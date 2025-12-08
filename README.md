@@ -1,20 +1,37 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# VINGI MOLDES AI
 
-# Run and deploy your AI Studio app
+Este é um sistema avançado de Inteligência Artificial para reconhecimento técnico de vestuário, engenharia reversa de moldes e curadoria de acervos globais.
 
-This contains everything you need to run your app locally.
+## Funcionalidades
 
-View your app in AI Studio: https://ai.studio/apps/drive/1U7qcub756v7WmjJ0EH8vNqTGJ94QJVw-
+- **IA Vision 3.0:** Análise de fotos (Frente/Costas) para identificar DNA técnico (Silhueta, Gola, Manga, Tecido).
+- **Galeria Massiva:** Retorna 50+ resultados de moldes reais.
+- **Acervo Global:** Busca em Burda Style, Mood Fabrics, The Fold Line, Makerist, Etsy e acervos brasileiros.
+- **Links Seguros:** Sistema inteligente que gera links de busca para evitar páginas 404.
+- **PWA Nativo:** Instalável no celular (Android/iOS) com suporte a câmera e funcionamento em tela cheia.
+- **Anti-Bloqueio:** Tecnologia de Proxy e Screenshot para exibir imagens reais mesmo de sites bloqueados.
 
-## Run Locally
+## Como Rodar Localmente
 
-**Prerequisites:**  Node.js
+1. Clone o repositório.
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Crie um arquivo `.env` na raiz com sua chave:
+   ```env
+   API_KEY=Sua_Chave_Gemini_Aqui
+   ```
+4. Rode o projeto:
+   ```bash
+   npm run dev
+   ```
 
+## Como Publicar (Vercel)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. Importe este repositório na Vercel.
+2. Configure a variável de ambiente `API_KEY`.
+3. Deploy.
+
+---
+Desenvolvido para uso interno profissional.
