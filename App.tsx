@@ -657,7 +657,7 @@ export default function App() {
 
             <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-[calc(100vh-64px)] flex flex-col">
             {state === AppState.IDLE && (
-                <div className="h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in">
+                <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
                 
                 <div className="w-full max-w-4xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
                     <div className="flex-1 p-8 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100">
