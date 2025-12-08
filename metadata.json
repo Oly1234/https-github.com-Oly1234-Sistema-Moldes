@@ -1,0 +1,7 @@
+{
+  "name": "VINGI MOLDES AI",
+  "description": "An advanced AI system for industrial clothing pattern generation, technical DNA analysis, and textile engineering.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
