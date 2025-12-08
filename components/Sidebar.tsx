@@ -1,17 +1,69 @@
 import React from 'react';
-import { LayoutDashboard, History, Sparkles, Download } from 'lucide-react';
-import { ViewState } from '../types';
+import { LayoutDashboard, History, Sparkles, Download, Camera, Search, RefreshCw, Loader2, ScanLine } from 'lucide-react';
+import { ViewState, AppState } from '../types';
 
 interface SidebarProps {
   currentView: ViewState;
+  appState: AppState;
+  hasUploadedImage: boolean;
   onViewChange: (view: ViewState) => void;
   onInstallClick?: () => void;
   showInstallButton?: boolean;
+  onFabClick?: () => void; // Ação dinâmica do botão principal
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onInstallClick, showInstallButton }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  currentView, 
+  appState, 
+  hasUploadedImage,
+  onViewChange, 
+  onInstallClick, 
+  showInstallButton, 
+  onFabClick 
+}) => {
+
+  // Lógica visual do botão central (FAB) - O "Cérebro" da navegação mobile
+  const getFabContent = () => {
+    // 1. Carregando
+    if (appState === AppState.ANALYZING) {
+      return {
+        icon: <Loader2 size={24} className="text-white animate-spin" />,
+        label: null,
+        className: "bg-gray-800 border-gray-700 cursor-wait w-14 h-14 rounded-full"
+      };
+    }
+
+    // 2. Resultado na tela -> Botão para Resetar
+    if (appState === AppState.SUCCESS) {
+      return {
+        icon: <RefreshCw size={20} className="text-white" />,
+        label: "NOVA BUSCA",
+        className: "bg-gray-900 border-gray-700 w-auto px-6 h-12 rounded-full hover:bg-black shadow-xl shadow-black/20"
+      };
+    }
+
+    // 3. Imagem Carregada -> Botão de Ação Principal (PESQUISAR)
+    if (hasUploadedImage && appState === AppState.IDLE) {
+      return {
+        icon: <ScanLine size={20} className="text-white animate-pulse" />,
+        label: "PESQUISAR",
+        // Visual Premium: Gradiente, Sombra Colorida e Animação de Atenção
+        className: "bg-gradient-to-r from-vingi-600 to-purple-600 border-white/20 shadow-lg shadow-vingi-500/50 w-auto px-8 h-14 rounded-full animate-bounce-subtle ring-2 ring-white/10 scale-105"
+      };
+    }
+
+    // 4. Estado Inicial (Sem imagem) -> Botão Discreto de Câmera
+    return {
+      icon: <Camera size={24} className="text-white" />,
+      label: null,
+      className: "bg-vingi-900 border-vingi-700 shadow-lg shadow-black/30 w-14 h-14 rounded-full active:scale-95 hover:bg-vingi-800 transition-transform"
+    };
+  };
+
+  const fab = getFabContent();
+
   return (
-    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0">
+    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all">
       
       {/* Brand Icon (Mobile Hidden / Desktop Top) */}
       <div className="hidden md:flex flex-col items-center gap-6">
@@ -39,22 +91,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onI
       </div>
 
       {/* Mobile Nav (Horizontal) */}
-      <div className="flex md:hidden w-full justify-around items-center">
+      <div className="flex md:hidden w-full justify-between items-center px-8 relative">
+          
+          {/* Esquerda - Home */}
           <NavItem 
-            icon={<LayoutDashboard size={20} />} 
+            icon={<LayoutDashboard size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
+            isMobile
           />
           
-          {/* Botão Central de Ação Mobile */}
-          <div className="bg-vingi-500 p-3 rounded-full -mt-6 border-4 border-[#0b0f19] shadow-lg">
-            <Sparkles size={24} className="text-white" />
+          {/* BOTÃO CENTRAL MUTANTE (FAB) */}
+          {/* Posicionado absolutamente no centro e levemente elevado */}
+          <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-50">
+            <button 
+              onClick={onFabClick}
+              disabled={appState === AppState.ANALYZING}
+              className={`flex items-center justify-center gap-2 border transition-all duration-500 ease-out transform ${fab.className}`}
+              style={{ minWidth: fab.label ? '140px' : '56px' }} // Garante largura suave
+            >
+              {fab.icon}
+              {fab.label && (
+                <span className="text-white font-bold text-sm tracking-wide whitespace-nowrap animate-fade-in">
+                  {fab.label}
+                </span>
+              )}
+            </button>
           </div>
 
+          {/* Direita - Histórico */}
           <NavItem 
-            icon={<History size={20} />} 
+            icon={<History size={24} />} 
             active={currentView === 'HISTORY'} 
             onClick={() => onViewChange('HISTORY')}
+            isMobile
           />
       </div>
 
@@ -79,7 +149,8 @@ const NavItem: React.FC<{
   active?: boolean; 
   onClick: () => void;
   tooltip?: string;
-}> = ({ icon, active, onClick, tooltip }) => (
+  isMobile?: boolean;
+}> = ({ icon, active, onClick, tooltip, isMobile }) => (
   <button 
     onClick={onClick}
     title={tooltip}
@@ -87,11 +158,11 @@ const NavItem: React.FC<{
       active 
         ? 'text-vingi-400 bg-vingi-800/50 shadow-inner' 
         : 'text-slate-500 hover:text-slate-300 hover:bg-vingi-800/30'
-    }`}
+    } ${isMobile ? 'active:scale-95' : ''}`}
   >
     {icon}
-    {active && (
-      <span className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-vingi-400 rounded-l-full hidden md:block translate-x-3" />
+    {active && !isMobile && (
+      <span className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-vingi-400 rounded-l-full translate-x-3" />
     )}
   </button>
 );

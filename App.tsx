@@ -1,10 +1,9 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, RecommendedResource, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Compass, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, PenTool, ArrowRightCircle, ShoppingBag, BookOpen, Star, Link as LinkIcon, Camera, Layout, DownloadCloud, AlertCircle, ShoppingCart, Plus, X, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Compass, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, PenTool, ArrowRightCircle, ShoppingBag, BookOpen, Star, Link as LinkIcon, Camera, Layout, DownloadCloud, AlertCircle, ShoppingCart, Plus, X, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, Scissors } from 'lucide-react';
 
 // --- UTILITÁRIOS DE IMAGEM ---
 
@@ -306,8 +305,11 @@ export default function App() {
   const [isInstallDismissed, setIsInstallDismissed] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const secondaryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  
+  // Refs para entrada secundária
+  const secondaryInputRef = useRef<HTMLInputElement>(null);
+  const secondaryCameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       const storedHistory = localStorage.getItem('vingi_scan_history');
@@ -346,6 +348,36 @@ export default function App() {
   const dismissInstall = () => {
       setShowInstallButton(false);
       setIsInstallDismissed(true);
+  };
+
+  // --- LÓGICA DO BOTÃO PRINCIPAL (FAB MOBILE) ---
+  const handleFabAction = () => {
+    // 1. Se estiver analisando, não faz nada
+    if (state === AppState.ANALYZING) return;
+
+    // 2. Se já tiver resultados (Sucesso), reseta para Nova Busca
+    if (state === AppState.SUCCESS) {
+        resetApp();
+        setView('HOME');
+        return;
+    }
+
+    // 3. Se estiver na Home COM Imagem, Inicia a Análise
+    if (state === AppState.IDLE && uploadedImage) {
+        startAnalysis();
+        return;
+    }
+
+    // 4. Se estiver na Home SEM Imagem, Abre a Câmera
+    if (state === AppState.IDLE && !uploadedImage) {
+        setView('HOME');
+        // Timeout para garantir renderização do input
+        setTimeout(() => {
+            if (cameraInputRef.current) {
+                cameraInputRef.current.click();
+            }
+        }, 50);
+    }
   };
 
   useEffect(() => {
@@ -585,9 +617,12 @@ export default function App() {
     <div className="flex min-h-screen bg-[#f8fafc] text-gray-800 font-sans">
       <Sidebar 
         currentView={view} 
+        appState={state}
+        hasUploadedImage={!!uploadedImage}
         onViewChange={setView} 
         onInstallClick={handleInstallClick}
         showInstallButton={showInstallButton}
+        onFabClick={handleFabAction}
       />
       
       {/* BANNER FLUTUANTE DE INSTALAÇÃO (Só aparece se disponível e não dispensado) */}
@@ -706,15 +741,28 @@ export default function App() {
                         <div className="mb-6">
                             <label className="block text-sm font-bold text-gray-700 mb-2">Ângulo Secundário</label>
                             <p className="text-xs text-gray-500 mb-3">Costas, lado ou detalhe.</p>
+                            
+                            {/* Inputs Invisíveis */}
                             <input type="file" ref={secondaryInputRef} onChange={handleSecondaryUpload} accept="image/*" className="hidden" />
+                            <input type="file" ref={secondaryCameraInputRef} onChange={handleSecondaryUpload} accept="image/*" capture="environment" className="hidden" />
+                            
                             {!uploadedSecondaryImage ? (
-                                <button 
-                                    onClick={() => secondaryInputRef.current?.click()}
-                                    className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-vingi-400 hover:bg-white hover:text-vingi-500 transition-all"
-                                >
-                                    <Plus size={24} className="mb-2 opacity-50" />
-                                    <span className="text-xs font-medium">Adicionar Vista</span>
-                                </button>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => secondaryInputRef.current?.click()}
+                                        className="flex-1 h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-vingi-400 hover:bg-white hover:text-vingi-500 transition-all"
+                                    >
+                                        <Plus size={24} className="mb-2 opacity-50" />
+                                        <span className="text-xs font-medium">Galeria</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => secondaryCameraInputRef.current?.click()}
+                                        className="w-12 h-32 bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-300 transition-all"
+                                        title="Câmera Secundária"
+                                    >
+                                        <Camera size={20} />
+                                    </button>
+                                </div>
                             ) : (
                                 <div className="relative group w-full h-32">
                                     <img src={uploadedSecondaryImage} alt="Sec" className="w-full h-full object-cover rounded-xl border border-gray-200" />
@@ -731,7 +779,7 @@ export default function App() {
                         <button 
                             onClick={startAnalysis}
                             disabled={!uploadedImage}
-                            className={`w-full py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
+                            className={`hidden md:flex w-full py-3 rounded-xl font-bold text-sm transition-all shadow-lg items-center justify-center gap-2 ${
                                 uploadedImage 
                                 ? 'bg-gradient-to-r from-vingi-900 to-vingi-500 text-white hover:shadow-xl hover:scale-[1.02]' 
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
