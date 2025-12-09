@@ -79,13 +79,11 @@ export const analyzeClothingImage = async (
     }
 
     parts.push({
-        text: `GERAR ACERVO MASSIVO (50+ MOLDES).
-        1. Analise a imagem.
-        2. Retorne 50 a 60 resultados.
-        3. DIVERSIFIQUE: Use The Fold Line, Makerist, Burda, Vogue, Mood, Marlene Mukai.
-        4. MENOS ETSY (Max 20%).
-        5. USE APENAS LINKS DE BUSCA (/search?q=) OU LINKS DE COLEÇÃO SEGURA. 
-        6. PRIORIZE MOOD FABRICS (SEWCIETY) PARA GRATUITOS.
+        text: `VOCÊ É O ANALISTA TÉCNICO VINGI.
+        1. Interprete a imagem e extraia o DNA TÊXTIL.
+        2. Retorne 50 MOLDES REAIS usando LINKS DE BUSCA SEGURA (ex: search?q=...).
+        3. NÃO INVENTE LINKS DE PRODUTOS. Use o formato de busca da loja.
+        4. Diversifique: Mood Fabrics, Etsy, Burda, Simplicity.
         ${JSON_SCHEMA_PROMPT}`
     });
 

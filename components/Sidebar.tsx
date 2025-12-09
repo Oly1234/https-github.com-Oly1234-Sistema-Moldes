@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return {
         icon: <RefreshCw size={20} className="text-white" />,
         label: "NOVA BUSCA",
-        className: "bg-gray-900 border-gray-700 w-auto px-6 h-12 rounded-full hover:bg-black shadow-xl shadow-black/20"
+        className: "bg-gray-900 border-gray-700 w-auto px-6 h-12 rounded-full hover:bg-black shadow-xl shadow-black/50"
       };
     }
 
@@ -48,7 +48,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         icon: <ScanLine size={20} className="text-white animate-pulse" />,
         label: "PESQUISAR",
         // Visual Premium: Gradiente, Sombra Colorida e Animação de Atenção
-        className: "bg-gradient-to-r from-vingi-600 to-purple-600 border-white/20 shadow-lg shadow-vingi-500/50 w-auto px-8 h-14 rounded-full animate-bounce-subtle ring-2 ring-white/10 scale-105"
+        // Adicionado z-50 e opacity-100 para garantir solidez
+        className: "bg-gradient-to-r from-vingi-600 to-purple-600 border border-white/20 shadow-xl shadow-vingi-500/40 w-auto px-8 h-14 rounded-full animate-bounce-subtle ring-4 ring-vingi-900 scale-105 z-50"
       };
     }
 
@@ -56,14 +57,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return {
       icon: <Camera size={24} className="text-white" />,
       label: null,
-      className: "bg-vingi-900 border-vingi-700 shadow-lg shadow-black/30 w-14 h-14 rounded-full active:scale-95 hover:bg-vingi-800 transition-transform"
+      className: "bg-vingi-900 border-2 border-vingi-700 shadow-xl shadow-black/40 w-16 h-16 rounded-full active:scale-95 hover:bg-vingi-800 transition-transform z-50"
     };
   };
 
   const fab = getFabContent();
 
   return (
-    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all">
+    // Adicionado overflow-visible para permitir que o botão saia da caixa sem cortar
+    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all overflow-visible shadow-2xl shadow-black">
       
       {/* Brand Icon (Mobile Hidden / Desktop Top) */}
       <div className="hidden md:flex flex-col items-center gap-6">
@@ -103,12 +105,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           
           {/* BOTÃO CENTRAL MUTANTE (FAB) */}
           {/* Posicionado absolutamente no centro e levemente elevado */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-50">
+          {/* top-[-32px] para subir mais e garantir destaque */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-[-32px] z-[60]">
             <button 
               onClick={onFabClick}
               disabled={appState === AppState.ANALYZING}
-              className={`flex items-center justify-center gap-2 border transition-all duration-500 ease-out transform ${fab.className}`}
-              style={{ minWidth: fab.label ? '140px' : '56px' }} // Garante largura suave
+              className={`flex items-center justify-center gap-2 transition-all duration-300 ease-out transform ${fab.className}`}
+              style={{ minWidth: fab.label ? '140px' : '64px' }} 
             >
               {fab.icon}
               {fab.label && (

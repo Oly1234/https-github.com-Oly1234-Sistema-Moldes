@@ -1,201 +1,249 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, RecommendedResource, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Compass, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, PenTool, ArrowRightCircle, ShoppingBag, BookOpen, Star, Link as LinkIcon, Camera, Layout, DownloadCloud, AlertCircle, ShoppingCart, Plus, X, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, Scissors } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Compass, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, PenTool, ArrowRightCircle, ShoppingBag, BookOpen, Star, Link as LinkIcon, Camera, Layout, DownloadCloud, AlertCircle, ShoppingCart, Plus, X, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, Scissors, Eye, MonitorPlay, Ruler, ScanFace } from 'lucide-react';
 
-// --- UTILITÁRIOS DE IMAGEM ---
+// --- UTILITÁRIOS DE IMAGEM (STEALTH & PROXY) ---
 
-// Camada 1: Proxy de Imagem Otimizado
+// Camada 1: Proxy Otimizado (Apenas para IMAGENS diretas)
 const getProxiedUrl = (url: string) => {
   if (!url) return '';
   if (url.startsWith('data:')) return url;
-  if (url.includes('googleusercontent')) return url;
-  // output=jpg e q=85 para garantir compressão e carregamento
-  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=400&h=600&fit=cover&a=attention&output=jpg&q=80`;
+  if (url.includes('googleusercontent') || url.includes('bing.net')) return url;
+  // output=jpg & q=80: Compressão para velocidade
+  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=500&h=700&fit=cover&a=attention&output=jpg&q=80&n=-1`;
 };
 
-// Camada 3: Screenshot HQ (Microlink) - Timeout rápido
+// Camada 2: Extrator de Meta Tags (Open Graph / Twitter Card) - IMAGEM DO PRODUTO
+const getMicrolinkImageExtraction = (siteUrl: string) => {
+    const encoded = encodeURIComponent(siteUrl);
+    // Embed=image.url extrai og:image ou twitter:image
+    return `https://api.microlink.io/?url=${encoded}&embed=image.url`;
+};
+
+// Camada 3: Screenshot HQ (Vitrine Virtual) - GRID DE RESULTADOS
 const getMicrolinkScreenshot = (siteUrl: string) => {
     const encoded = encodeURIComponent(siteUrl);
-    // Adicionei refresh=false para tentar pegar cache se existir, mais rápido
-    return `https://api.microlink.io/?url=${encoded}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1280&viewport.height=1280&overlay.browser=dark`;
+    
+    // SELETORES PARA ESCONDER (Limpa a tela para focar no produto)
+    // Inclui GDPR banners comuns em sites europeus (Burda, Makerist) e Overlays do Etsy
+    const hideSelectors = encodeURIComponent('#onetrust-banner-sdk, .wt-overlay, #gdpr-single-choice-overlay, .cookie-banner, .popup-overlay, #newsletter-popup, header, nav, .ad-banner, [aria-label="cookie consent"], .ui-toolkit-overlay');
+
+    // CONFIGURAÇÃO STEALTH OTIMIZADA
+    // viewport: 1280x800 (Laptop) - Garante que sites responsivos mostrem grid de produtos
+    // waitFor: 8s (Tempo para lazy load)
+    return `https://api.microlink.io/?url=${encoded}&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1280&viewport.height=800&waitFor=8000&hide=${hideSelectors}&overlay.browser=dark&colorScheme=dark&scripts=true`;
 };
 
-// Camada 4: Fallback mShots (Wordpress/Blog safe)
-const getMShotsScreenshot = (siteUrl: string) => {
-    return `https://s0.wp.com/mshots/v1/${encodeURIComponent(siteUrl)}?w=600&h=800`;
-};
+// --- FUNÇÃO ANTI-404 (Smart Link Sanitizer 2.0) ---
+const generateSafeUrl = (match: ExternalPatternMatch): string => {
+    const { url, source, patternName } = match;
+    const lowerSource = source.toLowerCase();
+    const lowerUrl = url.toLowerCase();
+    const cleanSearchTerm = encodeURIComponent(patternName.replace(/ pattern| sewing| molde| vestido| dress| pdf| download/gi, '').trim());
+    const fullSearchTerm = encodeURIComponent(patternName + ' sewing pattern');
 
-// Camada 5: Logo/Favicon da Marca
-const getBrandLogoUrl = (url: string) => {
-    let domain = '';
-    try {
-        const urlObj = new URL(url);
-        domain = urlObj.hostname;
-    } catch (e) {
-        domain = 'google.com';
+    const isGenericLink = url.split('/').length < 4 && !url.includes('search');
+
+    // 1. ETSY (Prioridade de Busca)
+    if (lowerSource.includes('etsy') || lowerUrl.includes('etsy.com')) {
+        if (lowerUrl.includes('/search')) return url;
+        return `https://www.etsy.com/search?q=${fullSearchTerm}&explicit=1&ship_to=BR`;
     }
-    return `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`;
+
+    // 2. BURDA STYLE
+    if (lowerSource.includes('burda') || lowerUrl.includes('burdastyle')) {
+         if (lowerUrl.includes('catalogsearch')) return url;
+        return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
+    }
+
+    // 3. MOOD FABRICS
+    if (lowerSource.includes('mood') || lowerUrl.includes('moodfabrics')) {
+        return `https://www.moodfabrics.com/blog/?s=${cleanSearchTerm}`;
+    }
+
+    // 4. AMAZON / EBAY
+    if (lowerSource.includes('amazon')) {
+        return `https://www.amazon.com/s?k=${fullSearchTerm}`;
+    }
+    if (lowerSource.includes('ebay')) {
+        return `https://www.ebay.com/sch/i.html?_nkw=${fullSearchTerm}`;
+    }
+
+    // 5. INDIE BRANDS
+    if (lowerSource.includes('mccall') || lowerSource.includes('vogue') || lowerSource.includes('simplicity') || lowerUrl.includes('somethingdelightful')) {
+        return `https://simplicity.com/search.php?search_query=${cleanSearchTerm}`;
+    }
+    
+    // 6. MAKERIST / FOLD LINE
+    if (lowerSource.includes('makerist')) {
+        return `https://www.makerist.com/patterns?q=${cleanSearchTerm}`;
+    }
+    if (lowerSource.includes('fold line') || lowerUrl.includes('thefoldline')) {
+        return `https://thefoldline.com/?s=${cleanSearchTerm}&post_type=product`;
+    }
+
+    if (isGenericLink) {
+         return `https://www.google.com/search?q=${fullSearchTerm}+site:${lowerSource}`;
+    }
+
+    return url;
 };
 
-// Lista de domínios que sabemos que bloqueiam screenshots (Puzzle/Captcha)
-const ANTI_CAPTCHA_DOMAINS = ['etsy.com', 'amazon.com', 'simplicity.com', 'mccall.com', 'knowme', 'somethingdelightful', 'ebay', 'sewdirect'];
-
-// --- COMPONENTE DE CARTÃO DE MARCA (FALLBACK FINAL) ---
-const BrandFallbackCard = ({ match }: { match: ExternalPatternMatch }) => {
-    const logoUrl = getBrandLogoUrl(match.url);
-
+// --- COMPONENTE: CARD TÉCNICO (FALLBACK CAMADA 4) ---
+const TechnicalFallbackCard = ({ match }: { match: ExternalPatternMatch }) => {
     return (
-        <div className="w-full h-full bg-white flex flex-col items-center justify-center relative overflow-hidden p-4 text-center group-hover:bg-gray-50 transition-colors">
-            {/* Padrão de fundo sutil */}
-             <div className="absolute inset-0 opacity-[0.03]" 
+        <div className="w-full h-full bg-[#f8fafc] flex flex-col relative overflow-hidden p-4 group-hover:bg-[#f1f5f9] transition-colors border-b border-gray-100">
+            <div className="absolute inset-0 opacity-10 pointer-events-none" 
                  style={{ 
-                     backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000000' fill-opacity='1' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E")` 
+                     backgroundImage: 'linear-gradient(#94a3b8 1px, transparent 1px), linear-gradient(90deg, #94a3b8 1px, transparent 1px)', 
+                     backgroundSize: '20px 20px' 
                  }} 
             />
-            
-            <div className="relative z-10 flex flex-col items-center animate-fade-in w-full">
-                <div className="w-12 h-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center mb-2 p-2 group-hover:scale-110 transition-transform duration-500">
-                    <img 
-                        src={logoUrl} 
-                        alt={match.source} 
-                        className="max-w-full max-h-full object-contain opacity-80"
-                        onError={(e) => e.currentTarget.style.display = 'none'} 
-                    />
+            <div className="flex-1 flex flex-col items-center justify-center relative z-10 text-center">
+                <div className="mb-3 p-3 bg-white rounded-full shadow-sm border border-gray-200">
+                    <Ruler size={20} className="text-vingi-400 opacity-80" />
                 </div>
-                <div className="bg-gray-100 px-2 py-0.5 rounded-full mb-1">
-                    <span className="text-[7px] font-bold tracking-widest text-gray-500 uppercase truncate max-w-[90px] block">{match.source}</span>
-                </div>
-                <h4 className="font-serif font-bold text-gray-800 text-[10px] leading-tight line-clamp-2 w-full">
-                    {match.patternName}
+                <h4 className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-1">
+                    Molde Digital
                 </h4>
+                <div className="w-3/4 h-px bg-gray-300 my-2"></div>
+                <h3 className="font-serif font-bold text-gray-700 text-sm leading-tight line-clamp-2 px-2">
+                    {match.patternName}
+                </h3>
             </div>
-             <div className="absolute bottom-0 w-full bg-gray-50 py-1 border-t border-gray-100">
-                 <span className="text-[7px] font-bold text-gray-400 flex items-center justify-center gap-1 uppercase">
-                    <Globe size={8} /> Site Oficial
-                 </span>
+            <div className="mt-auto flex justify-between items-center w-full pt-2 border-t border-gray-200 border-dashed">
+                <span className="text-[9px] font-bold text-gray-500 uppercase">{match.source.substring(0, 10)}</span>
+                <span className="text-[9px] font-mono text-gray-400">PDF/A4</span>
             </div>
         </div>
     );
 };
 
-// --- COMPONENTE INTELIGENTE DE IMAGEM (5 CAMADAS) ---
+// --- COMPONENTE INTELIGENTE DE IMAGEM (LÓGICA DE 4 CAMADAS) ---
 const PatternCardImage = ({ src, alt, className, onClick, match }: { src?: string, alt: string, className?: string, onClick?: () => void, match: ExternalPatternMatch }) => {
-  // 0: Proxy Otimizado
-  // 1: Blob Local
-  // 2: Screenshot HQ (Microlink)
-  // 3: Screenshot Fallback (mShots)
-  // 4: Brand Fallback
-  const [stage, setStage] = useState<0 | 1 | 2 | 3 | 4>(0);
+  // Stage 1: Direct CDN Image
+  // Stage 2: Open Graph Extraction (Product Page)
+  // Stage 3: Screenshot Stealth (Search Page or Fallback)
+  // Stage 4: Technical Card (Final Fallback)
+  const [stage, setStage] = useState<1 | 2 | 3 | 4>(1);
   const [currentSrc, setCurrentSrc] = useState<string>('');
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Verifica se o domínio está na lista negra de screenshots
-  const isAntiCaptchaDomain = ANTI_CAPTCHA_DOMAINS.some(domain => match.url.includes(domain) || match.source.toLowerCase().includes(domain.split('.')[0]));
-
-  const attemptBlobDownload = async (imageUrl: string) => {
-    try {
-        const corsProxy = 'https://corsproxy.io/?'; 
-        const response = await fetch(`${corsProxy}${encodeURIComponent(imageUrl)}`);
-        if (!response.ok) throw new Error("Falha no download");
-        const blob = await response.blob();
-        if (blob.size < 500) throw new Error("Imagem inválida"); 
-        const localUrl = URL.createObjectURL(blob);
-        setCurrentSrc(localUrl);
-    } catch (e) {
-        handleError(); // Falha no blob, vai para próxima
-    }
-  };
+  const safeSiteUrl = generateSafeUrl(match);
+  
+  // DETECÇÃO AUTOMÁTICA DE PÁGINA DE BUSCA
+  // Se for uma busca, pular a extração de Meta Tags (Stage 2) e ir direto para Screenshot (Stage 3)
+  // pois Meta Tags de páginas de busca geralmente retornam apenas o logo do site.
+  const isSearchPage = safeSiteUrl.includes('search') || 
+                       safeSiteUrl.includes('?q=') || 
+                       safeSiteUrl.includes('catalogsearch') ||
+                       safeSiteUrl.includes('google.com') ||
+                       safeSiteUrl.includes('pinterest.com');
 
   useEffect(() => {
-    setIsImageLoaded(false);
-    setStage(0);
+    setIsLoading(true);
     
-    if (src && src.length > 5) {
-        setCurrentSrc(getProxiedUrl(src));
-        
-        // Timeout Longo (10s) para Proxy
-        const timeoutId = setTimeout(() => {
-            if (!isImageLoaded) handleError();
-        }, 10000); 
+    // LÓGICA DE DECISÃO INICIAL
+    const hasValidDirectImage = src && src.length > 10 && (src.includes('http') || src.startsWith('data:')) && !src.includes('placeholder');
 
-        return () => clearTimeout(timeoutId);
+    if (hasValidDirectImage) {
+        // CAMADA 1: TEMOS URL DIRETA
+        setStage(1);
+        setCurrentSrc(getProxiedUrl(src as string));
+    } else if (isSearchPage) {
+        // CAMADA 3 (FORÇADA): É PÁGINA DE BUSCA -> SCREENSHOT DIRETO
+        setStage(3);
+        const screenshotUrl = getMicrolinkScreenshot(safeSiteUrl);
+        setCurrentSrc(screenshotUrl);
     } else {
-        // Se não tem imagem, tenta screenshot ou vai direto pro logo
-        if (isAntiCaptchaDomain) {
-            setStage(4); 
-        } else {
-            setStage(2);
-        }
+        // CAMADA 2: É PÁGINA DE PRODUTO -> TENTAR EXTRAIR FOTO PRINCIPAL
+        setStage(2);
+        const metaImageUrl = getMicrolinkImageExtraction(safeSiteUrl);
+        setCurrentSrc(metaImageUrl);
     }
-  }, [src, match.url]);
-
-  useEffect(() => {
-      if (stage === 1 && src) {
-          attemptBlobDownload(src);
-      } else if (stage === 2) {
-          setCurrentSrc(getMicrolinkScreenshot(match.url));
-          
-          const screenshotTimeout = setTimeout(() => {
-              if (!isImageLoaded) handleError();
-          }, 20000); // 20s para screenshot
-          return () => clearTimeout(screenshotTimeout);
-      } else if (stage === 3) {
-          setCurrentSrc(getMShotsScreenshot(match.url));
-          
-          const mshotsTimeout = setTimeout(() => {
-              if (!isImageLoaded) setStage(4);
-          }, 20000);
-          return () => clearTimeout(mshotsTimeout);
-      }
-  }, [stage]);
+  }, [src, match.url, safeSiteUrl, isSearchPage]);
 
   const handleError = () => {
-      if (stage === 0) {
-          setStage(1);
-      } else if (stage === 1) {
-          if (isAntiCaptchaDomain) {
-              setStage(4); 
+      // ESCALADA DE ERROS (Failover Logic)
+      if (stage === 1) {
+          // Imagem Direta falhou?
+          // Se for busca, vai para Screenshot (3). Se for produto, tenta Meta (2).
+          if (isSearchPage) {
+             setStage(3);
+             setCurrentSrc(getMicrolinkScreenshot(safeSiteUrl));
           } else {
-              setStage(2);
+             setStage(2);
+             setCurrentSrc(getMicrolinkImageExtraction(safeSiteUrl));
           }
       } else if (stage === 2) {
-          setStage(3); // Tenta mShots
+          // Extração Meta falhou? -> Vai para Screenshot (Último recurso visual)
+          setStage(3);
+          setCurrentSrc(getMicrolinkScreenshot(safeSiteUrl));
       } else if (stage === 3) {
-          setStage(4); // Brand Fallback
+          // Screenshot falhou? -> Mostra Envelope Técnico (Sem ícones genéricos)
+          setStage(4);
+          setIsLoading(false);
+      }
+  };
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+      const img = e.currentTarget;
+      // Anti-Corrupção: Imagens muito pequenas (pixels de tracking ou ícones quebrados) são rejeitadas
+      if (img.naturalWidth < 50 || img.naturalHeight < 50) {
+          handleError();
+      } else {
+          setIsLoading(false);
       }
   };
 
   if (stage === 4) {
       return (
-          <div className={`${className} cursor-pointer relative group bg-white`} onClick={onClick}>
-              <BrandFallbackCard match={match} />
+          <div className={`${className} cursor-pointer relative group`} onClick={onClick}>
+              <TechnicalFallbackCard match={match} />
           </div>
       );
   }
 
+  // Feedback Visual para o Usuário
+  let loadingText = "";
+  if (stage === 1) loadingText = "Carregando Imagem...";
+  if (stage === 2) loadingText = "Extraindo Foto...";
+  if (stage === 3) loadingText = "Capturando Vitrine...";
+
   return (
     <div className={`${className} relative bg-gray-100 overflow-hidden`}>
-        {/* Placeholder */}
-        {!isImageLoaded && (
-            <div className="absolute inset-0 bg-gray-50 animate-pulse z-10 flex items-center justify-center">
-                <div className="w-6 h-6 rounded-full border-2 border-gray-200 border-t-vingi-500 animate-spin opacity-50"></div>
+        {isLoading && (
+            <div className="absolute inset-0 bg-gray-50 z-10 flex flex-col items-center justify-center gap-2 p-4 text-center">
+                <div className="w-5 h-5 rounded-full border-2 border-gray-200 border-t-vingi-500 animate-spin opacity-60"></div>
+                <span className="text-[9px] text-gray-400 font-mono tracking-tighter uppercase animate-pulse">
+                    {loadingText}
+                </span>
             </div>
         )}
 
         <img
             src={currentSrc}
             alt={alt}
-            className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-105 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+            className={`w-full h-full object-cover object-top transition-all duration-700 group-hover:scale-105 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
             onClick={onClick}
             onError={handleError}
-            onLoad={() => setIsImageLoaded(true)}
+            onLoad={handleLoad}
             crossOrigin="anonymous"
             loading="lazy"
             referrerPolicy="no-referrer"
         />
+        
+        {!isLoading && (
+            <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-60 transition-opacity bg-black/50 px-1 rounded pointer-events-none">
+                <span className="text-[8px] text-white font-mono">
+                    {stage === 1 ? 'CDN' : stage === 2 ? 'META' : 'SCREEN'}
+                </span>
+            </div>
+        )}
     </div>
   );
 };
@@ -225,37 +273,6 @@ const CollectionCard: React.FC<{ collection: CuratedCollection }> = ({ collectio
         </div>
     </div>
 );
-
-const ResourceLink: React.FC<{ resource: RecommendedResource }> = ({ resource }) => {
-    let icon = <ExternalLink size={14} />;
-    let bgClass = "bg-white border-gray-200 hover:border-vingi-300";
-    
-    if (resource.type === 'PURCHASE') {
-        icon = <ShoppingCart size={14} />;
-        bgClass = "bg-emerald-50 border-emerald-200 hover:border-emerald-400 text-emerald-800";
-    } else if (resource.type === 'FREE_REPO') {
-        icon = <DownloadCloud size={14} />;
-        bgClass = "bg-indigo-50 border-indigo-200 hover:border-indigo-400 text-indigo-800";
-    }
-
-    return (
-        <a 
-            href={resource.url}
-            target="_blank"
-            rel="noreferrer"
-            className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all group ${bgClass}`}
-        >
-            <div className="shrink-0 p-1.5 bg-white/60 rounded-full border border-black/5">
-                {icon}
-            </div>
-            <div className="flex-1 min-w-0">
-                <h5 className="text-[11px] font-bold leading-tight truncate">{resource.name}</h5>
-                <p className="text-[9px] opacity-80 line-clamp-1">{resource.description}</p>
-            </div>
-            <ExternalLink size={12} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-        </a>
-    );
-};
 
 const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
     <a 
@@ -399,7 +416,7 @@ export default function App() {
           category: res.category,
           dnaSummary: `${res.technicalDna.silhouette}, ${res.technicalDna.neckline}`
       };
-      const updatedHistory = [newItem, ...history].slice(0, 50); // Manter últimos 50
+      const updatedHistory = [newItem, ...history].slice(50); // Manter últimos 50
       setHistory(updatedHistory);
       localStorage.setItem('vingi_scan_history', JSON.stringify(updatedHistory));
   };
@@ -477,8 +494,19 @@ export default function App() {
   const filteredData = getFilteredMatches();
   const superSuggestion = exactMatches[0] || closeMatches[0];
 
+  // Helper para construir queries ultra-específicas usando DNA Técnico
+  const getStrictSearchQuery = () => {
+      if (!result) return '';
+      // Ex: "A-Line Dress V-Neck Raglan Sleeve sewing pattern"
+      return `${result.technicalDna.silhouette} ${result.technicalDna.neckline} ${result.technicalDna.sleeve} ${result.category} pattern`;
+  };
+  
+  const strictQuery = getStrictSearchQuery();
+
   const renderCatalogCard = (match: ExternalPatternMatch, index: number, isHero: boolean = false) => {
-     const isSearchLink = match.url.includes('search') || match.linkType === 'SEARCH_QUERY';
+     // Sanitiza a URL para abrir no navegador (anti-404)
+     const safeUrl = generateSafeUrl(match);
+     const isSearchLink = safeUrl.includes('search') || safeUrl.includes('catalogsearch') || match.linkType === 'SEARCH_QUERY';
      
      // Color logic for Price Type
      let typeBadgeClass = 'bg-gray-100 text-gray-600 border-gray-200';
@@ -497,7 +525,7 @@ export default function App() {
      if (!isHero) {
          return (
             <div key={index} className="group bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-vingi-300 transition-all duration-300 flex flex-col h-full">
-                <div className="relative bg-gray-100 overflow-hidden cursor-pointer aspect-[3/4]" onClick={() => window.open(match.url, '_blank')}>
+                <div className="relative bg-[#f8fafc] overflow-hidden cursor-pointer aspect-[3/4] border-b border-gray-100" onClick={() => window.open(safeUrl, '_blank')}>
                     <PatternCardImage src={match.imageUrl} alt={match.patternName} match={match} className="w-full h-full" />
                     
                     <div className="absolute top-1.5 left-1.5 z-10 flex gap-1">
@@ -512,7 +540,7 @@ export default function App() {
                         {match.source}
                     </p>
                     <h3 className="font-bold text-gray-900 text-[10px] leading-snug line-clamp-2 mb-1.5 group-hover:text-vingi-600 min-h-[2.5em]">
-                        <a href={match.url} target="_blank" rel="noreferrer">{match.patternName}</a>
+                        <a href={safeUrl} target="_blank" rel="noreferrer">{match.patternName}</a>
                     </h3>
                     
                     <div className="mt-auto pt-2 border-t border-gray-50 flex items-center justify-between">
@@ -520,8 +548,8 @@ export default function App() {
                              <TypeIcon size={8} />
                              {match.type}
                          </span>
-                         <a href={match.url} target="_blank" rel="noreferrer" className="text-[9px] font-bold text-vingi-600 flex items-center gap-0.5 hover:underline group/link">
-                            ABRIR <ExternalLink size={8} className="group-hover/link:translate-x-0.5 transition-transform"/>
+                         <a href={safeUrl} target="_blank" rel="noreferrer" className="text-[9px] font-bold text-vingi-600 flex items-center gap-0.5 hover:underline group/link">
+                            {isSearchLink ? 'BUSCAR' : 'ABRIR'} <ExternalLink size={8} className="group-hover/link:translate-x-0.5 transition-transform"/>
                          </a>
                     </div>
                 </div>
@@ -532,7 +560,7 @@ export default function App() {
      // Hero Card (Destaque)
      return (
         <div key={index} className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl hover:border-vingi-300 transition-all duration-300 flex flex-col md:flex-row md:col-span-2 md:h-[300px]">
-            <div className="relative bg-gray-50 overflow-hidden cursor-pointer md:w-5/12 h-64 md:h-full" onClick={() => window.open(match.url, '_blank')}>
+            <div className="relative bg-gray-50 overflow-hidden cursor-pointer md:w-5/12 h-64 md:h-full" onClick={() => window.open(safeUrl, '_blank')}>
                 <PatternCardImage src={match.imageUrl} alt={match.patternName} match={match} className="w-full h-full" />
                 <div className="absolute top-3 left-3 z-10">
                      <span className="text-xs font-bold px-2 py-1 rounded shadow-md text-white bg-vingi-900">
@@ -548,13 +576,13 @@ export default function App() {
                     </p>
                 </div>
                 <h3 className="font-bold text-gray-900 text-xl leading-tight mb-3 group-hover:text-vingi-600 transition-colors">
-                    <a href={match.url} target="_blank" rel="noreferrer">{match.patternName}</a>
+                    <a href={safeUrl} target="_blank" rel="noreferrer">{match.patternName}</a>
                 </h3>
                 <p className="text-gray-600 text-sm mb-6 line-clamp-3 leading-relaxed">
                    Encontramos este modelo compatível com alta precisão técnica. Recomendamos verificar também as variações no site oficial.
                 </p>
                 <div className="mt-auto flex gap-3">
-                    <button onClick={() => window.open(match.url, '_blank')} className="flex-1 bg-vingi-900 text-white py-3 rounded-lg text-sm font-bold hover:bg-vingi-800 transition-colors shadow-lg shadow-vingi-900/20 flex items-center justify-center gap-2">
+                    <button onClick={() => window.open(safeUrl, '_blank')} className="flex-1 bg-vingi-900 text-white py-3 rounded-lg text-sm font-bold hover:bg-vingi-800 transition-colors shadow-lg shadow-vingi-900/20 flex items-center justify-center gap-2">
                          {isSearchLink ? <Search size={16}/> : <ExternalLink size={16}/>}
                          {isSearchLink ? 'Buscar no Acervo' : 'Acessar Loja Oficial'}
                     </button>
@@ -914,89 +942,58 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-                            {/* COLEÇÕES */}
-                            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                                <h5 className="text-xs font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                    <Sparkles size={14} className="text-amber-500"/> Coleções Recomendadas
-                                </h5>
-                                {result.curatedCollections && result.curatedCollections.length > 0 ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        {result.curatedCollections.map((collection, idx) => (
-                                            <CollectionCard key={idx} collection={collection} />
-                                        ))}
-                                    </div>
-                                ) : <p className="text-xs text-gray-400">Nenhuma coleção encontrada.</p>}
+                    {/* SEÇÃO 1: COLEÇÕES RECOMENDADAS (AGORA EM LARGURA TOTAL) */}
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm mb-8">
+                        <h5 className="text-xs font-bold text-gray-900 mb-3 flex items-center gap-2">
+                            <Sparkles size={14} className="text-amber-500"/> Coleções Curadas pela IA
+                        </h5>
+                        {result.curatedCollections && result.curatedCollections.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {result.curatedCollections.map((collection, idx) => (
+                                    <CollectionCard key={idx} collection={collection} />
+                                ))}
                             </div>
-
-                            {/* DEEP LINKS E ACERVOS */}
-                            <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
-                                <h5 className="text-xs font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                    <Search size={14} className="text-blue-500"/> Acervos Independentes & Big 4
-                                </h5>
-                                {/* Combinação de Links Gerados pela IA + Links Fixos Importantes */}
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                    {/* MOOD FABRICS EM DESTAQUE */}
-                                    <ResourceLink 
-                                        resource={{ 
-                                            name: 'Mood Fabrics (Sewciety)', 
-                                            type: 'FREE_REPO', 
-                                            url: `https://www.moodfabrics.com/blog/?s=${encodeURIComponent(result.category + ' pattern')}`, 
-                                            description: 'Milhares de moldes grátis' 
-                                        }} 
-                                    />
-                                    {result.recommendedResources && result.recommendedResources.map((resource, idx) => (
-                                        <ResourceLink key={idx} resource={resource} />
-                                    ))}
-                                    <ResourceLink resource={{ name: 'The Fold Line', type: 'PURCHASE', url: 'https://thefoldline.com', description: 'Maior acervo indie da Europa' }} />
-                                    <ResourceLink resource={{ name: 'Makerist', type: 'PURCHASE', url: 'https://www.makerist.com/sewing/patterns', description: 'Plataforma global de PDFs' }} />
-                                    <ResourceLink resource={{ name: 'Burda Style', type: 'PURCHASE', url: 'https://www.burdastyle.com', description: 'Acervo clássico alemão' }} />
-                                </div>
-                            </div>
+                        ) : <p className="text-xs text-gray-400">Nenhuma coleção encontrada.</p>}
                     </div>
 
-                    {/* NOVA ÁREA DE BUSCA RÁPIDA EM PLATAFORMAS */}
+                    {/* NOVA ÁREA DE BUSCA RÁPIDA (COM QUERIES RESTRITIVAS) */}
                     <div className="bg-vingi-900 rounded-xl p-5 shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
                         <div className="text-white">
-                             <h5 className="text-sm font-bold mb-1">Exploração Externa Rápida</h5>
-                             <p className="text-[10px] text-gray-400">Pesquise "{result.patternName}" diretamente em:</p>
+                             <h5 className="text-sm font-bold mb-1">Exploração Externa de Alta Precisão</h5>
+                             <p className="text-[10px] text-gray-400">
+                                Pesquisando DNA: <span className="text-vingi-300">"{strictQuery}"</span>
+                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2 justify-center">
                              <ExternalSearchButton 
-                                name="Google Imagens" 
-                                url={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(result.patternName + ' sewing pattern technical drawing moldes')}`}
+                                name="Google Technical" 
+                                url={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(strictQuery + ' technical drawing')}`}
                                 colorClass="bg-blue-600 hover:bg-blue-500"
                                 icon={Globe}
                              />
                              <ExternalSearchButton 
-                                name="Pinterest" 
-                                url={`https://www.pinterest.com/search/pins/?q=${encodeURIComponent(result.patternName + ' sewing pattern moldes')}`}
+                                name="Pinterest Vibe" 
+                                url={`https://www.pinterest.com/search/pins/?q=${encodeURIComponent(strictQuery + ' aesthetic')}`}
                                 colorClass="bg-red-600 hover:bg-red-500"
                                 icon={Share2}
                              />
                              <ExternalSearchButton 
-                                name="Etsy" 
-                                url={`https://www.etsy.com/search?q=${encodeURIComponent(result.patternName + ' sewing pattern pdf')}`}
+                                name="Etsy Patterns" 
+                                url={`https://www.etsy.com/search?q=${encodeURIComponent(strictQuery + ' pdf')}`}
                                 colorClass="bg-orange-600 hover:bg-orange-500"
                                 icon={ShoppingBag}
                              />
                              <ExternalSearchButton 
-                                name="Lekala" 
-                                url={`https://www.lekala.co/catalog?q=${encodeURIComponent(result.category)}`}
+                                name="Lekala Custom" 
+                                url={`https://www.lekala.co/catalog?q=${encodeURIComponent(result.technicalDna.silhouette + ' ' + result.technicalDna.neckline)}`}
                                 colorClass="bg-purple-600 hover:bg-purple-500"
                                 icon={Scissors}
                              />
                              <ExternalSearchButton 
-                                name="PatternReview" 
-                                url={`https://sewing.patternreview.com/cgi-bin/search.pl?search=${encodeURIComponent(result.patternName)}`}
+                                name="The Fold Line" 
+                                url={`https://thefoldline.com/?s=${encodeURIComponent(strictQuery)}&post_type=product`}
                                 colorClass="bg-teal-600 hover:bg-teal-500"
                                 icon={Star}
-                             />
-                             <ExternalSearchButton 
-                                name="YouTube" 
-                                url={`https://www.youtube.com/results?search_query=${encodeURIComponent(result.patternName + ' sewing pattern tutorial')}`}
-                                colorClass="bg-red-700 hover:bg-red-600"
-                                icon={ExternalLink}
                              />
                         </div>
                     </div>
@@ -1011,25 +1008,3 @@ export default function App() {
     </div>
   );
 }
-
-// Ícone auxiliar para o botão Lekala
-const Scissors = ({ size, className }: any) => (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <circle cx="6" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <line x1="20" y1="4" x2="8.12" y2="15.88" />
-      <line x1="14.47" y1="14.48" x2="20" y2="20" />
-      <line x1="8.12" y1="8.12" x2="12" y2="12" />
-    </svg>
-);
