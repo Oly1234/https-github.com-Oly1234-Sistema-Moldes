@@ -2,7 +2,7 @@ import { GoogleGenAI, Part } from "@google/genai";
 import { MASTER_SYSTEM_PROMPT } from "../constants";
 import { PatternAnalysisResult } from "../types";
 
-// VALIDAÇÃO CRÍTICA DE API KEY PARA EVITAR TELA BRANCA
+// VALIDAÇÃO CRÍTICA DE API KEY
 const apiKey = process.env.API_KEY;
 
 if (!apiKey) {
@@ -67,7 +67,7 @@ export const analyzeClothingImage = async (
 ): Promise<PatternAnalysisResult> => {
   
   if (!apiKey) {
-    throw new Error("CHAVE DE API NÃO CONFIGURADA. O sistema não pode se conectar ao cérebro da IA. Verifique as configurações do Vercel.");
+     throw new Error("Chave de API não configurada. O sistema não pode operar sem credenciais válidas.");
   }
 
   try {
@@ -103,7 +103,6 @@ export const analyzeClothingImage = async (
       contents: { parts },
       config: {
         systemInstruction: MASTER_SYSTEM_PROMPT,
-        // responseMimeType ensures valid JSON output and helps prevent truncation issues by prioritizing structure
         responseMimeType: "application/json",
       }
     });
@@ -113,8 +112,6 @@ export const analyzeClothingImage = async (
     }
 
     let cleanText = response.text.trim();
-    
-    // Remove markdown code blocks if present (even with mimeType, sometimes they appear)
     if (cleanText.startsWith('```')) {
         cleanText = cleanText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '');
     }
@@ -122,10 +119,20 @@ export const analyzeClothingImage = async (
     const result = JSON.parse(cleanText) as PatternAnalysisResult;
     return result;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error analyzing image:", error);
+
+    // TRATAMENTO DE ERROS REAIS (SEM MOCK)
+    if (error.message?.includes('403') || error.message?.includes('API key')) {
+        throw new Error("ERRO DE SEGURANÇA (403): Sua chave de API foi revogada ou bloqueada pelo Google. Por favor, gere uma nova chave válida.");
+    }
+    
+    if (error.message?.includes('503') || error.message?.includes('Overloaded')) {
+        throw new Error("Servidores do Gemini sobrecarregados. Tente novamente em alguns segundos.");
+    }
+
     if (error instanceof SyntaxError) {
-        throw new Error("Erro de processamento (JSON inválido). A resposta da IA foi corrompida. Tente novamente com uma foto mais clara.");
+        throw new Error("Erro de processamento (JSON inválido). A IA falhou em estruturar os dados. Tente novamente.");
     }
     throw error;
   }
