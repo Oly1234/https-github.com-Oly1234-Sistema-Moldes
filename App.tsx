@@ -496,31 +496,40 @@ export default function App() {
   const startAnalysis = async () => {
     if (!uploadedImage) return;
 
+    // 1. Atualização visual imediata (Renderiza o Loader)
     setState(AppState.ANALYZING);
     setErrorMsg(null);
+    
+    // Força scroll para o topo em mobile
+    if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
+    window.scrollTo(0,0);
 
-    try {
-        const mainBase64 = uploadedImage.split(',')[1];
-        const mainType = uploadedImage.split(';')[0].split(':')[1];
-        
-        let secondaryBase64: string | null = null;
-        let secondaryType: string | null = null;
-        
-        if (uploadedSecondaryImage) {
-            secondaryBase64 = uploadedSecondaryImage.split(',')[1];
-            secondaryType = uploadedSecondaryImage.split(';')[0].split(':')[1];
+    // 2. CRÍTICO: setTimeout permite que o navegador "pinte" o loader na tela (Paint Cycle)
+    // antes de bloquear a thread JS com o processamento pesado de Base64 e Network.
+    setTimeout(async () => {
+        try {
+            const mainBase64 = uploadedImage.split(',')[1];
+            const mainType = uploadedImage.split(';')[0].split(':')[1];
+            
+            let secondaryBase64: string | null = null;
+            let secondaryType: string | null = null;
+            
+            if (uploadedSecondaryImage) {
+                secondaryBase64 = uploadedSecondaryImage.split(',')[1];
+                secondaryType = uploadedSecondaryImage.split(';')[0].split(':')[1];
+            }
+
+            const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
+            setResult(analysisResult);
+            addToHistory(analysisResult);
+            setState(AppState.SUCCESS);
+
+        } catch (err) {
+            console.error(err);
+            setErrorMsg("Erro na conexão com os bancos de dados. Tente novamente.");
+            setState(AppState.ERROR);
         }
-
-        const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
-        setResult(analysisResult);
-        addToHistory(analysisResult);
-        setState(AppState.SUCCESS);
-
-    } catch (err) {
-      console.error(err);
-      setErrorMsg("Erro na conexão com os bancos de dados. Tente novamente.");
-      setState(AppState.ERROR);
-    }
+    }, 100);
   };
 
   const resetApp = () => {
@@ -789,8 +798,9 @@ export default function App() {
                 </div>
             )}
 
+            {/* LOADER AJUSTADO PARA MOBILE (flex-1 ao invés de altura fixa) */}
             {state === AppState.ANALYZING && (
-                <div className="h-[80vh] flex flex-col items-center justify-center">
+                <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]">
                 <div className="w-full max-w-xs text-center">
                     <div className="relative w-32 h-48 mx-auto bg-white rounded-xl p-1 shadow-2xl mb-6 rotate-3 transition-transform duration-1000">
                         {uploadedImage && <img src={uploadedImage} alt="Analise" className="w-full h-full object-cover rounded-lg" />}
