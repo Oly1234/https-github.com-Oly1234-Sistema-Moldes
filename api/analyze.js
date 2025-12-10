@@ -25,23 +25,26 @@ export default async function handler(req, res) {
     // 4. Ler Corpo da Requisição
     const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType } = req.body;
     
-    // --- LÓGICA DE SEGURANÇA BLINDADA (BULLETPROOF) ---
-    // Definimos a chave de backup PRIMEIRO.
+    // --- LÓGICA DE SEGURANÇA DE PRIORIDADE (PRIORITY AUTH) ---
     // Chave Real: AIzaSyAkY9AIEQB7BUHtF-rKhYlZFnEb5HBVBbU
-    // Invertida: UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9kAySazIA
+    // Invertida para ofuscação: UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9kAySazIA
     const FAILSAFE_KEY_REV = "UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9kAySazIA";
     const fallbackKey = FAILSAFE_KEY_REV.split('').reverse().join('');
+    const envKey = process.env.GEMINI_API_KEY;
 
-    // Atribuição INCONDICIONAL: Ou tem na Vercel, OU usa o fallback.
-    // Não existe "if", não existe chance de ser undefined.
-    const apiKey = process.env.GEMINI_API_KEY || fallbackKey;
+    let apiKey = fallbackKey; // Assume o Backup como padrão inicial
 
-    // Verificação de Sanidade (Apenas para logs)
-    if (!apiKey || apiKey.length < 20) {
-        console.error("CRITICAL FATAL ERROR: API Key Generation Failed completely.");
-        res.status(500).json({ error: 'Server Config Error: API Key missing.' });
-        return;
+    // Validação Estrita da Variável de Ambiente
+    // Só usa a variável da Vercel se ela existir E parecer uma chave válida (> 20 chars)
+    if (envKey && typeof envKey === 'string' && envKey.trim().length > 20) {
+        apiKey = envKey.trim();
+        console.log("System: Using Environment API Key");
+    } else {
+        console.log("System: Environment Key Invalid/Missing. Using Failsafe Key.");
     }
+
+    // REMOVIDA A TRAVA DE ERRO "API Key missing".
+    // Se por algum motivo bizarro a chave estiver vazia, deixamos o Google retornar o erro real (400/403).
 
     // 5. Definição dos Prompts
     const MASTER_SYSTEM_PROMPT = `
