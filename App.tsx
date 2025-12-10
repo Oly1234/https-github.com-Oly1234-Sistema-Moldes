@@ -1,9 +1,10 @@
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock } from 'lucide-react';
 
 // --- UTILITÁRIOS ---
 
@@ -220,10 +221,6 @@ const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string
 
                 if (files.length > 0) {
                     shareData.files = files;
-                } else {
-                    // Se não for possível arquivo, alguns apps preferem URL no texto (já incluído), 
-                    // mas podemos passar url no objeto também.
-                    // Para WhatsApp, o texto com link já funciona bem como fallback.
                 }
 
                 await navigator.share(shareData);
@@ -498,7 +495,7 @@ export default function App() {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-          setIsMobileBrowser(false); // Desbloqueia assumindo que instalou
+          setIsMobileBrowser(false);
       }
       setDeferredPrompt(null);
   };
@@ -590,6 +587,7 @@ export default function App() {
                 secondaryType = compressedSec.split(';')[0].split(':')[1];
             }
 
+            // A chamada agora não precisa de API Key, pois vai para o Backend Proxy
             const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
             setResult(analysisResult);
             addToHistory(analysisResult);
@@ -639,7 +637,7 @@ export default function App() {
   if (isMobileBrowser) {
       return <InstallGatekeeper onInstall={handleInstallClick} isIOS={isIOS} />;
   }
-
+  
   const renderHistoryView = () => (
       <div className="p-6 max-w-5xl mx-auto min-h-full">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
