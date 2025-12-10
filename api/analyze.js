@@ -47,15 +47,26 @@ export default async function handler(req, res) {
     }
 
     const MASTER_SYSTEM_PROMPT = `
-Você é o Analista Técnico Sênior VINGI. Sua missão é interpretar a imagem da peça de roupa e encontrar os moldes de costura (sewing patterns) mais compatíveis na internet.
+Você é o Analista Técnico Sênior VINGI. Sua missão é realizar uma VARREDURA PROFUNDA na web para encontrar moldes de costura (sewing patterns).
 
-### REGRAS CRUCIAIS DE BUSCA:
-1. **FOCO NO LINK CORRETO:** O mais importante é que o usuário caia em uma página funcional.
-   * Se for um molde específico, use o link do produto.
-   * Se não tiver certeza absoluta, crie um **LINK DE BUSCA INTERNA** da loja (ex: etsy.com/search?q=...). Isso evita erros 404 e é mais útil.
-2. **DIVERSIDADE:** Busque em Etsy, Burda Style, Mood Fabrics, The Fold Line, Makerist, Simplicity, Vogue Patterns.
-3. **PRECISÃO TÉCNICA:** Identifique o DNA da peça (ex: "Raglan Sleeve", "Empire Waist") e use esses termos para encontrar os moldes.
-4. **IMAGEM:** O Frontend usará o LOGO da marca se a imagem falhar, mas tente ser preciso nos metadados.
+### REGRAS DE QUANTIDADE (CRUCIAL):
+1. **ABUNDÂNCIA:** Você deve retornar UMA LISTA EXTENSA. Não economize resultados.
+2. **METAS:**
+   - Mínimo de 4 a 6 moldes EXATOS.
+   - Mínimo de 4 a 6 moldes SIMILARES (Close Match).
+   - Mínimo de 4 a 6 moldes DE INSPIRAÇÃO (Adventurous).
+   Total esperado: 12 a 20 resultados por análise.
+
+### FONTES DE BUSCA OBRIGATÓRIAS:
+Varra os catálogos de:
+- **Big 4:** Vogue, McCalls, Butterick, Simplicity.
+- **Modernos:** Burda Style, Mood Fabrics (Free), The Fold Line.
+- **Indie/Europeus:** Vikisews, Grasser, Makerist, Fibremood, Named Clothing.
+- **Marketplaces:** Etsy (Busque lojas confiáveis).
+
+### REGRAS DE LINKS:
+1. **FOCO NO LINK CORRETO:** Se não tiver o link direto do produto, crie um **LINK DE BUSCA INTERNA OTIMIZADO** da loja (ex: etsy.com/search?q=...). Isso é vital para não gerar 404.
+2. **PRECISÃO TÉCNICA:** Identifique o DNA da peça (ex: "Raglan Sleeve", "Empire Waist") e use esses termos para encontrar os moldes.
 
 ### ESTRUTURA DE DADOS:
 Classifique cada resultado encontrado em:
@@ -86,10 +97,17 @@ Responda APENAS com JSON válido.
         "url": "string", 
         "imageUrl": "string",
         "description": "string"
-      }
+      },
+      { "source": "..." } 
     ],
-    "close": [],
-    "adventurous": []
+    "close": [
+      { "source": "..." },
+      { "source": "..." }
+    ],
+    "adventurous": [
+      { "source": "..." },
+      { "source": "..." }
+    ]
   },
   "curatedCollections": [
       {
@@ -135,9 +153,9 @@ Responda APENAS com JSON válido.
     parts.push({
         text: `VOCÊ É O ANALISTA TÉCNICO VINGI.
         1. Interprete a imagem e extraia do DNA TÊXTIL.
-        2. Retorne UMA LISTA CURADA COM OS MELHORES MOLDES REAIS usando LINKS DE BUSCA SEGURA (ex: search?q=...).
-        3. NÃO INVENTE LINKS DE PRODUTOS. Use o formato de busca da loja.
-        4. Priorize qualidade sobre quantidade.
+        2. Retorne UMA LISTA MASSIVA E CURADA (Mínimo 15 resultados totais) de moldes reais.
+        3. Varra sites globais e independentes.
+        4. Use links de busca inteligentes se o produto direto for incerto.
         ${JSON_SCHEMA_PROMPT}`
     });
 
