@@ -3,12 +3,39 @@ import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2 } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff } from 'lucide-react';
 
 // --- UTILITÁRIOS DE IMAGEM E LINKS ---
 
 const getBrandIcon = (domain: string) => {
     return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+};
+
+// --- COMPRESSÃO DE IMAGEM (CORREÇÃO MOBILE) ---
+// Reduz imagens gigantes de câmeras (10MB+) para tamanho tratável (~500KB)
+const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            
+            // Qualidade 0.8 JPEG é perfeita para IA e leve para mobile
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+    });
 };
 
 // --- FUNÇÃO ANTI-404 (Smart Link Sanitizer 2.0) ---
@@ -432,7 +459,7 @@ export default function App() {
 
   const handleFabAction = () => {
     if (state === AppState.ANALYZING) return;
-    if (state === AppState.SUCCESS) {
+    if (state === AppState.SUCCESS || state === AppState.ERROR) {
         resetApp();
         setView('HOME');
         return;
@@ -508,15 +535,19 @@ export default function App() {
     // antes de bloquear a thread JS com o processamento pesado de Base64 e Network.
     setTimeout(async () => {
         try {
-            const mainBase64 = uploadedImage.split(',')[1];
-            const mainType = uploadedImage.split(';')[0].split(':')[1];
+            // COMPRESSÃO PARA MOBILE: Reduzir a imagem para evitar estouro de memória (White Screen)
+            const compressedMain = await compressImage(uploadedImage);
+            
+            const mainBase64 = compressedMain.split(',')[1];
+            const mainType = compressedMain.split(';')[0].split(':')[1];
             
             let secondaryBase64: string | null = null;
             let secondaryType: string | null = null;
             
             if (uploadedSecondaryImage) {
-                secondaryBase64 = uploadedSecondaryImage.split(',')[1];
-                secondaryType = uploadedSecondaryImage.split(';')[0].split(':')[1];
+                const compressedSec = await compressImage(uploadedSecondaryImage);
+                secondaryBase64 = compressedSec.split(',')[1];
+                secondaryType = compressedSec.split(';')[0].split(':')[1];
             }
 
             const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
@@ -524,12 +555,13 @@ export default function App() {
             addToHistory(analysisResult);
             setState(AppState.SUCCESS);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setErrorMsg("Erro na conexão com os bancos de dados. Tente novamente.");
+            // Captura o erro e exibe na tela ao invés de tela branca
+            setErrorMsg(err.message || "Erro desconhecido na análise.");
             setState(AppState.ERROR);
         }
-    }, 100);
+    }, 300); // Aumentado delay para garantir que a UI de loading carregue
   };
 
   const resetApp = () => {
@@ -538,6 +570,7 @@ export default function App() {
     setUploadedImage(null);
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
+    setErrorMsg(null);
   };
 
   const exactMatches = result?.matches?.exact || [];
@@ -670,6 +703,58 @@ export default function App() {
           <FloatingCompareWidget mainImage={uploadedImage} secImage={uploadedSecondaryImage} />
       )}
 
+      {/* ERROR OVERLAY */}
+      {state === AppState.ERROR && (
+          <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-8 animate-fade-in">
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                  <AlertTriangle size={32} className="text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">Interrupção na Análise</h3>
+              <p className="text-sm text-gray-500 text-center max-w-md mb-8">
+                  {errorMsg || "Não foi possível conectar ao servidor neural. Verifique sua conexão ou tente novamente."}
+              </p>
+              
+              <div className="flex gap-4">
+                  <button 
+                    onClick={resetApp}
+                    className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors"
+                  >
+                      Voltar ao Início
+                  </button>
+                  <button 
+                    onClick={startAnalysis}
+                    className="px-6 py-3 bg-vingi-900 text-white font-bold rounded-xl shadow-lg hover:bg-vingi-800 transition-colors flex items-center gap-2"
+                  >
+                      <RefreshCw size={16} /> Tentar Novamente
+                  </button>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-8 font-mono border p-2 rounded">
+                  DEBUG: {process.env.API_KEY ? 'API_KEY_PRESENT' : 'API_KEY_MISSING'}
+              </p>
+          </div>
+      )}
+
+      {/* LOADING OVERLAY (FULLSCREEN FIX) */}
+      {state === AppState.ANALYZING && (
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6">
+            <div className="w-full max-w-xs text-center">
+                <div className="relative w-32 h-48 mx-auto bg-white rounded-xl p-1 shadow-2xl mb-8 rotate-3 transition-transform duration-1000">
+                    {uploadedImage && <img src={uploadedImage} alt="Analise" className="w-full h-full object-cover rounded-lg" />}
+                    <div className="absolute inset-0 bg-vingi-900/20 rounded-xl"></div>
+                    <div className="absolute top-0 w-full h-1 bg-white shadow-[0_0_20px_rgba(255,255,255,0.8)] animate-scan z-20"></div>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{MOCK_LOADING_STEPS[loadingStep]}</h3>
+                <div className="w-48 h-2 bg-gray-100 rounded-full mx-auto overflow-hidden mt-4">
+                    <div 
+                        className="h-full bg-vingi-500 transition-all duration-500 ease-out"
+                        style={{ width: `${((loadingStep + 1) / MOCK_LOADING_STEPS.length) * 100}%` }}
+                    />
+                </div>
+                <p className="text-xs text-gray-400 mt-8 font-mono">PROCESSANDO DADOS TÊXTEIS...</p>
+            </div>
+        </div>
+      )}
+
       {/* MAIN CONTAINER: Agora gerencia seu próprio scroll interno */}
       <main 
         ref={mainScrollRef}
@@ -678,23 +763,26 @@ export default function App() {
         
         {view === 'HISTORY' ? renderHistoryView() : (
             <>
-            <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all shadow-sm">
-            <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold tracking-tight text-vingi-900">
-                VINGI <span className="text-vingi-500">GALERIA TÉCNICA</span>
-                </h1>
-            </div>
-            <div className="flex items-center gap-3">
-                {state === AppState.SUCCESS && (
-                    <button onClick={resetApp} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors" title="Nova Busca">
-                        <RefreshCw size={18} />
-                    </button>
-                )}
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-vingi-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm ring-2 ring-white">
-                    AI
+            {/* Header só aparece se NÃO estiver carregando */}
+            {state !== AppState.ANALYZING && state !== AppState.ERROR && (
+                <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all shadow-sm">
+                <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold tracking-tight text-vingi-900">
+                    VINGI <span className="text-vingi-500">GALERIA TÉCNICA</span>
+                    </h1>
                 </div>
-            </div>
-            </header>
+                <div className="flex items-center gap-3">
+                    {state === AppState.SUCCESS && (
+                        <button onClick={resetApp} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors" title="Nova Busca">
+                            <RefreshCw size={18} />
+                        </button>
+                    )}
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-vingi-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm ring-2 ring-white">
+                        AI
+                    </div>
+                </div>
+                </header>
+            )}
 
             <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-full flex flex-col">
             {state === AppState.IDLE && (
@@ -740,6 +828,7 @@ export default function App() {
                                 </button>
                             </div>
                         )}
+                        <span className="text-[10px] text-gray-300 mt-4">v3.0 Stability Update</span>
                     </div>
 
                     <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center">
@@ -793,26 +882,6 @@ export default function App() {
                             <Sparkles size={16} />
                             INICIAR VARREDURA
                         </button>
-                    </div>
-                </div>
-                </div>
-            )}
-
-            {/* LOADER AJUSTADO PARA MOBILE (flex-1 ao invés de altura fixa) */}
-            {state === AppState.ANALYZING && (
-                <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]">
-                <div className="w-full max-w-xs text-center">
-                    <div className="relative w-32 h-48 mx-auto bg-white rounded-xl p-1 shadow-2xl mb-6 rotate-3 transition-transform duration-1000">
-                        {uploadedImage && <img src={uploadedImage} alt="Analise" className="w-full h-full object-cover rounded-lg" />}
-                        <div className="absolute inset-0 bg-vingi-900/20 rounded-xl"></div>
-                        <div className="absolute top-0 w-full h-1 bg-white shadow-[0_0_20px_rgba(255,255,255,0.8)] animate-scan z-20"></div>
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{MOCK_LOADING_STEPS[loadingStep]}</h3>
-                    <div className="w-48 h-1.5 bg-gray-100 rounded-full mx-auto overflow-hidden mt-3">
-                        <div 
-                            className="h-full bg-vingi-500 transition-all duration-500 ease-out"
-                            style={{ width: `${((loadingStep + 1) / MOCK_LOADING_STEPS.length) * 100}%` }}
-                        />
                     </div>
                 </div>
                 </div>

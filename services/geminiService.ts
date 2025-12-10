@@ -1,9 +1,15 @@
-
 import { GoogleGenAI, Part } from "@google/genai";
 import { MASTER_SYSTEM_PROMPT } from "../constants";
 import { PatternAnalysisResult } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// VALIDAÇÃO CRÍTICA DE API KEY PARA EVITAR TELA BRANCA
+const apiKey = process.env.API_KEY;
+
+if (!apiKey) {
+  console.error("CRITICAL ERROR: API_KEY is missing from environment variables.");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy_key_to_prevent_init_crash' });
 
 const JSON_SCHEMA_PROMPT = `
 Output valid JSON only.
@@ -59,6 +65,11 @@ export const analyzeClothingImage = async (
   secondaryImageBase64?: string | null,
   secondaryMimeType?: string | null
 ): Promise<PatternAnalysisResult> => {
+  
+  if (!apiKey) {
+    throw new Error("CHAVE DE API NÃO CONFIGURADA. O sistema não pode se conectar ao cérebro da IA. Verifique as configurações do Vercel.");
+  }
+
   try {
     const parts: Part[] = [
       {
@@ -114,7 +125,7 @@ export const analyzeClothingImage = async (
   } catch (error) {
     console.error("Error analyzing image:", error);
     if (error instanceof SyntaxError) {
-        throw new Error("Erro de processamento (JSON inválido). A resposta foi muito longa ou cortada. Tente novamente.");
+        throw new Error("Erro de processamento (JSON inválido). A resposta da IA foi corrompida. Tente novamente com uma foto mais clara.");
     }
     throw error;
   }
