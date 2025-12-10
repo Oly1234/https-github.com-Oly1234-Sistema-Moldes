@@ -1,6 +1,6 @@
 
 export default async function handler(req, res) {
-  // 1. Configuração Manual de CORS (Crucial para o Frontend acessar o Backend)
+  // 1. Configuração Manual de CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -9,44 +9,37 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // 2. Responder rápido a pre-flight requests
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // 3. Bloquear métodos não permitidos
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method Not Allowed' });
     return;
   }
 
   try {
-    // 4. Ler Corpo da Requisição
     const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType } = req.body;
     
-    // --- LÓGICA DE SEGURANÇA DE PRIORIDADE (PRIORITY AUTH) ---
+    // --- CORREÇÃO DA CHAVE DE BACKUP ---
     // Chave Real: AIzaSyAkY9AIEQB7BUHtF-rKhYlZFnEb5HBVBbU
-    // Invertida para ofuscação: UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9kAySazIA
-    const FAILSAFE_KEY_REV = "UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9kAySazIA";
+    // Reverse Correto: UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9YkAySazIA
+    const FAILSAFE_KEY_REV = "UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9YkAySazIA"; 
     const fallbackKey = FAILSAFE_KEY_REV.split('').reverse().join('');
+    
+    let apiKey = fallbackKey; 
+
+    // Sanitização da Variável de Ambiente (Remove aspas e espaços acidentais)
     const envKey = process.env.GEMINI_API_KEY;
-
-    let apiKey = fallbackKey; // Assume o Backup como padrão inicial
-
-    // Validação Estrita da Variável de Ambiente
-    // Só usa a variável da Vercel se ela existir E parecer uma chave válida (> 20 chars)
-    if (envKey && typeof envKey === 'string' && envKey.trim().length > 20) {
-        apiKey = envKey.trim();
-        console.log("System: Using Environment API Key");
-    } else {
-        console.log("System: Environment Key Invalid/Missing. Using Failsafe Key.");
+    if (envKey) {
+        const cleanKey = envKey.replace(/['"\s]/g, ''); // Remove " ' e espaços
+        if (cleanKey.length > 20) {
+            apiKey = cleanKey;
+            console.log("System: Using Cleaned Environment Key");
+        }
     }
 
-    // REMOVIDA A TRAVA DE ERRO "API Key missing".
-    // Se por algum motivo bizarro a chave estiver vazia, deixamos o Google retornar o erro real (400/403).
-
-    // 5. Definição dos Prompts
     const MASTER_SYSTEM_PROMPT = `
 Você é o Analista Técnico Sênior VINGI. Sua missão é interpretar a imagem da peça de roupa e encontrar os moldes de costura (sewing patterns) mais compatíveis na internet.
 
@@ -113,7 +106,6 @@ Responda APENAS com JSON válido.
 }
 `;
 
-    // 6. Construção da Requisição REST Manual
     const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
     const parts = [
@@ -153,7 +145,6 @@ Responda APENAS com JSON válido.
         }
     };
 
-    // 7. Chamada Fetch para o Google (Server-to-Server)
     const googleResponse = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -176,8 +167,6 @@ Responda APENAS com JSON válido.
     }
 
     const data = await googleResponse.json();
-    
-    // 8. Extração e Limpeza da Resposta
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!generatedText) {
@@ -189,10 +178,7 @@ Responda APENAS com JSON válido.
         cleanText = cleanText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '');
     }
 
-    // 9. Validação do JSON
     const jsonResult = JSON.parse(cleanText);
-
-    // 10. Sucesso
     res.status(200).json(jsonResult);
 
   } catch (error) {
