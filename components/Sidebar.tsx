@@ -47,9 +47,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return {
         icon: <ScanLine size={20} className="text-white animate-pulse" />,
         label: "PESQUISAR",
-        // Visual Premium: Gradiente, Sombra Colorida e Animação de Atenção
-        // Adicionado z-50 e opacity-100 para garantir solidez
-        className: "bg-gradient-to-r from-vingi-600 to-purple-600 border border-white/20 shadow-xl shadow-vingi-500/40 w-auto px-8 h-14 rounded-full animate-bounce-subtle ring-4 ring-vingi-900 scale-105 z-50"
+        // Visual Premium: 100% Opaco com background sólido e sombra projetada
+        // A classe ring-white cria separação visual clara contra conteúdo branco/cinza
+        className: "bg-vingi-600 hover:bg-vingi-500 border-2 border-white shadow-xl shadow-vingi-900/50 w-auto px-8 h-14 rounded-full animate-bounce-subtle z-50 ring-4 ring-black/10 scale-105"
       };
     }
 
@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     // Adicionado overflow-visible para permitir que o botão saia da caixa sem cortar
-    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all overflow-visible shadow-2xl shadow-black">
+    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all overflow-visible shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
       
       {/* Brand Icon (Mobile Hidden / Desktop Top) */}
       <div className="hidden md:flex flex-col items-center gap-6">

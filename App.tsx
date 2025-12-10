@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2 } from 'lucide-react';
 
 // --- UTILITÁRIOS DE IMAGEM E LINKS ---
 
@@ -53,8 +53,68 @@ const generateSafeUrl = (match: ExternalPatternMatch): string => {
     return url;
 };
 
+// --- WIDGET FLUTUANTE DE COMPARAÇÃO ---
+const FloatingCompareWidget: React.FC<{ mainImage: string | null; secImage: string | null }> = ({ mainImage, secImage }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [isVisible, setIsVisible] = useState(true);
+
+    if (!mainImage || !isVisible) return null;
+
+    return (
+        <div 
+            className={`fixed z-40 transition-all duration-500 ease-in-out shadow-2xl rounded-2xl overflow-hidden bg-white border-2 border-vingi-100
+                ${isExpanded 
+                    ? 'w-48 h-auto md:w-64 bottom-24 right-4 md:top-24 md:right-8 md:bottom-auto' 
+                    : 'w-16 h-16 bottom-24 right-4 md:top-24 md:right-8 md:bottom-auto hover:scale-110 cursor-pointer rounded-full'
+                }
+            `}
+            style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.3)' }}
+        >
+            <div 
+                className="relative w-full h-full group"
+                onClick={() => !isExpanded && setIsExpanded(true)}
+            >
+                <img 
+                    src={mainImage} 
+                    alt="Reference" 
+                    className={`w-full h-full object-cover transition-all ${!isExpanded ? 'scale-150' : ''}`} 
+                />
+                
+                {/* Minimized View Overlay */}
+                {!isExpanded && (
+                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors flex items-center justify-center">
+                        <div className="w-6 h-6 rounded-full bg-white/90 shadow-sm flex items-center justify-center">
+                            <Layers size={12} className="text-vingi-600"/>
+                        </div>
+                    </div>
+                )}
+
+                {/* Expanded View Controls */}
+                {isExpanded && (
+                    <>
+                        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/60 to-transparent flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-white bg-black/20 backdrop-blur px-2 py-0.5 rounded-full">SUA REFERÊNCIA</span>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+                                className="p-1 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur"
+                            >
+                                <Minimize2 size={12} />
+                            </button>
+                        </div>
+
+                        {secImage && (
+                            <div className="absolute bottom-2 right-2 w-12 h-16 rounded-lg overflow-hidden border-2 border-white shadow-lg">
+                                <img src={secImage} className="w-full h-full object-cover" alt="Sec" />
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- VIRTUAL SCRAPER ENGINE (Simulando Lógica Python Backend) ---
-// Em vez de screenshot, extrai o og:image via API JSON
 const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string }> = ({ match, safeUrl }) => {
     const domain = new URL(safeUrl).hostname;
     
@@ -317,10 +377,20 @@ export default function App() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
   
   // Refs para entrada secundária
   const secondaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryCameraInputRef = useRef<HTMLInputElement>(null);
+
+  // RESET DE SCROLL INTELIGENTE (Correção para Tela Branca no Mobile)
+  useLayoutEffect(() => {
+    // Força o scroll voltar ao topo quando a análise termina ou a view muda
+    if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [state, view, activeTab]);
 
   useEffect(() => {
       const storedHistory = localStorage.getItem('vingi_scan_history');
@@ -485,7 +555,7 @@ export default function App() {
   const strictQuery = getStrictSearchQuery();
 
   const renderHistoryView = () => (
-      <div className="p-6 max-w-5xl mx-auto min-h-screen">
+      <div className="p-6 max-w-5xl mx-auto min-h-full">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
               <History size={28} className="text-vingi-600"/> Histórico de Varreduras
           </h2>
@@ -532,7 +602,9 @@ export default function App() {
   );
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] text-gray-800 font-sans">
+    // FIX MOBILE: h-[100dvh] força altura da tela exata no celular, ignorando barras de navegação.
+    // overflow-hidden no pai impede que o corpo da página role, deixando o scroll apenas para o <main>
+    <div className="flex h-[100dvh] w-full bg-[#f8fafc] text-gray-800 font-sans overflow-hidden fixed inset-0">
       <Sidebar 
         currentView={view} 
         appState={state}
@@ -584,7 +656,16 @@ export default function App() {
           </div>
       )}
 
-      <main className="flex-1 md:ml-20 pb-20 overflow-y-auto">
+      {/* WIDGET FLUTUANTE DE COMPARAÇÃO */}
+      {state === AppState.SUCCESS && (
+          <FloatingCompareWidget mainImage={uploadedImage} secImage={uploadedSecondaryImage} />
+      )}
+
+      {/* MAIN CONTAINER: Agora gerencia seu próprio scroll interno */}
+      <main 
+        ref={mainScrollRef}
+        className="flex-1 md:ml-20 h-full overflow-y-auto overflow-x-hidden pb-24 md:pb-6 relative touch-pan-y scroll-smooth"
+      >
         
         {view === 'HISTORY' ? renderHistoryView() : (
             <>
@@ -606,7 +687,7 @@ export default function App() {
             </div>
             </header>
 
-            <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-[calc(100vh-64px)] flex flex-col">
+            <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-full flex flex-col">
             {state === AppState.IDLE && (
                 <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
                 
