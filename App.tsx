@@ -1,10 +1,13 @@
-
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
 import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock } from 'lucide-react';
+
+// --- VERSÃO DO SISTEMA ---
+// Sempre que fizer um deploy novo, altere este valor para forçar a atualização nos clientes.
+const APP_VERSION = '4.6.0-AUTO-UPDATE'; 
 
 // --- UTILITÁRIOS ---
 
@@ -455,6 +458,48 @@ export default function App() {
   const secondaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryCameraInputRef = useRef<HTMLInputElement>(null);
 
+  // --- AUTO-UPDATE LOGIC ---
+  useEffect(() => {
+    // Delay para garantir que o documento esteja estável antes de mexer no SW
+    const checkUpdate = async () => {
+        try {
+            const storedVersion = localStorage.getItem('vingi_app_version');
+            if (storedVersion !== APP_VERSION) {
+                console.log(`Atualizando sistema de ${storedVersion} para ${APP_VERSION}`);
+                
+                // 1. Limpa caches antigos do navegador
+                if ('caches' in window) {
+                   const names = await caches.keys();
+                   await Promise.all(names.map(name => caches.delete(name)));
+                }
+      
+                // 2. Desregistra Service Workers antigos com proteção de erro
+                if ('serviceWorker' in navigator) {
+                   try {
+                       const registrations = await navigator.serviceWorker.getRegistrations();
+                       for(let registration of registrations) {
+                           await registration.unregister();
+                       }
+                   } catch (swError) {
+                       console.warn("Aviso de limpeza SW (não crítico):", swError);
+                   }
+                }
+                
+                // 3. Salva nova versão e recarrega
+                localStorage.setItem('vingi_app_version', APP_VERSION);
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 100);
+            }
+        } catch (e) {
+            console.error("Falha no Auto-Update", e);
+        }
+    };
+
+    setTimeout(checkUpdate, 1000);
+  }, []);
+
   useLayoutEffect(() => {
     if (mainScrollRef.current) {
         mainScrollRef.current.scrollTop = 0;
@@ -815,7 +860,7 @@ export default function App() {
                                 </button>
                             </div>
                         )}
-                        <span className="text-[10px] text-gray-300 mt-4">v4.0 Production</span>
+                        <span className="text-[10px] text-gray-300 mt-4">{APP_VERSION}</span>
                     </div>
 
                     <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center">
