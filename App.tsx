@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
@@ -7,7 +8,7 @@ import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, Check
 
 // --- VERSÃO DO SISTEMA ---
 // Sempre que fizer um deploy novo, altere este valor para forçar a atualização nos clientes.
-const APP_VERSION = '4.6.0-AUTO-UPDATE'; 
+const APP_VERSION = '4.7.0-AUTO-UPDATE'; 
 
 // --- UTILITÁRIOS ---
 
@@ -447,6 +448,9 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
 
+  // Load More State
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isMobileBrowser, setIsMobileBrowser] = useState(false);
@@ -505,7 +509,7 @@ export default function App() {
         mainScrollRef.current.scrollTop = 0;
     }
     window.scrollTo(0, 0);
-  }, [state, view, activeTab]);
+  }, [state, view]); 
 
   useEffect(() => {
       // 1. Check if Mobile
@@ -645,6 +649,60 @@ export default function App() {
         }
     }, 500); 
   };
+  
+  const handleLoadMore = async () => {
+    if (!uploadedImage || !result || isLoadingMore) return;
+    setIsLoadingMore(true);
+
+    try {
+        const compressedMain = await compressImage(uploadedImage);
+        const mainBase64 = compressedMain.split(',')[1];
+        const mainType = compressedMain.split(';')[0].split(':')[1];
+        
+        let secondaryBase64: string | null = null;
+        let secondaryType: string | null = null;
+        
+        if (uploadedSecondaryImage) {
+            const compressedSec = await compressImage(uploadedSecondaryImage);
+            secondaryBase64 = compressedSec.split(',')[1];
+            secondaryType = compressedSec.split(';')[0].split(':')[1];
+        }
+
+        // Lista de moldes para excluir da nova busca
+        const currentPatterns = [
+            ...result.matches.exact, 
+            ...result.matches.close, 
+            ...result.matches.adventurous
+        ].map(m => m.patternName);
+
+        const newResults = await analyzeClothingImage(
+            mainBase64, 
+            mainType, 
+            secondaryBase64, 
+            secondaryType, 
+            currentPatterns // Envia lista para ignorar
+        );
+
+        // Mescla os resultados novos com os antigos
+        setResult(prev => {
+            if (!prev) return newResults;
+            return {
+                ...prev,
+                matches: {
+                    exact: [...prev.matches.exact, ...newResults.matches.exact],
+                    close: [...prev.matches.close, ...newResults.matches.close],
+                    adventurous: [...prev.matches.adventurous, ...newResults.matches.adventurous]
+                }
+            };
+        });
+
+    } catch (err: any) {
+        console.error("Erro ao carregar mais:", err);
+        // Opcional: mostrar toast de erro, mas sem travar a tela
+    } finally {
+        setIsLoadingMore(false);
+    }
+  };
 
   const resetApp = () => {
     setState(AppState.IDLE);
@@ -653,6 +711,7 @@ export default function App() {
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
     setErrorMsg(null);
+    setIsLoadingMore(false);
   };
 
   const exactMatches = result?.matches?.exact || [];
@@ -987,6 +1046,27 @@ export default function App() {
                             <p>Nenhum resultado para este filtro.</p>
                         </div>
                     )}
+                    
+                    {/* BOTÃO CARREGAR MAIS */}
+                    <div className="mt-8 flex justify-center">
+                        <button 
+                            onClick={handleLoadMore}
+                            disabled={isLoadingMore}
+                            className="group relative px-8 py-4 bg-white border border-gray-200 text-gray-700 font-bold rounded-2xl shadow-md hover:shadow-lg hover:border-vingi-300 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoadingMore ? (
+                                <>
+                                    <Loader2 size={20} className="animate-spin text-vingi-500" />
+                                    <span>Buscando Alternativas...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles size={20} className="text-vingi-500 group-hover:animate-pulse" />
+                                    <span>EXPLORAR MAIS OPÇÕES</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="mt-12 pt-8 border-t border-gray-200">

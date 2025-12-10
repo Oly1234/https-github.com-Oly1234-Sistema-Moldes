@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType } = req.body;
+    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
     // --- GESTÃO DE CHAVES ---
     // Tenta pegar da Vercel (MOLDESKEY)
@@ -47,22 +47,22 @@ export default async function handler(req, res) {
     }
 
     const MASTER_SYSTEM_PROMPT = `
-Você é o Analista Técnico Sênior VINGI. Sua missão é realizar uma VARREDURA INDUSTRIAL MASSIVA na web para encontrar moldes de costura (sewing patterns).
+Você é o Analista Técnico Sênior VINGI. Sua missão é realizar uma VARREDURA INDUSTRIAL NA WEB para encontrar moldes de costura (sewing patterns).
 
-### REGRAS DE QUANTIDADE (VOLUME MÁXIMO):
-1. **META ALTA:** O usuário quer ver TUDO que existe. Retorne entre **40 a 60 MOLDES**.
-2. **DISTRIBUIÇÃO:**
-   - **EXACT MATCHES:** Mínimo 15 moldes (Idênticos/Oficiais).
-   - **CLOSE MATCHES:** Mínimo 20 moldes (Variações de marca/detalhe).
-   - **ADVENTUROUS:** Mínimo 15 moldes (Inspirações/Vibes similares).
+### REGRAS DE QUANTIDADE (O PONTO DE EQUILÍBRIO):
+O usuário precisa de MUITAS opções, mas precisa de rapidez.
+Retorne **30 MOLDES NO TOTAL** (Limite Máximo Seguro).
+   - **EXACT MATCHES:** 10 moldes (Idênticos/Oficiais).
+   - **CLOSE MATCHES:** 10 moldes (Variações de marca/detalhe).
+   - **ADVENTUROUS:** 10 moldes (Inspirações/Vibes similares).
 
 ### FONTES DE BUSCA OBRIGATÓRIAS (USE TODAS):
 Varra profundamente os catálogos de:
 - **Big 4 & Clássicos:** Vogue, McCalls, Butterick, Simplicity, Kwik Sew, New Look.
 - **Modernos & Digitais:** Burda Style, Mood Fabrics (Free), The Fold Line, Makerist, Peppermint Mag.
-- **Indie & Cult:** Style Arc, Closet Core, Grainline Studio, Deer&Doe, Tilly and the Buttons, Merchant & Mills, Tessuti, Friday Pattern Co.
-- **Europa/Leste:** Vikisews, Grasser, Fibre Mood, Named Clothing.
-- **Marketplaces:** Etsy (Vintage & Indie Designers), eBay (Vintage Patterns).
+- **Indie & Cult:** Style Arc, Closet Core, Grainline Studio, Deer&Doe, Tilly and the Buttons.
+- **Europa/Leste:** Vikisews, Grasser, Fibre Mood.
+- **Marketplaces:** Etsy (Vintage & Indie Designers).
 
 ### REGRAS DE LINKS:
 1. **FOCO NO LINK CORRETO:** Se não tiver o link direto do produto, crie um **LINK DE BUSCA INTERNA OTIMIZADO** da loja (ex: etsy.com/search?q=...). Isso é vital para não gerar 404.
@@ -97,15 +97,12 @@ Responda APENAS com JSON válido.
         "url": "string", 
         "imageUrl": "string",
         "description": "string"
-      },
-      { "source": "..." } 
+      }
     ],
     "close": [
-      { "source": "..." },
       { "source": "..." }
     ],
     "adventurous": [
-      { "source": "..." },
       { "source": "..." }
     ]
   },
@@ -150,14 +147,22 @@ Responda APENAS com JSON válido.
         });
     }
 
-    parts.push({
-        text: `VOCÊ É O ANALISTA TÉCNICO VINGI.
+    let promptText = `VOCÊ É O ANALISTA TÉCNICO VINGI.
         1. Interprete a imagem e extraia do DNA TÊXTIL.
-        2. Retorne UMA LISTA MASSIVA DE 50+ RESULTADOS. NÃO ECONOMIZE.
+        2. Retorne UMA LISTA DE 30 RESULTADOS DE ALTA PRECISÃO.
         3. Explore marcas Indie, Big4, Europeias e Marketplaces.
         4. Use links de busca inteligentes se o produto direto for incerto.
-        ${JSON_SCHEMA_PROMPT}`
-    });
+        ${JSON_SCHEMA_PROMPT}`;
+
+    // --- LÓGICA DE "CARREGAR MAIS" ---
+    if (excludePatterns && Array.isArray(excludePatterns) && excludePatterns.length > 0) {
+        const ignoredList = excludePatterns.join(', ');
+        promptText += `\n\nATENÇÃO CRÍTICA: O usuário já viu os seguintes moldes: [${ignoredList}].
+        NÃO retorne nenhum desses novamente. Encontre ALTERNATIVAS, marcas diferentes ou estilos similares que não estejam nessa lista.
+        Cave mais fundo em catálogos independentes ou vintage para trazer novidades.`;
+    }
+
+    parts.push({ text: promptText });
 
     const payload = {
         contents: [{ parts: parts }],

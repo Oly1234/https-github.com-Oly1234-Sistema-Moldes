@@ -5,12 +5,13 @@ export const analyzeClothingImage = async (
   mainImageBase64: string, 
   mainMimeType: string,
   secondaryImageBase64?: string | null,
-  secondaryMimeType?: string | null
+  secondaryMimeType?: string | null,
+  excludePatterns: string[] = [] // Novo parâmetro opcional
 ): Promise<PatternAnalysisResult> => {
   
-  // Timeout Controller para evitar que o app fique carregando para sempre
+  // Timeout Controller Aumentado para suportar listas maiores (30+ itens)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos de limite
+  const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 segundos de limite
 
   try {
     // Chamada ao Backend Seguro (Vercel Function)
@@ -23,7 +24,8 @@ export const analyzeClothingImage = async (
         mainImageBase64,
         mainMimeType,
         secondaryImageBase64,
-        secondaryMimeType
+        secondaryMimeType,
+        excludePatterns // Envia lista para o backend
       }),
       signal: controller.signal
     });
