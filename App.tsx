@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle } from 'lucide-react';
 
 // --- UTILITÁRIOS ---
 
@@ -137,6 +137,7 @@ const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string
     const [imageSrc, setImageSrc] = useState<string | null>(match.imageUrl || null);
     const [status, setStatus] = useState<'IDLE' | 'SCRAPING' | 'CACHED' | 'FALLBACK'>('IDLE');
     const [scraperLog, setScraperLog] = useState<string>('');
+    const [isSharing, setIsSharing] = useState(false);
 
     useEffect(() => {
         const cacheKey = `vingi_v2_cache_${safeUrl}`;
@@ -184,6 +185,62 @@ const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string
             setStatus('CACHED');
         } catch (e) {
             setImageSrc(url);
+        }
+    };
+
+    const handleShare = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (isSharing) return;
+        setIsSharing(true);
+
+        const text = `*VINGI AI - Referência Encontrada*\n\n🧥 *${match.patternName}*\n🏛️ Fonte: ${match.source}\n🎯 Match: ${Math.round(match.similarityScore)}%\n\n🔗 *Acessar:* ${safeUrl}`;
+
+        try {
+            // 1. Tentar Compartilhamento Nativo com Imagem (Mobile/Web Share API)
+            if (navigator.share) {
+                let files: File[] = [];
+
+                if (imageSrc) {
+                    try {
+                        const response = await fetch(imageSrc, { mode: 'cors' });
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const file = new File([blob], "vingi_preview.jpg", { type: blob.type });
+                            // Verifica suporte a compartilhamento de arquivos
+                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                files = [file];
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("Imagem não anexada ao share (CORS/Erro Rede). Enviando apenas texto.");
+                    }
+                }
+
+                const shareData: ShareData = { text };
+
+                if (files.length > 0) {
+                    shareData.files = files;
+                } else {
+                    // Se não for possível arquivo, alguns apps preferem URL no texto (já incluído), 
+                    // mas podemos passar url no objeto também.
+                    // Para WhatsApp, o texto com link já funciona bem como fallback.
+                }
+
+                await navigator.share(shareData);
+
+            } else {
+                throw new Error("Web Share Not Supported");
+            }
+
+        } catch (error: any) {
+            // Ignorar erro se usuário cancelou
+            if (error.name !== 'AbortError') {
+                // 2. Fallback WhatsApp Link (Desktop ou erro na API)
+                const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                window.open(waUrl, '_blank');
+            }
+        } finally {
+            setIsSharing(false);
         }
     };
 
@@ -267,6 +324,15 @@ const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string
                      <span className={`text-[9px] font-bold border px-2 py-0.5 rounded-full flex items-center gap-1 ${typeColor}`}>
                          <TypeIcon size={10} /> {match.type}
                      </span>
+                     
+                     <button 
+                        onClick={handleShare}
+                        disabled={isSharing}
+                        className="p-1.5 rounded-full text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors active:scale-95 disabled:opacity-50"
+                        title="Compartilhar"
+                     >
+                         {isSharing ? <Loader2 size={16} className="animate-spin text-green-600"/> : <Share2 size={16} />}
+                     </button>
                  </div>
              </div>
         </div>
