@@ -2,25 +2,8 @@ import { GoogleGenAI, Part } from "@google/genai";
 import { MASTER_SYSTEM_PROMPT } from "../constants";
 import { PatternAnalysisResult } from "../types";
 
-// --- STEALTH KEY SYSTEM ---
-// A chave está armazenada invertida para evitar detecção automática por bots de segurança (Github/Google Scanners).
-// Chave Original: AIzaSyAkY9AIEQB7BUHtF-rKhYlZFnEb5HBVBbU
-const SECRET_PART_1 = "UbVBH5bEnFZlYhKr";
-const SECRET_PART_2 = "-FtHUB7BEIA9ykAySazIA";
-
-const getStealthKey = () => {
-    // Tenta pegar do .env primeiro (Produção correta)
-    if (process.env.API_KEY && !process.env.API_KEY.includes("undefined")) {
-        return process.env.API_KEY;
-    }
-    // Fallback: Remonta a chave invertida em tempo de execução
-    try {
-        const reversed = SECRET_PART_1 + SECRET_PART_2;
-        return reversed.split('').reverse().join('');
-    } catch (e) {
-        return '';
-    }
-};
+// Removed Stealth Key System to comply with security guidelines:
+// The API key must be obtained exclusively from process.env.API_KEY.
 
 const JSON_SCHEMA_PROMPT = `
 Output valid JSON only.
@@ -77,14 +60,14 @@ export const analyzeClothingImage = async (
   secondaryMimeType?: string | null
 ): Promise<PatternAnalysisResult> => {
   
-  const currentKey = getStealthKey();
+  const apiKey = process.env.API_KEY;
 
-  if (!currentKey) {
-     throw new Error("Chave de Segurança não detectada. Instale o App Corretamente.");
+  if (!apiKey) {
+     throw new Error("API Key not found in process.env.API_KEY");
   }
 
-  // Inicializa a IA apenas no momento da chamada para garantir que a chave esteja montada
-  const ai = new GoogleGenAI({ apiKey: currentKey });
+  // Inicializa a IA usando diretamente a chave de ambiente
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const parts: Part[] = [
@@ -140,7 +123,7 @@ export const analyzeClothingImage = async (
 
     // TRATAMENTO DE ERROS REAIS
     if (error.message?.includes('403') || error.message?.includes('API key')) {
-        throw new Error("ERRO DE SEGURANÇA (403): Chave API bloqueada pelo Google. A chave vazou e foi revogada. Gere uma nova chave no AI Studio.");
+        throw new Error("ERRO DE SEGURANÇA (403): Chave API inválida ou bloqueada.");
     }
     
     if (error.message?.includes('503') || error.message?.includes('Overloaded')) {
