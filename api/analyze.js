@@ -1,9 +1,39 @@
 
-import { GoogleGenAI } from "@google/genai";
+export default async function handler(req, res) {
+  // 1. Configuração Manual de CORS (Crucial para o Frontend acessar o Backend)
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
-// Removido 'runtime: edge' para usar o padrão Node.js Serverless (Mais compatível e seguro para SDKs)
+  // 2. Responder rápido a pre-flight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
 
-const MASTER_SYSTEM_PROMPT = `
+  // 3. Bloquear métodos não permitidos
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
+  }
+
+  try {
+    // 4. Ler Corpo da Requisição (Vercel já faz o parse se for JSON)
+    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.error("CRITICAL: GEMINI_API_KEY não encontrada nas variáveis de ambiente.");
+      res.status(500).json({ error: 'Server Config Error: API Key missing.' });
+      return;
+    }
+
+    // 5. Definição dos Prompts (Injetados diretamente para evitar dependências)
+    const MASTER_SYSTEM_PROMPT = `
 Você é o Analista Técnico Sênior VINGI. Sua missão é interpretar a imagem da peça de roupa e encontrar os moldes de costura (sewing patterns) mais compatíveis na internet.
 
 ### REGRAS CRUCIAIS DE BUSCA:
@@ -20,12 +50,10 @@ Classifique cada resultado encontrado em:
 * **EXACT:** O molde é visualmente idêntico.
 * **CLOSE:** Mesma estrutura, detalhes diferentes.
 * **ADVENTUROUS:** Vibe similar, mas construção diferente.
-
-Seja técnico, preciso e direto.
 `;
 
-const JSON_SCHEMA_PROMPT = `
-Output valid JSON only.
+    const JSON_SCHEMA_PROMPT = `
+Responda APENAS com JSON válido.
 
 {
   "patternName": "string",
@@ -72,54 +100,22 @@ Output valid JSON only.
 }
 `;
 
-export default async function handler(req) {
-  // CORS Headers para permitir que seu frontend acesse a API
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
-  }
-
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  try {
-    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType } = await req.json();
-
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      console.error("Server Error: GEMINI_API_KEY is not set in Vercel Environment Variables.");
-      return new Response(JSON.stringify({ error: 'Configuration Error: API Key missing on Server.' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-
+    // 6. Construção da Requisição REST Manual (Sem SDK)
+    const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    
     const parts = [
-      {
-        inlineData: {
-          mimeType: mainMimeType,
-          data: mainImageBase64
+        {
+            inline_data: {
+                mime_type: mainMimeType,
+                data: mainImageBase64
+            }
         }
-      }
     ];
 
     if (secondaryImageBase64 && secondaryMimeType) {
         parts.push({
-            inlineData: {
-                mimeType: secondaryMimeType,
+            inline_data: {
+                mime_type: secondaryMimeType,
                 data: secondaryImageBase64
             }
         });
@@ -134,46 +130,54 @@ export default async function handler(req) {
         ${JSON_SCHEMA_PROMPT}`
     });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", 
-      contents: { parts },
-      config: {
-        systemInstruction: MASTER_SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-      }
+    const payload = {
+        contents: [{ parts: parts }],
+        system_instruction: {
+            parts: [{ text: MASTER_SYSTEM_PROMPT }]
+        },
+        generation_config: {
+            response_mime_type: "application/json"
+        }
+    };
+
+    // 7. Chamada Fetch para o Google (Server-to-Server)
+    const googleResponse = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
     });
 
-    if (!response.text) {
-      throw new Error("No response text from Gemini");
+    if (!googleResponse.ok) {
+        const errorText = await googleResponse.text();
+        console.error("Gemini API Error:", errorText);
+        throw new Error(`Google API Error (${googleResponse.status}): ${errorText}`);
     }
 
-    let cleanText = response.text.trim();
+    const data = await googleResponse.json();
+    
+    // 8. Extração e Limpeza da Resposta
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!generatedText) {
+        throw new Error("A IA não retornou texto.");
+    }
+
+    let cleanText = generatedText.trim();
     if (cleanText.startsWith('```')) {
         cleanText = cleanText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '');
     }
-    
-    // Validação básica do JSON antes de enviar
-    JSON.parse(cleanText); 
 
-    return new Response(cleanText, {
-      status: 200,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' 
-      }
-    });
+    // 9. Validação do JSON
+    const jsonResult = JSON.parse(cleanText);
+
+    // 10. Sucesso
+    res.status(200).json(jsonResult);
 
   } catch (error) {
-    console.error("API Error:", error);
-    return new Response(JSON.stringify({ 
-      error: error.message || 'Internal Server Error',
-      details: error.toString()
-    }), {
-      status: 500,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' 
-      }
+    console.error("Backend Handler Error:", error);
+    res.status(500).json({ 
+        error: error.message || 'Erro Interno do Servidor', 
+        details: error.toString() 
     });
   }
 }
