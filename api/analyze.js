@@ -22,22 +22,25 @@ export default async function handler(req, res) {
   try {
     const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType } = req.body;
     
-    // --- CORREÇÃO DA CHAVE DE BACKUP ---
-    // Chave Real: AIzaSyAkY9AIEQB7BUHtF-rKhYlZFnEb5HBVBbU
-    // Reverse Correto: UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9YkAySazIA
-    const FAILSAFE_KEY_REV = "UbBVBH5bEnFZlYhKr-FtHUB7BQEIA9YkAySazIA"; 
-    const fallbackKey = FAILSAFE_KEY_REV.split('').reverse().join('');
+    // --- GESTÃO DE CHAVES ---
+    // Atualizado para buscar a nova variável: MOLDESKEY
     
-    let apiKey = fallbackKey; 
-
-    // Sanitização da Variável de Ambiente (Remove aspas e espaços acidentais)
-    const envKey = process.env.GEMINI_API_KEY;
+    let apiKey = null;
+    const envKey = process.env.MOLDESKEY;
+    
     if (envKey) {
-        const cleanKey = envKey.replace(/['"\s]/g, ''); // Remove " ' e espaços
+        // Limpeza de segurança (remove aspas ou espaços que podem vir do copy-paste)
+        const cleanKey = envKey.replace(/['"\s]/g, '');
         if (cleanKey.length > 20) {
             apiKey = cleanKey;
-            console.log("System: Using Cleaned Environment Key");
+            // Log de Segurança (Mostra apenas o início para debug na Vercel)
+            console.log(`System: Usando Chave MOLDESKEY iniciando em ${cleanKey.substring(0, 4)}...`);
         }
+    }
+
+    if (!apiKey) {
+        console.error("System Error: MOLDESKEY não encontrada ou inválida nas variáveis de ambiente.");
+        return res.status(500).json({ error: "Configuração de Servidor: Variável MOLDESKEY não encontrada na Vercel. Verifique as configurações." });
     }
 
     const MASTER_SYSTEM_PROMPT = `
@@ -157,10 +160,10 @@ Responda APENAS com JSON válido.
         console.error("Gemini API Error Details:", errorText);
         
         if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
-             throw new Error("Erro de Autenticação com o Google (Chave Rejeitada).");
+             throw new Error("Erro de Autenticação com o Google: A Chave API configurada na Vercel (MOLDESKEY) é inválida ou foi rejeitada.");
         }
         if (googleResponse.status === 403) {
-             throw new Error("Chave de API Bloqueada ou sem permissão.");
+             throw new Error("Chave de API Bloqueada pelo Google. Gere uma nova chave no AI Studio.");
         }
 
         throw new Error(`Google API Error (${googleResponse.status})`);
