@@ -22,60 +22,75 @@ export default async function handler(req, res) {
   try {
     const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
-    // --- GESTÃO DE CHAVES DE SEGURANÇA (INDUSTRIAL V5) ---
-    // 1. Busca a chave
-    let rawKey = process.env.API_KEY || process.env.MOLDESKEY;
+    // --- GESTÃO DE CHAVES DE SEGURANÇA (ATUALIZAÇÃO MOLDESOK) ---
+    // MUDANÇA CRÍTICA: Busca especificamente a variável 'MOLDESOK' definida pelo usuário.
+    // Fallbacks mantidos apenas para segurança, mas a prioridade é a nova chave.
+    let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY;
     
-    // 2. Sanitização: Remove espaços em branco que causam erro 'API_KEY_INVALID'
+    // 2. Sanitização (Remove espaços em branco que causam erro 400)
     const apiKey = rawKey ? rawKey.trim() : null;
 
-    // 3. Diagnóstico de Chave (Sem expor o segredo)
+    // 3. Diagnóstico (Log seguro no console da Vercel)
     if (!apiKey) {
-        console.error("CRITICAL: API Key is missing in Environment Variables.");
+        console.error("CRITICAL: Nenhuma chave encontrada. Adicione 'MOLDESOK' nas variáveis de ambiente.");
         return res.status(500).json({ 
-            error: "Erro de Configuração: API Key não encontrada. Adicione 'API_KEY' na Vercel e faça REDEPLOY." 
+            error: "Erro de Configuração: Chave de API (MOLDESOK) não encontrada na Vercel." 
         });
     } else {
-        console.log(`System: Usando chave terminada em ...${apiKey.slice(-4)}`);
+        // Identifica qual variável está sendo usada para facilitar debug
+        let sourceVar = "DESCONHECIDA";
+        if (process.env.MOLDESOK) sourceVar = "MOLDESOK";
+        else if (process.env.MOLDESKEY) sourceVar = "MOLDESKEY";
+        else if (process.env.API_KEY) sourceVar = "API_KEY";
+        
+        console.log(`System: Autenticado via ${sourceVar} (Final ...${apiKey.slice(-4)})`);
     }
 
-    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.1 (FARM RIO/RESORT UPDATE) ---
+    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.2 (TROPICAL/FARM RIO SPECIALIST) ---
     const MASTER_SYSTEM_PROMPT = `
 ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
 MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS.
 
-### SPECIALIZED KNOWLEDGE BASE (BRAZILIAN RESORT & FARM RIO STYLE):
-The user explicitly searches for styles similar to **FARM RIO**, **ANTIX**, and **AGILITÀ**.
-You must strictly identify and prioritize these construction details:
-1.  **"Recortes" (Cutouts):** Side waist cutouts, underbust keyholes, bodice separations with O-rings or knots. Search terms: *"Cutout maxi dress pattern", "Midriff baring dress sewing pattern"*.
-2.  **"Frente Única" (Halter/Strappy):** High neck halters, spaghetti straps, criss-cross back details. Search terms: *"Halter neck maxi dress pattern", "Open back resort dress"*.
-3.  **"Mangas Amplas" (Statement Sleeves):** Wide Kimono sleeves, Butterfly sleeves, Puff sleeves with elastic cuffs. Search terms: *"Wide sleeve boho dress pattern", "Kimono sleeve maxi pattern"*.
-4.  **"Fluidez" (Flow & Tiered):** Tiered skirts ("Três Marias"), gathered waists, voluminous viscose drape. Search terms: *"Tiered maxi dress pattern", "Buffet dress pattern", "Boho chic sewing pattern"*.
-5.  **"Um Ombro Só" (Asymmetrical):** One-shoulder bodices. Search terms: *"One shoulder maxi dress pattern", "Asymmetrical greek dress pattern"*.
+### VISUAL INTELLIGENCE MODULE: BRAZILIAN TROPICAL & RESORT (FARM RIO STYLE)
+The user is specifically looking for the "Brazilian Tropical" aesthetic (similar to Farm Rio, Agua de Coco, Borana).
+Analyze the image for these specific signatures:
+
+1.  **"RECORTES ESTRATÉGICOS" (Cutouts):**
+    *   Look for: Side waist cutouts, "O-Ring" centers, underbust openings.
+    *   Pattern Search Terms: *"Cutout maxi dress pattern", "Waist cutout dress sewing pattern", "Vikisews Oona", "McCalls cutout dress"*.
+
+2.  **"SAIAS TRÊS MARIAS" (Tiered Skirts):**
+    *   Look for: Horizontal seams adding volume (tiers/ruffles) on a maxi skirt.
+    *   Pattern Search Terms: *"Tiered maxi skirt dress pattern", "Buffet dress pattern", "Boho tiered dress"*.
+
+3.  **"DECOTES & AMARRAÇÕES" (Necklines):**
+    *   Look for: Deep V-necks, Halter necks (Frente Única) with tie-backs, twisted bust details.
+    *   Pattern Search Terms: *"Deep V maxi dress pattern", "Halter neck open back pattern", "Twist front dress pattern"*.
+
+4.  **"MANGAS" (Sleeves):**
+    *   Look for: Wide Kimono sleeves, Puff sleeves with elastic, or Spaghetti straps (Alcinha).
 
 ### CORE OBJECTIVE:
-Analyze the input image(s) as a textile engineer. Deconstruct the garment into its construction methods and find the EXACT sewing patterns available online to recreate it.
+Deconstruct the garment construction hidden beneath the prints. Ignore the print pattern itself, focus on the SEAMS.
 
 ### OUTPUT QUANTITY PROTOCOL:
-Generate exactly **30 HIGH-FIDELITY RESULTS** structured as:
-1.  **10 EXACT MATCHES:** The official pattern or a 99% visual clone (Prioritize exact construction matches).
-2.  **10 CLOSE ALTERNATIVES:** Same silhouette, minor detail variations (e.g., different pocket, cuff).
-3.  **10 VIBE/AESTHETIC MATCHES:** Captures the "Farm Rio/Boho" mood (good for broad inspiration).
+Generate exactly **30 HIGH-FIDELITY RESULTS**:
+1.  **10 EXACT CONSTRUCTION MATCHES:** The cut/seams must match.
+2.  **10 CLOSE ALTERNATIVES:** Similar silhouette but maybe different sleeve/length.
+3.  **10 VIBE/AESTHETIC MATCHES:** "Farm Rio Vibe" (Tropical, Flowy, Boho) - Good for inspiration.
 
 ### SEARCH INTELLIGENCE (DEEP WEB SCAN):
-You must simulate a search across these specific databases:
-- **Commercial Giants:** Vogue (Very good for designer lookalikes), McCalls (Fashion Star collection), Butterick, Simplicity.
-- **Modern & Boho:** Fibre Mood (Excellent for loose fits), Vikisews (Excellent for modern cutouts), Style Arc, Closet Core, Tessuti.
-- **Vintage Archives:** Lady Marlowe, Mrs. Depew, Etsy Vintage (for the 70s vibe often found in Farm styles).
+Prioritize these sources for this specific style:
+- **Big 4:** McCalls (Fashion Star), Vogue (Designer).
+- **Indie/Modern:** Vikisews (Best for cutouts), Fibre Mood (Best for loose/tiered), Style Arc, Closet Core.
+- **Brazilian/Latin Style:** Search for terms like "Latin Resort Wear" patterns.
 
-### HYPER-LINKING STRATEGY (CRITICAL):
-The user hates 404 errors. You must be strategic:
-1.  **Direct Product Link:** Use ONLY if you are 95% sure it exists.
-2.  **Smart Search Link (PREFERRED):** Construct a search URL that lands on a results page.
-    *   *Bad:* site.com/products/unknown-id
-    *   *Good:* etsy.com/search?q=cutout+maxi+dress+pattern
-    *   *Good:* burdastyle.com/catalogsearch/result/?q=halter+neck+dress
-3.  **Search Terms:** Use technical keywords found in the image (e.g., "Godet Skirt", "Raglan Sleeve", "Mandarin Collar").
+### HYPER-LINKING STRATEGY:
+1.  **Direct Product Link:** Only if certain.
+2.  **Smart Search Link (MANDATORY if uncertain):**
+    *   *Good:* etsy.com/search?q=tropical+cutout+dress+pattern
+    *   *Good:* burdastyle.com/catalogsearch/result/?q=tiered+dress
+3.  **Search Terms:** Use technical keywords found in the image.
 
 ### JSON DATA STRUCTURE:
 Return strictly valid JSON.
@@ -84,13 +99,13 @@ Return strictly valid JSON.
     const JSON_SCHEMA_PROMPT = `
 RESPONSE FORMAT (JSON ONLY):
 {
-  "patternName": "Name of the garment style (ex: The Sapporo Coat)",
-  "category": "Broad Category (ex: Outerwear)",
+  "patternName": "Name of the garment style (ex: The Tropical Cutout Maxi)",
+  "category": "Broad Category (ex: Resort Wear)",
   "technicalDna": { 
-    "silhouette": "Technical shape description (ex: A-Line with Side Cutouts)", 
-    "neckline": "Neckline analysis (ex: Halter with keyhole)", 
-    "sleeve": "Sleeve construction (ex: Wide Kimono)", 
-    "fabricStructure": "Drape and weight analysis (ex: Fluid Viscose)"
+    "silhouette": "Technical shape (ex: A-Line with Side Cutouts)", 
+    "neckline": "Neckline (ex: Deep V Halter)", 
+    "sleeve": "Sleeve (ex: Kimono or Sleeveless)", 
+    "fabricStructure": "Fabric (ex: Viscose/Linen Blend)"
   },
   "matches": {
     "exact": [
@@ -101,7 +116,7 @@ RESPONSE FORMAT (JSON ONLY):
         "type": "PAGO/GRATIS/INDIE", 
         "url": "VALID_URL_OR_SMART_SEARCH", 
         "imageUrl": "OPTIONAL_IMAGE_URL",
-        "description": "Why is this an exact match?"
+        "description": "Technical reason for match (ex: Matches the waist cutout and tiered skirt)"
       }
     ],
     "close": [ { ... } ],
@@ -140,10 +155,11 @@ RESPONSE FORMAT (JSON ONLY):
         });
     }
 
-    let promptText = `EXECUTE VINGI INDUSTRIAL SCAN v5.1 (RESORT/FARM EDITION).
-        1. ANALYZE visual construction (Look for Cutouts, Halters, Tiered Skirts).
-        2. GENERATE 30 Patterns (10 Exact, 10 Close, 10 Vibe).
-        3. PRIORITIZE available PDF patterns from global indie designers like Vikisews, Fibre Mood, and Big 4.
+    let promptText = `EXECUTE VINGI INDUSTRIAL SCAN v5.2 (FARM RIO/TROPICAL SPECIALIST).
+        1. ANALYZE visual construction: Look for CUTOUTS (Cintura), TIERED SKIRTS (Três Marias), HALTER NECKS.
+        2. IGNORE the print pattern, focus on SEAM LINES.
+        3. GENERATE 30 Patterns (10 Exact, 10 Close, 10 Vibe).
+        4. PRIORITIZE global patterns that mimic Brazilian Resort Wear (Vikisews, McCalls, Fibre Mood).
         ${JSON_SCHEMA_PROMPT}`;
 
     // --- LÓGICA DE "PAGINAÇÃO INTELIGENTE" ---
@@ -152,7 +168,7 @@ RESPONSE FORMAT (JSON ONLY):
         promptText += `\n\nEXCLUSION FILTER ACTIVE:
         User has already seen: [${ignoredList}].
         DO NOT return these specific patterns again.
-        FIND NEW ALTERNATIVES. Dig deeper into less common brands (e.g., Marfy, Lekala, Grasser).`;
+        FIND NEW ALTERNATIVES. Dig deeper into Etsy Vintage or Indie Designers.`;
     }
 
     parts.push({ text: promptText });
@@ -180,10 +196,10 @@ RESPONSE FORMAT (JSON ONLY):
         
         // Diagnóstico preciso para o usuário
         if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
-             throw new Error("CRÍTICO: A API Key na Vercel é inválida ou foi deletada. Gere uma nova no Google AI Studio.");
+             throw new Error("CRÍTICO: A chave (MOLDESOK) é inválida. Verifique se copiou a chave inteira ou se há espaços extras.");
         }
         if (googleResponse.status === 403) {
-             throw new Error("CRÍTICO: Chave bloqueada ou expirada. Verifique o Google AI Studio.");
+             throw new Error("CRÍTICO: Chave bloqueada ou sem permissão. Verifique o Google AI Studio.");
         }
         if (googleResponse.status === 429) {
              throw new Error("Tráfego intenso. Aguarde 30 segundos e tente novamente.");
