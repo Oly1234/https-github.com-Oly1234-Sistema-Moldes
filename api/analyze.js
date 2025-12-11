@@ -22,95 +22,100 @@ export default async function handler(req, res) {
   try {
     const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
-    // --- GESTÃO DE CHAVES DE SEGURANÇA ---
-    // A chave deve vir EXCLUSIVAMENTE das variáveis de ambiente para garantir que cada instância
-    // tenha sua própria cota e não sofra bloqueios globais (Erro 403).
-    const apiKey = process.env.API_KEY || process.env.MOLDESKEY;
+    // --- GESTÃO DE CHAVES DE SEGURANÇA (INDUSTRIAL V5) ---
+    // 1. Busca a chave
+    let rawKey = process.env.API_KEY || process.env.MOLDESKEY;
+    
+    // 2. Sanitização: Remove espaços em branco que causam erro 'API_KEY_INVALID'
+    const apiKey = rawKey ? rawKey.trim() : null;
 
+    // 3. Diagnóstico de Chave (Sem expor o segredo)
     if (!apiKey) {
-        console.error("System Error: Nenhuma chave de API configurada.");
+        console.error("CRITICAL: API Key is missing in Environment Variables.");
         return res.status(500).json({ 
-            error: "Erro de Configuração: API Key não encontrada. Adicione 'API_KEY' nas variáveis de ambiente da Vercel." 
+            error: "Erro de Configuração: API Key não encontrada. Adicione 'API_KEY' na Vercel e faça REDEPLOY." 
         });
+    } else {
+        console.log(`System: Usando chave terminada em ...${apiKey.slice(-4)}`);
     }
 
+    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.1 (FARM RIO/RESORT UPDATE) ---
     const MASTER_SYSTEM_PROMPT = `
-Você é o Analista Técnico Sênior VINGI. Sua missão é realizar uma VARREDURA INDUSTRIAL NA WEB para encontrar moldes de costura (sewing patterns).
+ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
+MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS.
 
-### REGRAS DE QUANTIDADE (O PONTO DE EQUILÍBRIO):
-O usuário precisa de MUITAS opções, mas precisa de rapidez.
-Retorne **30 MOLDES NO TOTAL** (Limite Máximo Seguro).
-   - **EXACT MATCHES:** 10 moldes (Idênticos/Oficiais).
-   - **CLOSE MATCHES:** 10 moldes (Variações de marca/detalhe).
-   - **ADVENTUROUS:** 10 moldes (Inspirações/Vibes similares).
+### SPECIALIZED KNOWLEDGE BASE (BRAZILIAN RESORT & FARM RIO STYLE):
+The user explicitly searches for styles similar to **FARM RIO**, **ANTIX**, and **AGILITÀ**.
+You must strictly identify and prioritize these construction details:
+1.  **"Recortes" (Cutouts):** Side waist cutouts, underbust keyholes, bodice separations with O-rings or knots. Search terms: *"Cutout maxi dress pattern", "Midriff baring dress sewing pattern"*.
+2.  **"Frente Única" (Halter/Strappy):** High neck halters, spaghetti straps, criss-cross back details. Search terms: *"Halter neck maxi dress pattern", "Open back resort dress"*.
+3.  **"Mangas Amplas" (Statement Sleeves):** Wide Kimono sleeves, Butterfly sleeves, Puff sleeves with elastic cuffs. Search terms: *"Wide sleeve boho dress pattern", "Kimono sleeve maxi pattern"*.
+4.  **"Fluidez" (Flow & Tiered):** Tiered skirts ("Três Marias"), gathered waists, voluminous viscose drape. Search terms: *"Tiered maxi dress pattern", "Buffet dress pattern", "Boho chic sewing pattern"*.
+5.  **"Um Ombro Só" (Asymmetrical):** One-shoulder bodices. Search terms: *"One shoulder maxi dress pattern", "Asymmetrical greek dress pattern"*.
 
-### FONTES DE BUSCA OBRIGATÓRIAS (USE TODAS):
-Varra profundamente os catálogos de:
-- **Big 4 & Clássicos:** Vogue, McCalls, Butterick, Simplicity, Kwik Sew, New Look.
-- **Modernos & Digitais:** Burda Style, Mood Fabrics (Free), The Fold Line, Makerist, Peppermint Mag.
-- **Indie & Cult:** Style Arc, Closet Core, Grainline Studio, Deer&Doe, Tilly and the Buttons.
-- **Europa/Leste:** Vikisews, Grasser, Fibre Mood.
-- **Marketplaces:** Etsy (Vintage & Indie Designers).
+### CORE OBJECTIVE:
+Analyze the input image(s) as a textile engineer. Deconstruct the garment into its construction methods and find the EXACT sewing patterns available online to recreate it.
 
-### REGRAS DE LINKS:
-1. **FOCO NO LINK CORRETO:** Se não tiver o link direto do produto, crie um **LINK DE BUSCA INTERNA OTIMIZADO** da loja (ex: etsy.com/search?q=...). Isso é vital para não gerar 404.
-2. **PRECISÃO TÉCNICA:** Identifique o DNA da peça (ex: "Raglan Sleeve", "Empire Waist") e use esses termos para encontrar os moldes.
+### OUTPUT QUANTITY PROTOCOL:
+Generate exactly **30 HIGH-FIDELITY RESULTS** structured as:
+1.  **10 EXACT MATCHES:** The official pattern or a 99% visual clone (Prioritize exact construction matches).
+2.  **10 CLOSE ALTERNATIVES:** Same silhouette, minor detail variations (e.g., different pocket, cuff).
+3.  **10 VIBE/AESTHETIC MATCHES:** Captures the "Farm Rio/Boho" mood (good for broad inspiration).
 
-### ESTRUTURA DE DADOS:
-Classifique cada resultado encontrado em:
-* **EXACT:** O molde é visualmente idêntico.
-* **CLOSE:** Mesma estrutura, detalhes diferentes.
-* **ADVENTUROUS:** Vibe similar, mas construção diferente.
+### SEARCH INTELLIGENCE (DEEP WEB SCAN):
+You must simulate a search across these specific databases:
+- **Commercial Giants:** Vogue (Very good for designer lookalikes), McCalls (Fashion Star collection), Butterick, Simplicity.
+- **Modern & Boho:** Fibre Mood (Excellent for loose fits), Vikisews (Excellent for modern cutouts), Style Arc, Closet Core, Tessuti.
+- **Vintage Archives:** Lady Marlowe, Mrs. Depew, Etsy Vintage (for the 70s vibe often found in Farm styles).
+
+### HYPER-LINKING STRATEGY (CRITICAL):
+The user hates 404 errors. You must be strategic:
+1.  **Direct Product Link:** Use ONLY if you are 95% sure it exists.
+2.  **Smart Search Link (PREFERRED):** Construct a search URL that lands on a results page.
+    *   *Bad:* site.com/products/unknown-id
+    *   *Good:* etsy.com/search?q=cutout+maxi+dress+pattern
+    *   *Good:* burdastyle.com/catalogsearch/result/?q=halter+neck+dress
+3.  **Search Terms:** Use technical keywords found in the image (e.g., "Godet Skirt", "Raglan Sleeve", "Mandarin Collar").
+
+### JSON DATA STRUCTURE:
+Return strictly valid JSON.
 `;
 
     const JSON_SCHEMA_PROMPT = `
-Responda APENAS com JSON válido.
-
+RESPONSE FORMAT (JSON ONLY):
 {
-  "patternName": "string",
-  "category": "string",
+  "patternName": "Name of the garment style (ex: The Sapporo Coat)",
+  "category": "Broad Category (ex: Outerwear)",
   "technicalDna": { 
-    "silhouette": "string", 
-    "neckline": "string", 
-    "sleeve": "string", 
-    "fabricStructure": "string"
+    "silhouette": "Technical shape description (ex: A-Line with Side Cutouts)", 
+    "neckline": "Neckline analysis (ex: Halter with keyhole)", 
+    "sleeve": "Sleeve construction (ex: Wide Kimono)", 
+    "fabricStructure": "Drape and weight analysis (ex: Fluid Viscose)"
   },
   "matches": {
     "exact": [
       { 
-        "source": "string", 
-        "patternName": "string", 
+        "source": "Brand Name", 
+        "patternName": "Pattern Name/Number", 
         "similarityScore": 99, 
-        "type": "PAGO/GRATIS", 
-        "url": "string", 
-        "imageUrl": "string",
-        "description": "string"
+        "type": "PAGO/GRATIS/INDIE", 
+        "url": "VALID_URL_OR_SMART_SEARCH", 
+        "imageUrl": "OPTIONAL_IMAGE_URL",
+        "description": "Why is this an exact match?"
       }
     ],
-    "close": [
-      { "source": "..." }
-    ],
-    "adventurous": [
-      { "source": "..." }
-    ]
+    "close": [ { ... } ],
+    "adventurous": [ { ... } ]
   },
   "curatedCollections": [
       {
-          "sourceName": "string",
-          "title": "string",
-          "itemCount": "string",
-          "searchUrl": "string",
-          "description": "string",
+          "sourceName": "Etsy/Burda/Etc",
+          "title": "Collection Title",
+          "itemCount": "15+",
+          "searchUrl": "SMART_SEARCH_URL",
+          "description": "Short reasoning",
           "icon": "SHOPPING"
       }
-  ],
-  "recommendedResources": [
-    {
-      "name": "string",
-      "type": "PURCHASE", 
-      "url": "string",
-      "description": "string"
-    }
   ]
 }
 `;
@@ -135,19 +140,19 @@ Responda APENAS com JSON válido.
         });
     }
 
-    let promptText = `VOCÊ É O ANALISTA TÉCNICO VINGI.
-        1. Interprete a imagem e extraia do DNA TÊXTIL.
-        2. Retorne UMA LISTA DE 30 RESULTADOS DE ALTA PRECISÃO.
-        3. Explore marcas Indie, Big4, Europeias e Marketplaces.
-        4. Use links de busca inteligentes se o produto direto for incerto.
+    let promptText = `EXECUTE VINGI INDUSTRIAL SCAN v5.1 (RESORT/FARM EDITION).
+        1. ANALYZE visual construction (Look for Cutouts, Halters, Tiered Skirts).
+        2. GENERATE 30 Patterns (10 Exact, 10 Close, 10 Vibe).
+        3. PRIORITIZE available PDF patterns from global indie designers like Vikisews, Fibre Mood, and Big 4.
         ${JSON_SCHEMA_PROMPT}`;
 
-    // --- LÓGICA DE "CARREGAR MAIS" ---
+    // --- LÓGICA DE "PAGINAÇÃO INTELIGENTE" ---
     if (excludePatterns && Array.isArray(excludePatterns) && excludePatterns.length > 0) {
         const ignoredList = excludePatterns.join(', ');
-        promptText += `\n\nATENÇÃO CRÍTICA: O usuário já viu os seguintes moldes: [${ignoredList}].
-        NÃO retorne nenhum desses novamente. Encontre ALTERNATIVAS, marcas diferentes ou estilos similares que não estejam nessa lista.
-        Cave mais fundo em catálogos independentes ou vintage para trazer novidades.`;
+        promptText += `\n\nEXCLUSION FILTER ACTIVE:
+        User has already seen: [${ignoredList}].
+        DO NOT return these specific patterns again.
+        FIND NEW ALTERNATIVES. Dig deeper into less common brands (e.g., Marfy, Lekala, Grasser).`;
     }
 
     parts.push({ text: promptText });
@@ -173,14 +178,15 @@ Responda APENAS com JSON válido.
         console.error("Gemini API Error Status:", googleResponse.status);
         console.error("Gemini API Error Details:", errorText);
         
+        // Diagnóstico preciso para o usuário
         if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
-             throw new Error("Erro de Autenticação: A API_KEY configurada na Vercel é inválida.");
+             throw new Error("CRÍTICO: A API Key na Vercel é inválida ou foi deletada. Gere uma nova no Google AI Studio.");
         }
         if (googleResponse.status === 403) {
-             throw new Error("Cota de API Excedida ou Chave Bloqueada. Verifique o faturamento no Google AI Studio.");
+             throw new Error("CRÍTICO: Chave bloqueada ou expirada. Verifique o Google AI Studio.");
         }
         if (googleResponse.status === 429) {
-             throw new Error("Muitas requisições (429). Aguarde alguns instantes.");
+             throw new Error("Tráfego intenso. Aguarde 30 segundos e tente novamente.");
         }
 
         throw new Error(`Google API Error (${googleResponse.status})`);
@@ -190,7 +196,7 @@ Responda APENAS com JSON válido.
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!generatedText) {
-        throw new Error("A IA processou, mas não retornou texto. Tente novamente.");
+        throw new Error("A IA analisou a imagem mas não gerou texto. Tente uma foto com melhor iluminação.");
     }
 
     let cleanText = generatedText.trim();
