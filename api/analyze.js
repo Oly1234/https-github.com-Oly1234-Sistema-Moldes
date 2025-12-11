@@ -84,11 +84,11 @@ The user loves the "Farm Rio" aesthetic (Antix, Borana, Agilità).
 *   Ignore the prints (tropical/floral).
 *   Focus on the **STRUCTURE**: deep V-necks, flowy viscose behavior, elastic waists, strategic skin exposure.
 
-### OUTPUT QUANTITY PROTOCOL:
-Generate exactly **30 HIGH-FIDELITY RESULTS**:
-1.  **10 EXACT MATCHES:** Prioritize **Vikisews** (modern) and **McCalls** (classic).
-2.  **10 CLOSE ALTERNATIVES:** Prioritize **Marlene Mukai** (free/technical) and **Mood Fabrics**.
-3.  **10 VIBE/AESTHETIC MATCHES:** **Etsy** and Indie designers (Farm Rio vibe).
+### OUTPUT QUANTITY PROTOCOL (BATCH OPTIMIZATION):
+Generate exactly **45 HIGH-FIDELITY RESULTS** in a single run to optimize API usage:
+1.  **15 EXACT MATCHES:** Prioritize **Vikisews** (modern) and **McCalls** (classic).
+2.  **15 CLOSE ALTERNATIVES:** Prioritize **Marlene Mukai** (free/technical) and **Mood Fabrics**.
+3.  **15 VIBE/AESTHETIC MATCHES:** **Etsy** and Indie designers (Farm Rio vibe).
 
 ### HYPER-LINKING STRATEGY:
 1.  **Direct Product Link:** Only if certain.
@@ -161,14 +161,14 @@ RESPONSE FORMAT (JSON ONLY):
         });
     }
 
-    let promptText = `EXECUTE VINGI GLOBAL SCAN v5.3 (MULTI-LANGUAGE).
+    let promptText = `EXECUTE VINGI GLOBAL SCAN v5.4 (BATCH OPTIMIZED).
         1. ANALYZE visual construction (Cutouts, Tiers, Asymmetry).
         2. TRANSLATE features to English Keywords (e.g., 'Três Marias' -> 'Tiered Skirt').
         3. SEARCH GLOBALLY: Vikisews, Mood Fabrics, McCalls, Etsy, and LOCALLY: Marlene Mukai.
-        4. GENERATE 30 Patterns (10 Exact, 10 Close, 10 Vibe).
+        4. GENERATE 45 Patterns (15 Exact, 15 Close, 15 Vibe).
         ${JSON_SCHEMA_PROMPT}`;
 
-    // --- LÓGICA DE "PAGINAÇÃO INTELIGENTE" ---
+    // --- LÓGICA DE EXCLUSÃO (MANTIDA POR PRECAUÇÃO, MAS MENOS USADA COM BATCHING) ---
     if (excludePatterns && Array.isArray(excludePatterns) && excludePatterns.length > 0) {
         const ignoredList = excludePatterns.join(', ');
         promptText += `\n\nEXCLUSION FILTER ACTIVE:

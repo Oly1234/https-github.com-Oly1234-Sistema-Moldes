@@ -8,7 +8,7 @@ import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, Check
 
 // --- VERSÃO DO SISTEMA ---
 // Sempre que fizer um deploy novo, altere este valor para forçar a atualização nos clientes.
-const APP_VERSION = '5.2.1-DRAGGABLE-WIDGET'; 
+const APP_VERSION = '5.4.0-BATCH-OPTIMIZED'; 
 
 // --- UTILITÁRIOS ---
 
@@ -523,8 +523,8 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
 
-  // Load More State
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // --- LOCAL PAGINATION STATE (Optimization) ---
+  const [visibleCount, setVisibleCount] = useState(12);
 
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -692,6 +692,7 @@ export default function App() {
 
     setState(AppState.ANALYZING);
     setErrorMsg(null);
+    setVisibleCount(12); // Reset to initial batch on new analysis
     
     if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
     window.scrollTo(0,0);
@@ -725,58 +726,10 @@ export default function App() {
     }, 500); 
   };
   
-  const handleLoadMore = async () => {
-    if (!uploadedImage || !result || isLoadingMore) return;
-    setIsLoadingMore(true);
-
-    try {
-        const compressedMain = await compressImage(uploadedImage);
-        const mainBase64 = compressedMain.split(',')[1];
-        const mainType = compressedMain.split(';')[0].split(':')[1];
-        
-        let secondaryBase64: string | null = null;
-        let secondaryType: string | null = null;
-        
-        if (uploadedSecondaryImage) {
-            const compressedSec = await compressImage(uploadedSecondaryImage);
-            secondaryBase64 = compressedSec.split(',')[1];
-            secondaryType = compressedSec.split(';')[0].split(':')[1];
-        }
-
-        // Lista de moldes para excluir da nova busca
-        const currentPatterns = [
-            ...result.matches.exact, 
-            ...result.matches.close, 
-            ...result.matches.adventurous
-        ].map(m => m.patternName);
-
-        const newResults = await analyzeClothingImage(
-            mainBase64, 
-            mainType, 
-            secondaryBase64, 
-            secondaryType, 
-            currentPatterns // Envia lista para ignorar
-        );
-
-        // Mescla os resultados novos com os antigos
-        setResult(prev => {
-            if (!prev) return newResults;
-            return {
-                ...prev,
-                matches: {
-                    exact: [...prev.matches.exact, ...newResults.matches.exact],
-                    close: [...prev.matches.close, ...newResults.matches.close],
-                    adventurous: [...prev.matches.adventurous, ...newResults.matches.adventurous]
-                }
-            };
-        });
-
-    } catch (err: any) {
-        console.error("Erro ao carregar mais:", err);
-        // Opcional: mostrar toast de erro, mas sem travar a tela
-    } finally {
-        setIsLoadingMore(false);
-    }
+  // --- OPTIMIZED LOAD MORE (LOCAL PAGINATION) ---
+  const handleLoadMore = () => {
+      // Just increase the visible count, no API call needed. It's instant and free.
+      setVisibleCount(prev => prev + 12);
   };
 
   const resetApp = () => {
@@ -785,8 +738,8 @@ export default function App() {
     setUploadedImage(null);
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
+    setVisibleCount(12);
     setErrorMsg(null);
-    setIsLoadingMore(false);
   };
 
   const exactMatches = result?.matches?.exact || [];
@@ -804,6 +757,9 @@ export default function App() {
   };
 
   const filteredData = getFilteredMatches();
+  // Apply pagination: Only show what fits in visibleCount
+  const visibleData = filteredData.slice(0, visibleCount);
+  const hasMoreItems = visibleCount < filteredData.length;
   
   const getStrictSearchQuery = () => {
       if (!result) return '';
@@ -1109,11 +1065,17 @@ export default function App() {
                 </div>
 
                 <div className="min-h-[600px]">
-                    {filteredData.length > 0 ? (
+                    {visibleData.length > 0 ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-                            {filteredData.map((match, i) => {
+                            {visibleData.map((match, i) => {
                                 const safeUrl = generateSafeUrl(match);
-                                return <PatternVisualCard key={i} match={match} safeUrl={safeUrl} />;
+                                return (
+                                    <PatternVisualCard 
+                                        key={i} 
+                                        match={match} 
+                                        safeUrl={safeUrl} 
+                                    />
+                                );
                             })}
                         </div>
                     ) : (
@@ -1122,26 +1084,18 @@ export default function App() {
                         </div>
                     )}
                     
-                    {/* BOTÃO CARREGAR MAIS */}
-                    <div className="mt-8 flex justify-center">
-                        <button 
-                            onClick={handleLoadMore}
-                            disabled={isLoadingMore}
-                            className="group relative px-8 py-4 bg-white border border-gray-200 text-gray-700 font-bold rounded-2xl shadow-md hover:shadow-lg hover:border-vingi-300 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isLoadingMore ? (
-                                <>
-                                    <Loader2 size={20} className="animate-spin text-vingi-500" />
-                                    <span>Buscando Alternativas...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Sparkles size={20} className="text-vingi-500 group-hover:animate-pulse" />
-                                    <span>EXPLORAR MAIS OPÇÕES</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
+                    {/* BOTÃO CARREGAR MAIS OTIMIZADO (LOCAL) */}
+                    {hasMoreItems && (
+                        <div className="mt-8 flex justify-center">
+                            <button 
+                                onClick={handleLoadMore}
+                                className="group relative px-8 py-4 bg-white border border-gray-200 text-gray-700 font-bold rounded-2xl shadow-md hover:shadow-lg hover:border-vingi-300 transition-all flex items-center gap-3 active:scale-95"
+                            >
+                                <Sparkles size={20} className="text-vingi-500 group-hover:animate-pulse" />
+                                <span>EXPLORAR MAIS OPÇÕES</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-12 pt-8 border-t border-gray-200">
