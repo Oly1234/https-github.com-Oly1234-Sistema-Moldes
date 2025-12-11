@@ -4,11 +4,11 @@ import { Sidebar } from './components/Sidebar';
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal } from 'lucide-react';
 
 // --- VERSÃO DO SISTEMA ---
 // Sempre que fizer um deploy novo, altere este valor para forçar a atualização nos clientes.
-const APP_VERSION = '5.2.0-GLOBAL-SEARCH'; 
+const APP_VERSION = '5.2.1-DRAGGABLE-WIDGET'; 
 
 // --- UTILITÁRIOS ---
 
@@ -84,54 +84,129 @@ const generateSafeUrl = (match: ExternalPatternMatch): string => {
 
 const FloatingCompareWidget: React.FC<{ mainImage: string | null; secImage: string | null }> = ({ mainImage, secImage }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isVisible, setIsVisible] = useState(true);
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const isDragging = useRef(false);
+    const dragOffset = useRef({ x: 0, y: 0 });
+    const widgetRef = useRef<HTMLDivElement>(null);
 
-    if (!mainImage || !isVisible) return null;
+    // Inicializa posição no canto inferior direito
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setPosition({
+                x: window.innerWidth - (window.innerWidth < 768 ? 90 : 150),
+                y: window.innerHeight - 200
+            });
+        }
+    }, []);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        // Apenas inicia arraste se clicar no container ou na alça
+        isDragging.current = true;
+        const rect = widgetRef.current?.getBoundingClientRect();
+        if (rect) {
+            dragOffset.current = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+        e.currentTarget.setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+        e.preventDefault();
+        
+        const newX = e.clientX - dragOffset.current.x;
+        const newY = e.clientY - dragOffset.current.y;
+
+        // Limites simples para não sumir da tela
+        const maxX = window.innerWidth - 50;
+        const maxY = window.innerHeight - 50;
+
+        setPosition({
+            x: Math.min(Math.max(0, newX), maxX),
+            y: Math.min(Math.max(0, newY), maxY)
+        });
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDragging.current = false;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+
+    if (!mainImage) return null;
 
     return (
         <div 
-            className={`fixed z-40 transition-all duration-500 ease-in-out shadow-2xl rounded-2xl overflow-hidden bg-white border-2 border-vingi-100
+            ref={widgetRef}
+            className={`fixed z-[999] transition-all duration-75 ease-out shadow-2xl rounded-2xl overflow-hidden bg-white border-2 border-vingi-100 touch-none
                 ${isExpanded 
-                    ? 'w-48 h-auto md:w-64 bottom-24 right-4 md:top-24 md:right-8 md:bottom-auto' 
-                    : 'w-16 h-16 bottom-24 right-4 md:top-24 md:right-8 md:bottom-auto hover:scale-110 cursor-pointer rounded-full'
+                    ? 'w-36 md:w-64 h-auto'  // Mobile: w-36 (menor), Desktop: w-64
+                    : 'w-16 h-16 rounded-full'
                 }
             `}
-            style={{ boxShadow: '0 10px 40px -10px rgba(0,0,0,0.3)' }}
+            style={{ 
+                left: position.x, 
+                top: position.y,
+                boxShadow: '0 10px 40px -10px rgba(0,0,0,0.3)',
+                cursor: isDragging.current ? 'grabbing' : 'grab'
+            }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
         >
             <div 
-                className="relative w-full h-full group"
-                onClick={() => !isExpanded && setIsExpanded(true)}
+                className="relative w-full h-full group flex flex-col"
             >
-                <img 
-                    src={mainImage} 
-                    alt="Reference" 
-                    className={`w-full h-full object-cover transition-all ${!isExpanded ? 'scale-150' : ''}`} 
-                />
-                {!isExpanded && (
-                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors flex items-center justify-center">
-                        <div className="w-6 h-6 rounded-full bg-white/90 shadow-sm flex items-center justify-center">
-                            <Layers size={12} className="text-vingi-600"/>
-                        </div>
+                {/* Drag Handle & Controls */}
+                {isExpanded && (
+                    <div className="bg-gray-100 border-b border-gray-200 p-1 flex justify-between items-center cursor-grab active:cursor-grabbing">
+                         <div className="flex items-center gap-1">
+                            <GripHorizontal size={14} className="text-gray-400" />
+                            <span className="text-[9px] font-bold text-gray-500 uppercase">Ref</span>
+                         </div>
+                         <button 
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setIsExpanded(false); 
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()} // Evita iniciar drag ao clicar no botão
+                            className="p-1 bg-white hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition-colors"
+                         >
+                            <Minimize2 size={12} />
+                         </button>
                     </div>
                 )}
-                {isExpanded && (
-                    <>
-                        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/60 to-transparent flex justify-between items-start">
-                            <span className="text-[10px] font-bold text-white bg-black/20 backdrop-blur px-2 py-0.5 rounded-full">SUA REFERÊNCIA</span>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
-                                className="p-1 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur"
-                            >
-                                <Minimize2 size={12} />
-                            </button>
+
+                {/* Main Content Area */}
+                <div 
+                    className={`relative w-full ${isExpanded ? 'aspect-[3/4]' : 'h-full'}`}
+                    onClick={(e) => {
+                        if (!isDragging.current && !isExpanded) {
+                            setIsExpanded(true);
+                        }
+                    }}
+                >
+                    <img 
+                        src={mainImage} 
+                        alt="Reference" 
+                        className="w-full h-full object-cover pointer-events-none" 
+                    />
+                    
+                    {/* Overlay de Minimização (quando pequeno) */}
+                    {!isExpanded && (
+                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors flex items-center justify-center rounded-full">
+                            <Layers size={12} className="text-vingi-600 drop-shadow-md"/>
                         </div>
-                        {secImage && (
-                            <div className="absolute bottom-2 right-2 w-12 h-16 rounded-lg overflow-hidden border-2 border-white shadow-lg">
-                                <img src={secImage} className="w-full h-full object-cover" alt="Sec" />
-                            </div>
-                        )}
-                    </>
-                )}
+                    )}
+
+                    {/* Imagem Secundária (PiP) */}
+                    {isExpanded && secImage && (
+                        <div className="absolute bottom-2 right-2 w-10 h-14 md:w-16 md:h-20 rounded-lg overflow-hidden border-2 border-white shadow-lg">
+                            <img src={secImage} className="w-full h-full object-cover" alt="Sec" />
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
