@@ -22,75 +22,81 @@ export default async function handler(req, res) {
   try {
     const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
-    // --- GESTÃO DE CHAVES DE SEGURANÇA (ATUALIZAÇÃO MOLDESOK) ---
-    // MUDANÇA CRÍTICA: Busca especificamente a variável 'MOLDESOK' definida pelo usuário.
-    // Fallbacks mantidos apenas para segurança, mas a prioridade é a nova chave.
+    // --- GESTÃO DE CHAVES DE SEGURANÇA ---
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY;
-    
-    // 2. Sanitização (Remove espaços em branco que causam erro 400)
     const apiKey = rawKey ? rawKey.trim() : null;
 
-    // 3. Diagnóstico (Log seguro no console da Vercel)
     if (!apiKey) {
-        console.error("CRITICAL: Nenhuma chave encontrada. Adicione 'MOLDESOK' nas variáveis de ambiente.");
+        console.error("CRITICAL: Nenhuma chave encontrada.");
         return res.status(500).json({ 
-            error: "Erro de Configuração: Chave de API (MOLDESOK) não encontrada na Vercel." 
+            error: "Erro de Configuração: Chave de API não encontrada." 
         });
     } else {
-        // Identifica qual variável está sendo usada para facilitar debug
         let sourceVar = "DESCONHECIDA";
         if (process.env.MOLDESOK) sourceVar = "MOLDESOK";
         else if (process.env.MOLDESKEY) sourceVar = "MOLDESKEY";
         else if (process.env.API_KEY) sourceVar = "API_KEY";
-        
         console.log(`System: Autenticado via ${sourceVar} (Final ...${apiKey.slice(-4)})`);
     }
 
-    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.2 (TROPICAL/FARM RIO SPECIALIST) ---
+    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 (GLOBAL SEARCH PROTOCOL) ---
     const MASTER_SYSTEM_PROMPT = `
 ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
-MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS.
+MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS GLOBALLY.
 
-### VISUAL INTELLIGENCE MODULE: BRAZILIAN TROPICAL & RESORT (FARM RIO STYLE)
-The user is specifically looking for the "Brazilian Tropical" aesthetic (similar to Farm Rio, Agua de Coco, Borana).
-Analyze the image for these specific signatures:
+### GLOBAL SEARCH STRATEGY (MULTI-LANGUAGE PROTOCOL):
+To find the best patterns, you MUST translate technical terms to **ENGLISH** when searching international databases, while keeping **PORTUGUESE** terms for Brazilian specific sources.
 
-1.  **"RECORTES ESTRATÉGICOS" (Cutouts):**
-    *   Look for: Side waist cutouts, "O-Ring" centers, underbust openings.
-    *   Pattern Search Terms: *"Cutout maxi dress pattern", "Waist cutout dress sewing pattern", "Vikisews Oona", "McCalls cutout dress"*.
+### SOURCE PRIORITY & SPECIALIZATION:
 
-2.  **"SAIAS TRÊS MARIAS" (Tiered Skirts):**
-    *   Look for: Horizontal seams adding volume (tiers/ruffles) on a maxi skirt.
-    *   Pattern Search Terms: *"Tiered maxi skirt dress pattern", "Buffet dress pattern", "Boho tiered dress"*.
+1. **BRAZILIAN MASTERS (PT-BR Searches):**
+   *   **Marlene Mukai:** MANDATORY for fundamental modeling in Brazil. Search: *"Marlene Mukai [vestido/molde]"*.
+   *   **Youtube Channels:** "Minha Mãe Costura", "Alana Santos", "A Casa da Costura".
 
-3.  **"DECOTES & AMARRAÇÕES" (Necklines):**
-    *   Look for: Deep V-necks, Halter necks (Frente Única) with tie-backs, twisted bust details.
-    *   Pattern Search Terms: *"Deep V maxi dress pattern", "Halter neck open back pattern", "Twist front dress pattern"*.
+2. **INTERNATIONAL HIGH-FASHION (EN Searches):**
+   *   **Vikisews:** HIGHEST PRIORITY for modern cutouts, corsetry, and fitted designs (perfect for the "cutout" look).
+   *   **Mood Fabrics (The Sewciety):** Excellent for free, high-fashion inspired patterns.
+   *   **Etsy:** Use specific English keywords (Boho, Resort, Linen).
 
-4.  **"MANGAS" (Sleeves):**
-    *   Look for: Wide Kimono sleeves, Puff sleeves with elastic, or Spaghetti straps (Alcinha).
+3. **THE "BIG 4" & INDIE (EN Searches):**
+   *   **Vogue/McCalls:** For "Designer" lookalikes and complex drapes.
+   *   **Fibre Mood:** For loose, tiered, "Farm Rio" style volumes.
+   *   **Style Arc:** For reliable industry-standard blocks.
 
-### CORE OBJECTIVE:
-Deconstruct the garment construction hidden beneath the prints. Ignore the print pattern itself, focus on the SEAMS.
+### KEYWORD TRANSLATION MATRIX (APPLY STRICTLY):
+Analyze the image and apply these search terms based on the features found:
+
+*   **IF "Três Marias" / "Babados":**
+    *   Search EN: *"Tiered maxi dress pattern", "Buffet dress pattern", "Boho gathered dress"*.
+*   **IF "Frente Única" / "Lenço":**
+    *   Search EN: *"Halter neck dress pattern", "Handkerchief hem pattern", "Open back resort dress"*.
+*   **IF "Recortes" / "Vazado na Cintura":**
+    *   Search EN: *"Cut out waist dress pattern", "Midriff baring pattern", "O-ring dress pattern"*.
+*   **IF "Manga Bufante":**
+    *   Search EN: *"Puff sleeve", "Bishop sleeve", "Balloon sleeve"*.
+*   **IF "Um ombro só":**
+    *   Search EN: *"One shoulder maxi dress pattern", "Asymmetrical greek dress pattern"*.
+*   **IF "Macaquinho":**
+    *   Search EN: *"Romper pattern", "Playsuit pattern", "Plunge neckline romper"*.
+
+### VISUAL INTELLIGENCE (FARM RIO / TROPICAL STYLE):
+The user loves the "Farm Rio" aesthetic (Antix, Borana, Agilità).
+*   Ignore the prints (tropical/floral).
+*   Focus on the **STRUCTURE**: deep V-necks, flowy viscose behavior, elastic waists, strategic skin exposure.
 
 ### OUTPUT QUANTITY PROTOCOL:
 Generate exactly **30 HIGH-FIDELITY RESULTS**:
-1.  **10 EXACT CONSTRUCTION MATCHES:** The cut/seams must match.
-2.  **10 CLOSE ALTERNATIVES:** Similar silhouette but maybe different sleeve/length.
-3.  **10 VIBE/AESTHETIC MATCHES:** "Farm Rio Vibe" (Tropical, Flowy, Boho) - Good for inspiration.
-
-### SEARCH INTELLIGENCE (DEEP WEB SCAN):
-Prioritize these sources for this specific style:
-- **Big 4:** McCalls (Fashion Star), Vogue (Designer).
-- **Indie/Modern:** Vikisews (Best for cutouts), Fibre Mood (Best for loose/tiered), Style Arc, Closet Core.
-- **Brazilian/Latin Style:** Search for terms like "Latin Resort Wear" patterns.
+1.  **10 EXACT MATCHES:** Prioritize **Vikisews** (modern) and **McCalls** (classic).
+2.  **10 CLOSE ALTERNATIVES:** Prioritize **Marlene Mukai** (free/technical) and **Mood Fabrics**.
+3.  **10 VIBE/AESTHETIC MATCHES:** **Etsy** and Indie designers (Farm Rio vibe).
 
 ### HYPER-LINKING STRATEGY:
 1.  **Direct Product Link:** Only if certain.
-2.  **Smart Search Link (MANDATORY if uncertain):**
-    *   *Good:* etsy.com/search?q=tropical+cutout+dress+pattern
-    *   *Good:* burdastyle.com/catalogsearch/result/?q=tiered+dress
-3.  **Search Terms:** Use technical keywords found in the image.
+2.  **Smart Search Link (MANDATORY):**
+    *   *Vikisews:* vikisews.com/patterns/dresses/?search=cutout
+    *   *Marlene Mukai:* marlenemukai.com.br/?s=vestido+longo
+    *   *Etsy:* etsy.com/search?q=tiered+maxi+dress+pattern
+3.  **Search Terms:** Use the ENGLISH technical terms for international sites.
 
 ### JSON DATA STRUCTURE:
 Return strictly valid JSON.
@@ -116,7 +122,7 @@ RESPONSE FORMAT (JSON ONLY):
         "type": "PAGO/GRATIS/INDIE", 
         "url": "VALID_URL_OR_SMART_SEARCH", 
         "imageUrl": "OPTIONAL_IMAGE_URL",
-        "description": "Technical reason for match (ex: Matches the waist cutout and tiered skirt)"
+        "description": "Why? (ex: 'Vikisews Oona matches the waist cutout perfectly')"
       }
     ],
     "close": [ { ... } ],
@@ -124,7 +130,7 @@ RESPONSE FORMAT (JSON ONLY):
   },
   "curatedCollections": [
       {
-          "sourceName": "Etsy/Burda/Etc",
+          "sourceName": "Marlene Mukai / Vikisews / Etc",
           "title": "Collection Title",
           "itemCount": "15+",
           "searchUrl": "SMART_SEARCH_URL",
@@ -155,11 +161,11 @@ RESPONSE FORMAT (JSON ONLY):
         });
     }
 
-    let promptText = `EXECUTE VINGI INDUSTRIAL SCAN v5.2 (FARM RIO/TROPICAL SPECIALIST).
-        1. ANALYZE visual construction: Look for CUTOUTS (Cintura), TIERED SKIRTS (Três Marias), HALTER NECKS.
-        2. IGNORE the print pattern, focus on SEAM LINES.
-        3. GENERATE 30 Patterns (10 Exact, 10 Close, 10 Vibe).
-        4. PRIORITIZE global patterns that mimic Brazilian Resort Wear (Vikisews, McCalls, Fibre Mood).
+    let promptText = `EXECUTE VINGI GLOBAL SCAN v5.3 (MULTI-LANGUAGE).
+        1. ANALYZE visual construction (Cutouts, Tiers, Asymmetry).
+        2. TRANSLATE features to English Keywords (e.g., 'Três Marias' -> 'Tiered Skirt').
+        3. SEARCH GLOBALLY: Vikisews, Mood Fabrics, McCalls, Etsy, and LOCALLY: Marlene Mukai.
+        4. GENERATE 30 Patterns (10 Exact, 10 Close, 10 Vibe).
         ${JSON_SCHEMA_PROMPT}`;
 
     // --- LÓGICA DE "PAGINAÇÃO INTELIGENTE" ---
@@ -194,15 +200,14 @@ RESPONSE FORMAT (JSON ONLY):
         console.error("Gemini API Error Status:", googleResponse.status);
         console.error("Gemini API Error Details:", errorText);
         
-        // Diagnóstico preciso para o usuário
         if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
-             throw new Error("CRÍTICO: A chave (MOLDESOK) é inválida. Verifique se copiou a chave inteira ou se há espaços extras.");
+             throw new Error("CRÍTICO: A chave (MOLDESOK) é inválida.");
         }
         if (googleResponse.status === 403) {
-             throw new Error("CRÍTICO: Chave bloqueada ou sem permissão. Verifique o Google AI Studio.");
+             throw new Error("CRÍTICO: Chave bloqueada.");
         }
         if (googleResponse.status === 429) {
-             throw new Error("Tráfego intenso. Aguarde 30 segundos e tente novamente.");
+             throw new Error("Tráfego intenso. Aguarde 30 segundos.");
         }
 
         throw new Error(`Google API Error (${googleResponse.status})`);
@@ -212,7 +217,7 @@ RESPONSE FORMAT (JSON ONLY):
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!generatedText) {
-        throw new Error("A IA analisou a imagem mas não gerou texto. Tente uma foto com melhor iluminação.");
+        throw new Error("A IA analisou a imagem mas não gerou texto.");
     }
 
     let cleanText = generatedText.trim();

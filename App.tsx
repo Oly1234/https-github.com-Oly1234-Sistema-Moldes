@@ -8,7 +8,7 @@ import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, Check
 
 // --- VERSÃO DO SISTEMA ---
 // Sempre que fizer um deploy novo, altere este valor para forçar a atualização nos clientes.
-const APP_VERSION = '5.1.2-KEY-FIX'; 
+const APP_VERSION = '5.2.0-GLOBAL-SEARCH'; 
 
 // --- UTILITÁRIOS ---
 
