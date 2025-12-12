@@ -66,43 +66,23 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 2: DESCRIÇÃO DE ESTAMPA (VISÃO COMPUTACIONAL - PROMPT MESTRE)
+    // ROTA 2: DESCRIÇÃO DE ESTAMPA (VISÃO COMPUTACIONAL)
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
         const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
         
         const VISION_PROMPT = `
-          ATUE COMO: Designer de Superfície Têxtil Sênior (Expert em Print Design).
-          TAREFA: Analisar a imagem fornecida e gerar um "Prompt Técnico Mestre" para recriação da estampa.
+          Analise esta imagem como um Designer de Estampas. 
+          Descreva EXATAMENTE o padrão visual para que uma IA geradora de imagens possa replicar o estilo.
           
-          OBJETIVO: O texto gerado deve ser rico, estruturado e técnico, seguindo EXATAMENTE este modelo:
-
-          🎨 Prompt Técnico para Geração de Estampa Têxtil Digital
+          ESTRUTURA DA RESPOSTA (Em Português):
+          "Estampa [ESTILO: ex: Floral, Geométrico, Étnico], composta por [ELEMENTOS PRINCIPAIS], utilizando técnica de [TÉCNICA: ex: Aquarela, Vetor Flat, Óleo].
+          Paleta de cores: [CORES DOMINANTES].
+          Fundo: [COR/TEXTURA DO FUNDO].
+          Vibe: [SENSAÇÃO: ex: Tropical, Minimalista, Retrô].
+          Design repetitivo seamless (sem emendas)."
           
-          1. Contexto e Estilo
-          - Estilo Visual: (Ex: Floral Tropical, Geométrico Bauhaus, Paisley Boho, etc)
-          - Vibe: (Ex: Vibrante, Minimalista, Romântico, Nostálgico)
-          - Técnica Aparente: (Ex: Aquarela, Vetor Flat, Serigrafia, Óleo sobre tela)
-
-          2. Composição e Estrutura
-          - Fundo (Base): Cor exata (nome e tom), textura ou cor sólida.
-          - Elementos Principais: Descrição detalhada dos motivos (flores, formas, animais). Tamanho, distribuição e interação.
-          - Elementos Secundários: Detalhes de preenchimento.
-          - Barrados/Bordas: Se houver, descreva a estrutura geométrica ou linear nas bordas (muito importante se visível).
-
-          3. Paleta de Cores (Maximalista e Precisa)
-          - Cor Dominante:
-          - Cores de Acento/Destaque:
-          - Cores Secundárias:
-
-          4. Requisitos de Repetição (Rapport)
-          - Tipo: (Seamless Pattern, Half-Drop, Grid)
-          - Instrução para IA: "Garantir que não haja cortes ou emendas visíveis. Alta resolução."
-
-          IMPORTANTE:
-          - Seja extremamente descritivo nas cores (ex: "Verde Floresta Profundo" em vez de apenas "Verde").
-          - Identifique a "Pincelada" ou o traço artístico.
-          - Responda em Português do Brasil.
+          Seja direto e técnico. Não use frases introdutórias.
         `;
 
         const visionPayload = {
@@ -113,8 +93,8 @@ export default async function handler(req, res) {
                 ]
             }],
             generation_config: {
-                temperature: 0.4,
-                max_output_tokens: 1000
+                temperature: 0.2, 
+                max_output_tokens: 500
             }
         };
 
@@ -146,17 +126,16 @@ export default async function handler(req, res) {
     if (action === 'GENERATE_PATTERN') {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
         
+        // Reforço para Seamless Pattern
         const finalPrompt = `
-          Task: Create a High-End Seamless Textile Pattern based on this description.
+          Design a High-End Seamless Textile Pattern.
+          Visual Description: "${prompt}".
           
-          Visual Description (Portuguese):
-          "${prompt}"
-          
-          TECHNICAL MANDATORY REQUIREMENTS:
-          1. SEAMLESS / TILEABLE: The edges must match perfectly. This is for fabric printing.
-          2. VIEW: Top-down, flat 2D design. No perspective, no folds, no clothing mockups. Just the raw pattern.
-          3. QUALITY: 8k resolution, sharp details, professional color grading.
-          4. COMPOSITION: Balanced distribution. Avoid empty holes unless specified.
+          MANDATORY REQUIREMENTS:
+          1. SEAMLESS / TILEABLE: The edges must match perfectly for repetition.
+          2. VIEW: Top-down, flat 2D design. No perspective, no folds, no mockups.
+          3. STYLE: Professional Surface Design. High detail, 8k resolution.
+          4. COMPOSITION: Balanced distribution of elements.
         `;
         
         const payload = {
@@ -192,45 +171,29 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 4: ANÁLISE DE ROUPAS - RETORNO MASSIVO (25+ ITENS)
+    // ROTA 4: ANÁLISE DE ROUPAS
     // ==========================================================================================
     const JSON_SCHEMA_PROMPT = `
-You are a Fashion Technical Analyst. Analyze the image and return a JSON object.
-It is CRITICAL that you find matching sewing patterns available for purchase or download.
-
-MANDATORY: Return a MASSIVE LIST of 18 to 28 matches.
-Focus on "Big 4" (Vogue, McCall's, Butterick, Simplicity), BurdaStyle, Etsy, The Fold Line, Mood Fabrics, Vikisews.
-
-STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
-
+RESPONSE FORMAT (JSON ONLY):
 {
-  "patternName": "Descriptive Name (PT-BR)",
+  "patternName": "Name",
   "category": "Category",
-  "technicalDna": { "silhouette": "e.g. A-Line", "neckline": "e.g. V-Neck", "sleeve": "e.g. Puff", "fabricStructure": "e.g. Woven" },
-  "matches": { 
-      "exact": [{ "source": "Store Name", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "OPTIONAL: URL of logo or thumb", "type": "PAGO", "similarityScore": 95 }], 
-      "close": [{ "source": "Etsy Search", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "OPTIONAL", "type": "INDIE", "similarityScore": 85 }], 
-      "adventurous": [] 
-  },
-  "curatedCollections": [
-      { "title": "Nome da Coleção (ex: Vestidos de Verão)", "searchUrl": "https://...", "itemCount": "50+ modelos", "description": "Curadoria de...", "sourceName": "Burda/Etsy" }
-  ]
+  "technicalDna": { "silhouette": "", "neckline": "", "sleeve": "", "fabricStructure": "" },
+  "matches": { "exact": [], "close": [], "adventurous": [] },
+  "curatedCollections": []
 }
 `;
     const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const parts = [{ inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }];
     if (secondaryImageBase64) parts.push({ inline_data: { mime_type: secondaryMimeType, data: secondaryImageBase64 } });
 
-    let promptText = `EXECUTE VINGI GLOBAL SCAN. ${JSON_SCHEMA_PROMPT}`;
+    let promptText = `EXECUTE VINGI GLOBAL SCAN. GENERATE 45 PATTERNS. ${JSON_SCHEMA_PROMPT}`;
     if (excludePatterns?.length) promptText += ` EXCLUDE: ${excludePatterns.join(', ')}`;
     parts.push({ text: promptText });
 
     const payloadMain = {
         contents: [{ parts: parts }],
-        generation_config: { 
-            response_mime_type: "application/json",
-            temperature: 0.2
-        }
+        generation_config: { response_mime_type: "application/json" }
     };
 
     const googleResponse = await fetch(apiEndpoint, {
@@ -241,32 +204,8 @@ STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
 
     if (!googleResponse.ok) throw new Error("Erro na API de Análise");
     const dataMain = await googleResponse.json();
-    let generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    // --- CORREÇÃO DO ERRO DE URL (MANTIDA) ---
-    if (generatedText) {
-        generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '');
-        const firstBrace = generatedText.indexOf('{');
-        const lastBrace = generatedText.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            generatedText = generatedText.substring(firstBrace, lastBrace + 1);
-        }
-    }
-
-    let jsonResult;
-    try {
-        jsonResult = JSON.parse(generatedText);
-    } catch (e) {
-        console.error("JSON Parse Error Raw:", generatedText);
-        jsonResult = {
-            patternName: "Erro de Processamento",
-            category: "Geral",
-            technicalDna: { silhouette: "-", neckline: "-", sleeve: "-", fabricStructure: "-" },
-            matches: { exact: [], close: [], adventurous: [] },
-            curatedCollections: []
-        };
-    }
-    
+    const generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
+    const jsonResult = JSON.parse(generatedText.replace(/```json|```/g, '').trim());
     res.status(200).json(jsonResult);
 
   } catch (error) {

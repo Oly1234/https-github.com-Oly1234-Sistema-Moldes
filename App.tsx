@@ -8,7 +8,7 @@ import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollectio
 import { MOCK_LOADING_STEPS } from './constants';
 import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal } from 'lucide-react';
 
-const APP_VERSION = '5.7.3-GOLD'; 
+const APP_VERSION = '5.7.0-PRO'; 
 
 // ... Utility functions mantidas ...
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
@@ -58,42 +58,16 @@ const generateSafeUrl = (match: ExternalPatternMatch): string => {
 
 // ... Components ...
 const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string }> = ({ match, safeUrl }) => {
-    // Lógica para recuperar o ícone da marca se não houver imagem
-    let domain = '';
-    try { domain = new URL(match.url).hostname; } catch (e) { domain = 'google.com'; }
-    const iconUrl = match.imageUrl || getBrandIcon(domain);
-
     return (
-        <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full">
-            {/* ÁREA VISUAL RICA (ICONE/IMAGEM) - RESTAURADO */}
-            <div className="h-32 bg-gray-50 overflow-hidden relative border-b border-gray-100 p-4 flex items-center justify-center">
-                <img 
-                    src={iconUrl} 
-                    alt={match.source} 
-                    className="w-16 h-16 object-contain mix-blend-multiply group-hover:scale-110 transition-transform" 
-                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://cdn-icons-png.flaticon.com/512/3389/3389081.png'; }}
-                />
-                <div className="absolute top-2 right-2">
-                    <ExternalLink size={12} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"/>
-                </div>
-            </div>
-
-            <div className="p-4 flex flex-col flex-1">
-                <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{match.source}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${match.type === 'PAGO' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-                        {match.type}
-                    </span>
-                </div>
-                <h3 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight mb-2 flex-1">{match.patternName}</h3>
-                <div className="text-xs text-vingi-500 font-medium flex items-center gap-1 group-hover:underline">
-                    Ver Molde <ArrowRightCircle size={10}/>
-                </div>
+        <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white p-4 rounded-xl border hover:shadow-lg cursor-pointer transition-shadow">
+            <h3 className="font-bold text-sm text-gray-800 line-clamp-2">{match.patternName}</h3>
+            <div className="flex justify-between items-center mt-2">
+                <span className="text-xs text-gray-500 font-medium">{match.source}</span>
+                <span className="text-[10px] px-2 py-0.5 bg-gray-100 rounded-full text-gray-600 border border-gray-200">{match.type}</span>
             </div>
         </div>
     );
 };
-
 const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
     <a href={url} target="_blank" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white transition-transform hover:scale-105 ${colorClass}`}>
         <Icon size={12} /> {name}
@@ -158,18 +132,6 @@ export default function App() {
       return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
-  // Efeito para rotacionar mensagens de loading
-  useEffect(() => {
-    let interval: any;
-    if (state === AppState.ANALYZING) {
-        setLoadingStep(0);
-        interval = setInterval(() => {
-            setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length);
-        }, 2000);
-    }
-    return () => clearInterval(interval);
-  }, [state]);
-
   const handleInstallClick = async () => {
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
@@ -210,17 +172,7 @@ export default function App() {
 
   const startAnalysis = async () => {
     if (!uploadedImage) return;
-    
-    // Inicia estado de análise
-    setState(AppState.ANALYZING); 
-    setErrorMsg(null); 
-    setVisibleCount(12);
-    
-    // Timestamp de início para calcular o tempo mínimo de loading
-    const startTime = Date.now();
-    const MIN_LOADING_TIME = 3000; // 3 segundos para a animação "correr"
-
-    // Pequeno delay inicial para renderizar a UI de loading
+    setState(AppState.ANALYZING); setErrorMsg(null); setVisibleCount(12);
     setTimeout(async () => {
         try {
             const compressedMain = await compressImage(uploadedImage);
@@ -235,26 +187,10 @@ export default function App() {
                 secondaryBase64 = compressedSec.split(',')[1];
                 secondaryType = compressedSec.split(';')[0].split(':')[1];
             }
-            
-            // Chama a API
             const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
-            
-            // Calcula quanto tempo passou
-            const elapsedTime = Date.now() - startTime;
-            const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
-
-            // Espera o tempo restante se a API foi muito rápida
-            setTimeout(() => {
-                setResult(analysisResult); 
-                addToHistory(analysisResult); 
-                setState(AppState.SUCCESS);
-            }, remainingTime);
-
-        } catch (err: any) { 
-            setErrorMsg(err.message || "Erro desconhecido na análise."); 
-            setState(AppState.ERROR); 
-        }
-    }, 100); 
+            setResult(analysisResult); addToHistory(analysisResult); setState(AppState.SUCCESS);
+        } catch (err: any) { setErrorMsg(err.message || "Erro desconhecido na análise."); setState(AppState.ERROR); }
+    }, 500); 
   };
   
   const handleLoadMore = () => setVisibleCount(prev => prev + 12);
@@ -391,27 +327,13 @@ export default function App() {
             )}
             
             {state === AppState.ANALYZING && (
-                <div className="flex flex-col items-center justify-center h-[90vh] w-full p-6">
-                     <div className="relative w-full max-w-sm aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-200 bg-slate-900">
-                        {/* Imagem do Usuário de Fundo */}
-                        <img src={uploadedImage || ''} className="w-full h-full object-cover opacity-60 blur-[2px]" />
-                        
-                        {/* Overlay Grade Técnica */}
-                        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,100,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
-
-                        {/* Linha de Scanner - Reforçada para visibilidade */}
-                        <div className="absolute top-0 left-0 w-full h-2 bg-vingi-400 shadow-[0_0_20px_rgba(96,165,250,1),0_0_10px_rgba(255,255,255,0.8)] animate-scan z-30 opacity-90"></div>
+                <div className="flex flex-col items-center justify-center h-[70vh]">
+                     <div className="relative">
+                        <div className="absolute inset-0 bg-vingi-400 blur-xl opacity-20 rounded-full animate-pulse"></div>
+                        <Loader2 size={64} className="text-vingi-600 animate-spin relative z-10"/>
                      </div>
-                     
-                     <div className="mt-8 text-center max-w-xs mx-auto">
-                        <h3 className="text-xl font-bold text-slate-800 tracking-tight animate-pulse min-h-[3rem] flex items-center justify-center">
-                            {MOCK_LOADING_STEPS[loadingStep]}
-                        </h3>
-                        <div className="flex justify-center items-center gap-2 text-vingi-500 font-mono text-xs mt-2 uppercase tracking-widest">
-                            <Loader2 size={12} className="animate-spin"/>
-                            Processando DNA
-                        </div>
-                     </div>
+                     <h3 className="text-2xl font-bold mt-8 text-slate-800 tracking-tight">{MOCK_LOADING_STEPS[loadingStep]}</h3>
+                     <p className="text-slate-400 text-sm mt-3 font-medium">Processando DNA Técnico...</p>
                 </div>
             )}
             
@@ -467,27 +389,6 @@ export default function App() {
                             </button>
                         </div>
                     )}
-
-                    {/* SEÇÃO DE LINKS SUGESTIVOS (RESTAURADO) */}
-                    {result.curatedCollections && result.curatedCollections.length > 0 && (
-                        <div className="mt-12 bg-gray-50 rounded-2xl p-6 border border-gray-100">
-                             <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><BookOpen size={20} className="text-vingi-600"/> Coleções Sugestivas</h3>
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {result.curatedCollections.map((coll, i) => (
-                                    <a key={i} href={coll.searchUrl} target="_blank" className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition-all flex flex-col group">
-                                        <div className="flex justify-between mb-2">
-                                            <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded">{coll.sourceName}</span>
-                                            <ExternalLink size={14} className="text-gray-300 group-hover:text-gray-600"/>
-                                        </div>
-                                        <h4 className="font-bold text-gray-800 mb-1">{coll.title}</h4>
-                                        <p className="text-xs text-gray-500 line-clamp-2">{coll.description}</p>
-                                        <div className="mt-3 text-xs font-medium text-gray-400">{coll.itemCount}</div>
-                                    </a>
-                                ))}
-                             </div>
-                        </div>
-                    )}
-
                 </div>
             )}
             </div>
