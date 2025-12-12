@@ -348,8 +348,8 @@ export default function App() {
                         {/* Overlay Grade Técnica */}
                         <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,100,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
 
-                        {/* Linha de Scanner - Animação CSS definida em index.html */}
-                        <div className="absolute top-0 left-0 w-full h-1 bg-vingi-400 shadow-[0_0_20px_rgba(96,165,250,1)] animate-scan z-20"></div>
+                        {/* Linha de Scanner - Reforçada para visibilidade */}
+                        <div className="absolute top-0 left-0 w-full h-2 bg-vingi-400 shadow-[0_0_20px_rgba(96,165,250,1),0_0_10px_rgba(255,255,255,0.8)] animate-scan z-30 opacity-90"></div>
                      </div>
                      
                      <div className="mt-8 text-center max-w-xs mx-auto">
