@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Wand2, X, Move, Trash2, Scissors, Layers, FlipHorizontal, FlipVertical, RotateCw, Check, Palette, Hand, PlusCircle, Maximize, Pointer } from 'lucide-react';
+import { Wand2, X, Move, Trash2, Scissors, Layers, FlipHorizontal, FlipVertical, RotateCw, Check, Palette, Hand, PlusCircle, Maximize, Pointer, ZoomIn, Grip } from 'lucide-react';
 
 // --- TYPES ---
 type BodyPartType = 'DEFAULT';
@@ -21,6 +21,7 @@ interface AppliedLayer {
   bodyPart: BodyPartType; 
 }
 
+// Algoritmo de Flood Fill Otimizado
 const floodFill = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tol: number) => {
     const imageData = ctx.getImageData(0,0,width,height);
     const data = imageData.data;
@@ -69,20 +70,32 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   const [patternImgObj, setPatternImgObj] = useState<HTMLImageElement | null>(null);
   const [layers, setLayers] = useState<AppliedLayer[]>([]);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
-  const [tool, setTool] = useState<'WAND' | 'MOVE'>('WAND');
+  const [interactionMode, setInteractionMode] = useState<'VIEW' | 'EDIT'>('VIEW');
+  const [panZoom, setPanZoom] = useState({ x: 0, y: 0, scale: 1 });
   
   // Refs
   const isDraggingLayer = useRef(false);
+  const isPanningCanvas = useRef(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
+  
+  // Gesture Refs
   const gestureStartScale = useRef<number>(1);
   const gestureStartRotation = useRef<number>(0);
   const gestureStartDist = useRef<number>(0);
   const gestureStartAngle = useRef<number>(0);
   const isGestureActive = useRef<boolean>(false);
+  
+  // View Gesture Refs
+  const viewGestureStartScale = useRef<number>(1);
+  const viewGestureStartDist = useRef<number>(0);
+  const viewGestureStartPan = useRef({ x: 0, y: 0 });
+
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const moldInputRef = useRef<HTMLInputElement>(null);
   const patternInputRef = useRef<HTMLInputElement>(null);
 
+  // --- INIT ---
   useEffect(() => {
     if (moldImage) {
       const img = new Image(); img.src = moldImage;
@@ -99,19 +112,64 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   }, [patternImage, externalPattern]);
 
   useEffect(() => {
-    const handleGlobalUp = () => { isDraggingLayer.current = false; isGestureActive.current = false; };
-    window.addEventListener('mouseup', handleGlobalUp); window.addEventListener('touchend', handleGlobalUp);
+    const handleGlobalUp = () => { 
+        isDraggingLayer.current = false; 
+        isGestureActive.current = false; 
+        isPanningCanvas.current = false;
+    };
+    window.addEventListener('mouseup', handleGlobalUp); 
+    window.addEventListener('touchend', handleGlobalUp);
     return () => { window.removeEventListener('mouseup', handleGlobalUp); window.removeEventListener('touchend', handleGlobalUp); };
   }, []);
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        containerRef.current?.requestFullscreen().catch(err => {
+            console.error(`Error trying to enable fullscreen: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+  };
+
+  // --- POINTER HANDLERS ---
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      const isTouch = 'touches' in e;
+      const t = isTouch ? (e as React.TouchEvent).touches[0] : (e as React.MouseEvent);
+      const clientX = t.clientX;
+      const clientY = t.clientY;
+
+      // === 1. MODO VIEW (PAN/ZOOM TELA) ===
+      if (interactionMode === 'VIEW' || (isTouch && (e as React.TouchEvent).touches.length === 2 && !activeLayerId)) {
+          if (isTouch && (e as React.TouchEvent).touches.length === 2) {
+              // Zoom da Tela com dois dedos
+              isGestureActive.current = true;
+              const t1 = (e as React.TouchEvent).touches[0];
+              const t2 = (e as React.TouchEvent).touches[1];
+              viewGestureStartDist.current = getDistance(t1, t2);
+              viewGestureStartScale.current = panZoom.scale;
+              return;
+          }
+          // Pan da Tela com um dedo
+          isPanningCanvas.current = true;
+          lastMousePos.current = { x: clientX, y: clientY };
+          return;
+      }
+
+      // === 2. MODO EDIT (MANIPULAR MOLDE) ===
       if (!moldImgObj || !patternImgObj) return;
       const canvas = mainCanvasRef.current!;
-      const rect = canvas.getBoundingClientRect();
-      const isTouch = 'touches' in e;
+      const rect = canvas.getBoundingClientRect(); // Rect já considera o CSS Transform (Pan/Zoom visual)
       
+      // Coordenadas relativas ao canvas interno (desconsiderando zoom visual da tela)
+      const scaleX = canvas.width / rect.width; 
+      const scaleY = canvas.height / rect.height;
+      const x = (clientX - rect.left) * scaleX; 
+      const y = (clientY - rect.top) * scaleY;
+
+      // Gestos Multitouch no Molde (Rotação/Escala da Camada)
       if (isTouch && (e as React.TouchEvent).touches.length === 2 && activeLayerId) {
-          e.preventDefault(); 
           const t1 = (e as React.TouchEvent).touches[0]; const t2 = (e as React.TouchEvent).touches[1];
           const activeLayer = layers.find(l => l.id === activeLayerId);
           if (activeLayer) {
@@ -124,23 +182,20 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
           return;
       }
 
-      let clientX, clientY;
-      if (isTouch) { clientX = (e as React.TouchEvent).touches[0].clientX; clientY = (e as React.TouchEvent).touches[0].clientY; } 
-      else { clientX = (e as React.MouseEvent).clientX; clientY = (e as React.MouseEvent).clientY; }
-
-      const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-      const x = (clientX - rect.left) * scaleX; const y = (clientY - rect.top) * scaleY;
-
+      // Detecção de clique em camada
       let clickedLayerId = null;
       for (let i = layers.length - 1; i >= 0; i--) {
           const ctx = layers[i].maskCanvas.getContext('2d')!;
+          // Verifica pixel no contexto original
           if (ctx.getImageData(x, y, 1, 1).data[3] > 0) { clickedLayerId = layers[i].id; break; }
       }
 
       if (clickedLayerId) {
-          setActiveLayerId(clickedLayerId); setTool('MOVE');
-          isDraggingLayer.current = true; lastMousePos.current = { x: clientX, y: clientY };
+          setActiveLayerId(clickedLayerId); 
+          isDraggingLayer.current = true; 
+          lastMousePos.current = { x: clientX, y: clientY };
       } else {
+          // Criação de Nova Camada (Flood Fill)
           setActiveLayerId(null); 
           const ctx = canvas.getContext('2d')!;
           const res = floodFill(ctx, canvas.width, canvas.height, x, y, 40);
@@ -156,7 +211,8 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                };
                setLayers(prev => [...prev, newLayer]);
                setActiveLayerId(newLayer.id);
-               setTool('MOVE'); 
+               // Switch automático para edição ao criar
+               setInteractionMode('EDIT');
           }
       }
   };
@@ -164,26 +220,62 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
       if (e.cancelable) e.preventDefault(); 
       const isTouch = 'touches' in e;
-      if (isTouch && (e as React.TouchEvent).touches.length === 2 && isGestureActive.current && activeLayerId) {
-          const t1 = (e as React.TouchEvent).touches[0]; const t2 = (e as React.TouchEvent).touches[1];
-          const newDist = getDistance(t1, t2); const newAngle = getAngle(t1, t2);
-          const scaleFactor = newDist / gestureStartDist.current;
-          const newScale = Math.max(0.1, Math.min(5, gestureStartScale.current * scaleFactor));
-          const rotationDelta = newAngle - gestureStartAngle.current;
-          const newRotation = gestureStartRotation.current + rotationDelta;
-          updateActiveLayer({ scale: newScale, rotation: newRotation });
+      const t = isTouch ? (e as React.TouchEvent).touches[0] : (e as React.MouseEvent);
+      const clientX = t.clientX;
+      const clientY = t.clientY;
+
+      // === 1. LÓGICA DE VIEW (Zoom Tela) ===
+      if (interactionMode === 'VIEW' || (isTouch && (e as React.TouchEvent).touches.length === 2 && !activeLayerId)) {
+          // Zoom da Tela
+          if (isTouch && (e as React.TouchEvent).touches.length === 2 && isGestureActive.current) {
+              const t1 = (e as React.TouchEvent).touches[0]; const t2 = (e as React.TouchEvent).touches[1];
+              const newDist = getDistance(t1, t2);
+              const scaleFactor = newDist / viewGestureStartDist.current;
+              const newScale = Math.max(0.5, Math.min(4, viewGestureStartScale.current * scaleFactor));
+              setPanZoom(prev => ({ ...prev, scale: newScale }));
+              return;
+          }
+          // Pan da Tela
+          if (isPanningCanvas.current) {
+              const dx = clientX - lastMousePos.current.x;
+              const dy = clientY - lastMousePos.current.y;
+              setPanZoom(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+              lastMousePos.current = { x: clientX, y: clientY };
+          }
           return;
       }
-      if (!isDraggingLayer.current || !activeLayerId || tool !== 'MOVE') return;
-      let clientX, clientY;
-      if (isTouch) { clientX = (e as React.TouchEvent).touches[0].clientX; clientY = (e as React.TouchEvent).touches[0].clientY; } 
-      else { clientX = (e as React.MouseEvent).clientX; clientY = (e as React.MouseEvent).clientY; }
-      const canvas = mainCanvasRef.current!;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-      const dx = (clientX - lastMousePos.current.x) * scaleX; const dy = (clientY - lastMousePos.current.y) * scaleY;
-      updateActiveLayer({ offsetX: layers.find(l => l.id === activeLayerId)!.offsetX + dx, offsetY: layers.find(l => l.id === activeLayerId)!.offsetY + dy });
-      lastMousePos.current = { x: clientX, y: clientY };
+
+      // === 2. LÓGICA DE EDIT (Camada) ===
+      if (activeLayerId) {
+          // Gesto Multitouch na Camada
+          if (isTouch && (e as React.TouchEvent).touches.length === 2 && isGestureActive.current) {
+              const t1 = (e as React.TouchEvent).touches[0]; const t2 = (e as React.TouchEvent).touches[1];
+              const newDist = getDistance(t1, t2); const newAngle = getAngle(t1, t2);
+              const scaleFactor = newDist / gestureStartDist.current;
+              const newScale = Math.max(0.1, Math.min(5, gestureStartScale.current * scaleFactor));
+              const rotationDelta = newAngle - gestureStartAngle.current;
+              const newRotation = gestureStartRotation.current + rotationDelta;
+              updateActiveLayer({ scale: newScale, rotation: newRotation });
+              return;
+          }
+          // Arrastar Camada
+          if (isDraggingLayer.current) {
+              const canvas = mainCanvasRef.current!;
+              const rect = canvas.getBoundingClientRect();
+              const scaleX = canvas.width / rect.width; 
+              const scaleY = canvas.height / rect.height;
+              
+              // O movimento do mouse precisa ser escalado para coordenadas do canvas
+              const dx = (clientX - lastMousePos.current.x) * scaleX;
+              const dy = (clientY - lastMousePos.current.y) * scaleY;
+              
+              updateActiveLayer({ 
+                  offsetX: layers.find(l => l.id === activeLayerId)!.offsetX + dx, 
+                  offsetY: layers.find(l => l.id === activeLayerId)!.offsetY + dy 
+              });
+              lastMousePos.current = { x: clientX, y: clientY };
+          }
+      }
   };
 
   const updateActiveLayer = (updates: Partial<AppliedLayer>) => {
@@ -224,7 +316,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
               ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 15;
               ctx.setLineDash([6,4]);
               ctx.beginPath();
-              // Desenha caixa bounding aproximada ou circulo
+              // Desenha caixa bounding aproximada
               ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 50, 0, 2 * Math.PI);
               ctx.stroke();
               
@@ -244,14 +336,22 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   const activeLayer = layers.find(l => l.id === activeLayerId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] md:h-full bg-[#f1f5f9] font-sans overflow-hidden">
+    <div ref={containerRef} className="flex flex-col h-[calc(100vh-64px)] md:h-full bg-[#f1f5f9] font-sans overflow-hidden">
       
       {/* 1. AREA DO CANVAS */}
-      <div className="flex-1 relative flex items-center justify-center bg-[#f1f5f9] overflow-hidden p-4 md:p-8">
+      <div className="flex-1 relative flex items-center justify-center bg-[#f1f5f9] overflow-hidden">
            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#64748b 1px, transparent 1px), linear-gradient(90deg, #64748b 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
-           {/* Canvas Container */}
-           <div className={`relative shadow-2xl bg-white border border-gray-200 md:rounded-lg flex flex-col items-center justify-center overflow-hidden transition-all duration-300 w-full h-full max-w-full max-h-[60vh] md:max-h-[85vh]`}>
+           {/* Container com Transform CSS para Pan/Zoom Global */}
+           <div 
+             className={`relative shadow-2xl bg-white border border-gray-200 flex flex-col items-center justify-center transition-transform duration-75 ease-linear`}
+             style={{
+                 transform: `translate(${panZoom.x}px, ${panZoom.y}px) scale(${panZoom.scale})`,
+                 cursor: interactionMode === 'VIEW' ? 'grab' : 'crosshair',
+                 maxWidth: '90%',
+                 maxHeight: '85%'
+             }}
+           >
                 {moldImgObj ? (
                     <canvas 
                         ref={mainCanvasRef}
@@ -261,8 +361,8 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                         onMouseMove={handlePointerMove}
                         onTouchStart={handlePointerDown}
                         onTouchMove={handlePointerMove}
-                        style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', objectFit: 'contain', touchAction: 'none' }}
-                        className="cursor-crosshair block shadow-inner bg-white"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', touchAction: 'none' }}
+                        className="block shadow-inner bg-white"
                     />
                 ) : (
                     <div onClick={() => moldInputRef.current?.click()} className="p-10 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-lg m-4 cursor-pointer hover:bg-gray-50 active:scale-95 transition-all group">
@@ -272,13 +372,36 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                 )}
            </div>
 
-           {/* Ferramentas Flutuantes de Tela (Desktop/Mobile) */}
+           {/* Ferramentas Flutuantes de Tela */}
            {moldImage && (
-             <div className="absolute top-4 right-4 flex flex-col gap-2">
-                 <button onClick={() => { setCanvasDims({...canvasDims}); }} className="bg-white p-2 rounded-lg shadow-lg text-gray-700 active:scale-90 transition-transform border border-gray-200" title="Recentralizar">
+             <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
+                 <button onClick={toggleFullscreen} className="bg-white p-3 rounded-full shadow-lg text-gray-700 active:scale-90 transition-transform border border-gray-200" title="Tela Cheia">
                     <Maximize size={20} />
                  </button>
+                 <button onClick={() => setPanZoom({x:0,y:0,scale:1})} className="bg-white p-3 rounded-full shadow-lg text-gray-700 active:scale-90 transition-transform border border-gray-200" title="Resetar Zoom">
+                    <ZoomIn size={20} />
+                 </button>
              </div>
+           )}
+
+           {/* Seletor de MODO (View vs Edit) - Centralizado em baixo no Mobile */}
+           {moldImage && activeLayerId && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1 bg-white p-1 rounded-full shadow-lg border border-gray-200 z-20">
+                  <button 
+                    onClick={() => setInteractionMode('VIEW')} 
+                    className={`p-2 rounded-full transition-all ${interactionMode === 'VIEW' ? 'bg-vingi-900 text-white' : 'text-gray-400 hover:bg-gray-100'}`}
+                    title="Mover Tela"
+                  >
+                      <Hand size={18} />
+                  </button>
+                  <button 
+                    onClick={() => setInteractionMode('EDIT')} 
+                    className={`p-2 rounded-full transition-all ${interactionMode === 'EDIT' ? 'bg-vingi-900 text-white' : 'text-gray-400 hover:bg-gray-100'}`}
+                    title="Mover Molde"
+                  >
+                      <Move size={18} />
+                  </button>
+              </div>
            )}
       </div>
 
@@ -289,20 +412,18 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
               <h2 className="text-xs font-bold text-vingi-900 flex items-center gap-2">
                   <Wand2 className="text-vingi-600" size={16} /> Vingi Studio <span className="text-[9px] bg-black text-white px-1 rounded">2D</span>
               </h2>
-              {/* Inputs Invisíveis */}
               <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden"/>
               <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden"/>
           </div>
           
           <div className="p-3 space-y-3 relative">
                
-               {/* BOTÕES DE UPLOAD (ESTADO SÓLIDO) */}
                <div className="flex gap-3">
                    <button 
                        onClick={() => moldInputRef.current?.click()} 
                        className={`flex-1 py-3 px-2 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95 text-xs ${
                            moldImage 
-                             ? 'bg-emerald-500 border-emerald-600 text-white' // SÓLIDO VERDE
+                             ? 'bg-emerald-500 border-emerald-600 text-white' 
                              : 'bg-white border-dashed border-gray-300 text-gray-400 hover:bg-gray-50'
                        }`}
                    >
@@ -314,7 +435,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                        onClick={() => patternInputRef.current?.click()} 
                        className={`flex-1 py-3 px-2 rounded-xl border-2 font-bold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95 text-xs ${
                            patternImage 
-                             ? 'bg-violet-600 border-violet-700 text-white' // SÓLIDO ROXO
+                             ? 'bg-violet-600 border-violet-700 text-white' 
                              : 'bg-white border-dashed border-gray-300 text-gray-400 hover:bg-gray-50'
                        }`}
                    >
@@ -323,7 +444,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                    </button>
                </div>
 
-               {/* CONTROLES DA CAMADA (FERRAMENTAS) */}
+               {/* CONTROLES DA CAMADA */}
                {activeLayer ? (
                    <div className="animate-fade-in-up bg-slate-50 p-2 rounded-xl border border-slate-200">
                        <div className="flex items-center justify-between mb-2 px-1">
@@ -335,7 +456,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                             <button onClick={() => updateActiveLayer({ rotation: activeLayer.rotation + 45 })} className="bg-white p-2 rounded-lg text-slate-600 border border-slate-200 flex flex-col items-center justify-center active:scale-95"><RotateCw size={18}/><span className="text-[9px] mt-1">Girar</span></button>
                             <button onClick={() => updateActiveLayer({ flipX: !activeLayer.flipX })} className="bg-white p-2 rounded-lg text-slate-600 border border-slate-200 flex flex-col items-center justify-center active:scale-95"><FlipHorizontal size={18}/><span className="text-[9px] mt-1">Flip H</span></button>
                             <button onClick={() => updateActiveLayer({ flipY: !activeLayer.flipY })} className="bg-white p-2 rounded-lg text-slate-600 border border-slate-200 flex flex-col items-center justify-center active:scale-95"><FlipVertical size={18}/><span className="text-[9px] mt-1">Flip V</span></button>
-                            <button onClick={() => { setActiveLayerId(null); setTool('WAND'); }} className="bg-vingi-900 text-white p-2 rounded-lg border border-vingi-800 flex flex-col items-center justify-center active:scale-95 shadow-md"><PlusCircle size={18}/><span className="text-[9px] mt-1">Novo</span></button>
+                            <button onClick={() => { setActiveLayerId(null); }} className="bg-vingi-900 text-white p-2 rounded-lg border border-vingi-800 flex flex-col items-center justify-center active:scale-95 shadow-md"><PlusCircle size={18}/><span className="text-[9px] mt-1">Novo</span></button>
                        </div>
                    </div>
                ) : (

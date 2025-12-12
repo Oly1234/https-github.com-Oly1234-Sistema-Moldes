@@ -174,7 +174,7 @@ export default async function handler(req, res) {
     // ROTA 4: ANÁLISE DE ROUPAS
     // ==========================================================================================
     const JSON_SCHEMA_PROMPT = `
-RESPONSE FORMAT (JSON ONLY):
+RESPONSE FORMAT (JSON ONLY, NO MARKDOWN, NO COMMENTS):
 {
   "patternName": "Name",
   "category": "Category",
@@ -204,8 +204,28 @@ RESPONSE FORMAT (JSON ONLY):
 
     if (!googleResponse.ok) throw new Error("Erro na API de Análise");
     const dataMain = await googleResponse.json();
-    const generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
-    const jsonResult = JSON.parse(generatedText.replace(/```json|```/g, '').trim());
+    let generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    // LIMPEZA AGRESSIVA DE JSON PARA EVITAR TELA PRETA
+    if (generatedText) {
+        // Remove markdown ```json ... ```
+        generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '');
+        // Tenta encontrar o primeiro { e o último }
+        const firstBrace = generatedText.indexOf('{');
+        const lastBrace = generatedText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            generatedText = generatedText.substring(firstBrace, lastBrace + 1);
+        }
+    }
+
+    let jsonResult;
+    try {
+        jsonResult = JSON.parse(generatedText);
+    } catch (e) {
+        console.error("JSON Parse Error:", generatedText);
+        throw new Error("Falha ao processar resposta da IA. Tente novamente.");
+    }
+    
     res.status(200).json(jsonResult);
 
   } catch (error) {

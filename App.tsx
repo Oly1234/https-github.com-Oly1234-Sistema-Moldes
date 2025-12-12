@@ -132,6 +132,18 @@ export default function App() {
       return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
+  // Efeito para rotacionar mensagens de loading
+  useEffect(() => {
+    let interval: any;
+    if (state === AppState.ANALYZING) {
+        setLoadingStep(0);
+        interval = setInterval(() => {
+            setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length);
+        }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [state]);
+
   const handleInstallClick = async () => {
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
@@ -173,6 +185,7 @@ export default function App() {
   const startAnalysis = async () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING); setErrorMsg(null); setVisibleCount(12);
+    // Pequeno delay para garantir que o estado de UI atualize antes do processamento pesado
     setTimeout(async () => {
         try {
             const compressedMain = await compressImage(uploadedImage);
@@ -190,7 +203,7 @@ export default function App() {
             const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
             setResult(analysisResult); addToHistory(analysisResult); setState(AppState.SUCCESS);
         } catch (err: any) { setErrorMsg(err.message || "Erro desconhecido na análise."); setState(AppState.ERROR); }
-    }, 500); 
+    }, 100); 
   };
   
   const handleLoadMore = () => setVisibleCount(prev => prev + 12);
@@ -327,13 +340,27 @@ export default function App() {
             )}
             
             {state === AppState.ANALYZING && (
-                <div className="flex flex-col items-center justify-center h-[70vh]">
-                     <div className="relative">
-                        <div className="absolute inset-0 bg-vingi-400 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                        <Loader2 size={64} className="text-vingi-600 animate-spin relative z-10"/>
+                <div className="flex flex-col items-center justify-center h-[90vh] w-full p-6">
+                     <div className="relative w-full max-w-sm aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-200 bg-slate-900">
+                        {/* Imagem do Usuário de Fundo */}
+                        <img src={uploadedImage || ''} className="w-full h-full object-cover opacity-60 blur-[2px]" />
+                        
+                        {/* Overlay Grade Técnica */}
+                        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,100,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+
+                        {/* Linha de Scanner - Animação CSS definida em index.html */}
+                        <div className="absolute top-0 left-0 w-full h-1 bg-vingi-400 shadow-[0_0_20px_rgba(96,165,250,1)] animate-scan z-20"></div>
                      </div>
-                     <h3 className="text-2xl font-bold mt-8 text-slate-800 tracking-tight">{MOCK_LOADING_STEPS[loadingStep]}</h3>
-                     <p className="text-slate-400 text-sm mt-3 font-medium">Processando DNA Técnico...</p>
+                     
+                     <div className="mt-8 text-center max-w-xs mx-auto">
+                        <h3 className="text-xl font-bold text-slate-800 tracking-tight animate-pulse min-h-[3rem] flex items-center justify-center">
+                            {MOCK_LOADING_STEPS[loadingStep]}
+                        </h3>
+                        <div className="flex justify-center items-center gap-2 text-vingi-500 font-mono text-xs mt-2 uppercase tracking-widest">
+                            <Loader2 size={12} className="animate-spin"/>
+                            Processando DNA
+                        </div>
+                     </div>
                 </div>
             )}
             
