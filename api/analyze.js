@@ -30,124 +30,21 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Erro de Configuração: Chave de API não encontrada." });
     }
 
-    const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
     // ==========================================================================================
-    // ROTA 1: ENHANCE PROMPT (INTELIGÊNCIA DE TEXTO)
-    // ==========================================================================================
-    if (action === 'ENHANCE_PROMPT') {
-        const endpoint = genAIEndpoint('gemini-2.5-flash');
-        
-        const systemPrompt = `
-        ATUE COMO: Engenheiro de Prompt de IA focado em Design Têxtil (Midjourney/DALL-E 3).
-        
-        MISSÃO: Transformar a descrição simples do usuário em um prompt de "Design Premiado".
-        ENTRADA: "${prompt}"
-        
-        REGRAS:
-        1. Retorne APENAS o texto do prompt melhorado.
-        2. Mantenha em PORTUGUÊS para o usuário entender, mas adicione termos técnicos de arte.
-        3. Obrigatório definir: Mídia (Ex: Guache, Vetor), Iluminação (Ex: Flat lay), Textura (Ex: Papel granulado).
-        
-        EXEMPLO DE SAÍDA:
-        "Estampa corrida seamless de alta complexidade, padrão floral tropical com hibiscos e folhagens densas, estilo pintura a óleo com textura de tela visível, paleta de cores vibrante coral e verde esmeralda, iluminação suave de estúdio, resolução 8k, detalhado."
-        `;
-
-        const payload = {
-            contents: [{ parts: [{ text: systemPrompt }] }]
-        };
-
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const data = await response.json();
-        const enhancedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        return res.status(200).json({ success: true, enhancedPrompt: enhancedText || prompt });
-    }
-
-    // ==========================================================================================
-    // ROTA 2: DESCRIÇÃO DE ESTAMPA (VISION TO PROMPT - REVERSE ENGINEERING)
-    // ==========================================================================================
-    if (action === 'DESCRIBE_PATTERN') {
-        const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
-        
-        // PROMPT DE ENGENHARIA REVERSA TÊXTIL - NÍVEL MASTER (PT-BR)
-        const VISION_PROMPT = `
-          ATUE COMO: Diretora de Criação Têxtil Sênior (Especialista em Surface Design).
-          MISSÃO: Fazer uma engenharia reversa visual desta estampa para recriação fidedigna via IA.
-
-          ANÁLISE TÉCNICA PROFUNDA (EM PORTUGUÊS):
-          1. **Técnica e Mídia:** Identifique se é aquarela (wet-on-wet), guache, vetor flat, bico de pena, xilogravura, etc.
-          2. **Textura de Fundo:** Existe textura de papel, linho, canvas, ruído digital?
-          3. **Dinâmica da Composição:** É um padrão denso, esparso, geométrico, orgânico, half-drop (tijolinho)?
-          4. **Nuances Cromáticas:** Descreva as cores com precisão técnica (ex: "verde sálvia pálido", "azul cobalto vibrante", "tons terrosos de terracota").
-          5. **Botânica/Elementos:** Seja específica (ex: "folhas de costela-de-adão gigantes", "rosas inglesas delicadas", "grafismos memphis").
-
-          FORMATO DE SAÍDA (Obrigatório):
-          Retorne APENAS um parágrafo descritivo em PORTUGUÊS, rico em adjetivos técnicos. Comece com "Estampa corrida seamless...".
-          
-          EXEMPLO:
-          "Estampa corrida seamless, estilo pintura a guache manual com pinceladas visíveis e textura de cerdas, fundo com textura sutil de papel de algodão off-white. Composição floral densa e entrelaçada apresentando hibiscos tropicais cor coral e folhas de palmeira em verde esmeralda profundo. Iluminação flat sem sombras duras, alta resolução 8k, estilo Farm Rio."
-        `;
-
-        const visionPayload = {
-            contents: [{
-                parts: [
-                    { text: VISION_PROMPT },
-                    { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }
-                ]
-            }],
-            generation_config: {
-                temperature: 0.4, 
-                max_output_tokens: 800
-            }
-        };
-
-        const visionRes = await fetch(visionEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(visionPayload)
-        });
-
-        if (!visionRes.ok) {
-            const errText = await visionRes.text();
-            throw new Error(`Vision API Error: ${visionRes.status} - ${errText}`);
-        }
-        
-        const visionData = await visionRes.json();
-        const candidate = visionData.candidates?.[0];
-        
-        if (candidate?.finishReason === 'SAFETY') {
-             throw new Error("A imagem contém elementos bloqueados pela segurança. Tente recortar apenas o tecido.");
-        }
-
-        const description = candidate?.content?.parts?.[0]?.text;
-
-        if (!description) {
-            throw new Error("A IA analisou a imagem mas não gerou descrição. Tente outra foto.");
-        }
-
-        return res.status(200).json({ success: true, description: description.trim() });
-    }
-
-    // ==========================================================================================
-    // ROTA 3: GERAÇÃO DE ESTAMPAS (TEXT TO IMAGE - FACTORY)
+    // ROTA 1: GERAÇÃO DE ESTAMPAS (AI PATTERN STUDIO)
     // ==========================================================================================
     if (action === 'GENERATE_PATTERN') {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
         
-        // O prompt já vem em PT-BR ou aprimorado. Adicionamos sufixos técnicos universais em inglês para o motor de imagem.
-        const finalPrompt = `Seamless repeating pattern, textile design style. ${prompt} . Flat lighting, 8k resolution, highly detailed fabric texture, no shadows, 2d vector or raster art.`;
+        // Prompt Otimizado para Texturas Têxteis
+        const textilePrompt = `Generate a high-quality seamless textile pattern. Texture design: ${prompt}. Flat lay, no perspective, infinite repeat style, fabric texture.`;
         
         const payload = {
-            contents: [{ parts: [{ text: finalPrompt }] }],
+            contents: [{ parts: [{ text: textilePrompt }] }],
             generation_config: {
                 response_mime_type: "image/jpeg",
-                aspect_ratio: "1:1"
+                // Configurações para garantir criatividade na estampa
+                temperature: 0.8 
             }
         };
 
@@ -163,11 +60,17 @@ export default async function handler(req, res) {
         }
 
         const data = await googleResponse.json();
+        // O modelo retorna a imagem em base64 dentro de inlineData ou parts
+        // Nota: A estrutura de resposta para imagem pode variar levemente, adaptando para o padrão
+        // Se o modelo retornar imagem binária direta ou base64
+        
+        // Tenta extrair a imagem da resposta (pode vir como texto se o modelo recusar, ou blob)
+        // Para gemini-2.5-flash-image, geralmente vem em candidates[0].content.parts
         const parts = data.candidates?.[0]?.content?.parts || [];
         const imagePart = parts.find(p => p.inline_data);
         
         if (!imagePart) {
-             throw new Error("A IA recusou a geração (Safety Filter). Tente descrever de forma menos específica.");
+             throw new Error("A IA não gerou uma imagem válida. Tente descrever de outra forma.");
         }
 
         return res.status(200).json({ 
@@ -177,20 +80,71 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 4: ANÁLISE TÉCNICA DE ROUPAS (PADRÃO)
+    // ROTA 2: ANÁLISE TÉCNICA (PADRÃO)
     // ==========================================================================================
     
     // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 ---
     const MASTER_SYSTEM_PROMPT = `
 ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
 MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS GLOBALLY.
-... (Código existente mantido) ...
+
+### GLOBAL SEARCH STRATEGY (MULTI-LANGUAGE PROTOCOL):
+To find the best patterns, you MUST translate technical terms to **ENGLISH** when searching international databases, while keeping **PORTUGUESE** terms for Brazilian specific sources.
+
+### SOURCE PRIORITY & SPECIALIZATION:
+
+1. **BRAZILIAN MASTERS (PT-BR Searches):**
+   *   **Marlene Mukai:** MANDATORY for fundamental modeling in Brazil. Search: *"Marlene Mukai [vestido/molde]"*.
+   *   **Youtube Channels:** "Minha Mãe Costura", "Alana Santos", "A Casa da Costura".
+
+2. **INTERNATIONAL HIGH-FASHION (EN Searches):**
+   *   **Vikisews:** HIGHEST PRIORITY for modern cutouts, corsetry, and fitted designs (perfect for the "cutout" look).
+   *   **Mood Fabrics (The Sewciety):** Excellent for free, high-fashion inspired patterns.
+   *   **Etsy:** Use specific English keywords (Boho, Resort, Linen).
+
+3. **THE "BIG 4" & INDIE (EN Searches):**
+   *   **Vogue/McCalls:** For "Designer" lookalikes and complex drapes.
+   *   **Fibre Mood:** For loose, tiered, "Farm Rio" style volumes.
+   *   **Style Arc:** For reliable industry-standard blocks.
+
+### KEYWORD TRANSLATION MATRIX (APPLY STRICTLY):
+Analyze the image and apply these search terms based on the features found:
+
+*   **IF "Três Marias" / "Babados":**
+    *   Search EN: *"Tiered maxi dress pattern", "Buffet dress pattern", "Boho gathered dress"*.
+*   **IF "Frente Única" / "Lenço":**
+    *   Search EN: *"Halter neck dress pattern", "Handkerchief hem pattern", "Open back resort dress"*.
+*   **IF "Recortes" / "Vazado na Cintura":**
+    *   Search EN: *"Cut out waist dress pattern", "Midriff baring pattern", "O-ring dress pattern"*.
+*   **IF "Manga Bufante":**
+    *   Search EN: *"Puff sleeve", "Bishop sleeve", "Balloon sleeve"*.
+*   **IF "Um ombro só":**
+    *   Search EN: *"One shoulder maxi dress pattern", "Asymmetrical greek dress pattern"*.
+*   **IF "Macaquinho":**
+    *   Search EN: *"Romper pattern", "Playsuit pattern", "Plunge neckline romper"*.
+
+### VISUAL INTELLIGENCE (FARM RIO / TROPICAL STYLE):
+The user loves the "Farm Rio" aesthetic (Antix, Borana, Agilità).
+*   Ignore the prints (tropical/floral).
+*   Focus on the **STRUCTURE**: deep V-necks, flowy viscose behavior, elastic waists, strategic skin exposure.
+
+### OUTPUT QUANTITY PROTOCOL (BATCH OPTIMIZATION):
+Generate exactly **45 HIGH-FIDELITY RESULTS** in a single run to optimize API usage:
+1.  **15 EXACT MATCHES:** Prioritize **Vikisews** (modern) and **McCalls** (classic).
+2.  **15 CLOSE ALTERNATIVES:** Prioritize **Marlene Mukai** (free/technical) and **Mood Fabrics**.
+3.  **15 VIBE/AESTHETIC MATCHES:** **Etsy** and Indie designers (Farm Rio vibe).
+
+### HYPER-LINKING STRATEGY:
+1.  **Direct Product Link:** Only if certain.
+2.  **Smart Search Link (MANDATORY):**
+    *   *Vikisews:* vikisews.com/patterns/dresses/?search=cutout
+    *   *Marlene Mukai:* marlenemukai.com.br/?s=vestido+longo
+    *   *Etsy:* etsy.com/search?q=tiered+maxi+dress+pattern
+3.  **Search Terms:** Use the ENGLISH technical terms for international sites.
+
+### JSON DATA STRUCTURE:
+Return strictly valid JSON.
 `;
-    // (Mantendo o restante do código da rota 4 inalterado para economizar tokens, pois não foi o foco da mudança)
-    
-    // ... INSERIR CÓDIGO RESTANTE DA ROTA 4 AQUI (Igual ao arquivo anterior) ...
-    // Para garantir a integridade, vou recolocar o bloco de código da rota 4 simplificado ou completo se necessário.
-    // Como a instrução pede XML completo, vou incluir o arquivo inteiro corretamente.
 
     const JSON_SCHEMA_PROMPT = `
 RESPONSE FORMAT (JSON ONLY):
@@ -268,7 +222,7 @@ RESPONSE FORMAT (JSON ONLY):
 
     parts.push({ text: promptText });
 
-    const payloadMain = {
+    const payload = {
         contents: [{ parts: parts }],
         system_instruction: {
             parts: [{ text: MASTER_SYSTEM_PROMPT }]
@@ -281,7 +235,7 @@ RESPONSE FORMAT (JSON ONLY):
     const googleResponse = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payloadMain)
+        body: JSON.stringify(payload)
     });
 
     if (!googleResponse.ok) {
@@ -289,8 +243,8 @@ RESPONSE FORMAT (JSON ONLY):
         throw new Error(`Google API Error (${googleResponse.status}): ${errorText}`);
     }
 
-    const dataMain = await googleResponse.json();
-    const generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await googleResponse.json();
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!generatedText) throw new Error("A IA analisou a imagem mas não gerou texto.");
 

@@ -103,4 +103,4 @@ export enum AppState {
   ERROR = 'ERROR'
 }
 
-export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP' | 'CREATOR';
+export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP';
