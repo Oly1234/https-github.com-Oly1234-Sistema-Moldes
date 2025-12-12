@@ -20,219 +20,171 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
+    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
     // --- GESTÃO DE CHAVES DE SEGURANÇA ---
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
 
     if (!apiKey) {
-        console.error("CRITICAL: Nenhuma chave encontrada.");
-        return res.status(500).json({ 
-            error: "Erro de Configuração: Chave de API não encontrada." 
-        });
-    } else {
-        let sourceVar = "DESCONHECIDA";
-        if (process.env.MOLDESOK) sourceVar = "MOLDESOK";
-        else if (process.env.MOLDESKEY) sourceVar = "MOLDESKEY";
-        else if (process.env.API_KEY) sourceVar = "API_KEY";
-        console.log(`System: Autenticado via ${sourceVar} (Final ...${apiKey.slice(-4)})`);
+        return res.status(500).json({ error: "Erro de Configuração: Chave de API não encontrada." });
     }
 
-    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 (GLOBAL SEARCH PROTOCOL) ---
-    const MASTER_SYSTEM_PROMPT = `
-ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
-MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS GLOBALLY.
+    const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-### GLOBAL SEARCH STRATEGY (MULTI-LANGUAGE PROTOCOL):
-To find the best patterns, you MUST translate technical terms to **ENGLISH** when searching international databases, while keeping **PORTUGUESE** terms for Brazilian specific sources.
+    // ==========================================================================================
+    // ROTA 1: ENHANCE PROMPT
+    // ==========================================================================================
+    if (action === 'ENHANCE_PROMPT') {
+        const endpoint = genAIEndpoint('gemini-2.5-flash');
+        const systemPrompt = `
+        ATUE COMO: Curador de Arte Têxtil Sênior.
+        TAREFA: Transformar a entrada do usuário em um prompt técnico para geração de PADRÃO CONTÍNUO.
+        ENTRADA DO USUÁRIO: "${prompt}"
+        SAÍDA (Apenas o texto refinado em Português):
+        Crie uma descrição rica focada em elementos visuais, estilo artístico, paleta de cores.
+        Adicione ao final: ", design de superfície profissional, alta resolução, padrão repetitivo perfeito."
+        `;
+        const payload = { contents: [{ parts: [{ text: systemPrompt }] }] };
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        const enhancedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return res.status(200).json({ success: true, enhancedPrompt: enhancedText || prompt });
+    }
 
-### SOURCE PRIORITY & SPECIALIZATION:
+    // ==========================================================================================
+    // ROTA 2: DESCRIÇÃO DE ESTAMPA
+    // ==========================================================================================
+    if (action === 'DESCRIBE_PATTERN') {
+        const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
+        const VISION_PROMPT = `
+          ATUE COMO: Designer de Superfície Têxtil Sênior.
+          TAREFA: Analisar a imagem e gerar um "Prompt Técnico Mestre".
+          OBJETIVO: O texto gerado deve ser rico, estruturado e técnico.
+          1. Contexto e Estilo. 2. Composição e Estrutura. 3. Paleta de Cores. 4. Requisitos de Repetição.
+        `;
+        const visionPayload = {
+            contents: [{
+                parts: [
+                    { text: VISION_PROMPT },
+                    { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }
+                ]
+            }],
+            generation_config: { temperature: 0.4, max_output_tokens: 1000 }
+        };
+        const visionRes = await fetch(visionEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(visionPayload) });
+        if (!visionRes.ok) { const errText = await visionRes.text(); throw new Error(`Vision API Error: ${visionRes.status} - ${errText}`); }
+        const visionData = await visionRes.json();
+        let description = visionData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!description) throw new Error("Não foi possível ler a imagem.");
+        description = description.replace(/^Prompt:|^Descrição:/i, '').trim();
+        return res.status(200).json({ success: true, description: description });
+    }
 
-1. **BRAZILIAN MASTERS (PT-BR Searches):**
-   *   **Marlene Mukai:** MANDATORY for fundamental modeling in Brazil. Search: *"Marlene Mukai [vestido/molde]"*.
-   *   **Youtube Channels:** "Minha Mãe Costura", "Alana Santos", "A Casa da Costura".
+    // ==========================================================================================
+    // ROTA 3: GERAÇÃO DE ESTAMPAS
+    // ==========================================================================================
+    if (action === 'GENERATE_PATTERN') {
+        const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+        const finalPrompt = `
+          Task: Create a High-End Seamless Textile Pattern based on this description.
+          Visual Description (Portuguese): "${prompt}"
+          TECHNICAL MANDATORY REQUIREMENTS:
+          1. SEAMLESS / TILEABLE. 2. VIEW: Top-down, flat 2D design. 3. QUALITY: 8k resolution.
+        `;
+        const payload = {
+            contents: [{ parts: [{ text: finalPrompt }] }],
+            generation_config: { response_mime_type: "image/jpeg", aspect_ratio: "1:1" }
+        };
+        const googleResponse = await fetch(imageEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!googleResponse.ok) throw new Error(`Erro na Geração: ${googleResponse.status}`);
+        const data = await googleResponse.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(p => p.inline_data);
+        if (!imagePart) throw new Error("Conteúdo bloqueado pelos filtros de segurança.");
+        return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
+    }
 
-2. **INTERNATIONAL HIGH-FASHION (EN Searches):**
-   *   **Vikisews:** HIGHEST PRIORITY for modern cutouts, corsetry, and fitted designs (perfect for the "cutout" look).
-   *   **Mood Fabrics (The Sewciety):** Excellent for free, high-fashion inspired patterns.
-   *   **Etsy:** Use specific English keywords (Boho, Resort, Linen).
-
-3. **THE "BIG 4" & INDIE (EN Searches):**
-   *   **Vogue/McCalls:** For "Designer" lookalikes and complex drapes.
-   *   **Fibre Mood:** For loose, tiered, "Farm Rio" style volumes.
-   *   **Style Arc:** For reliable industry-standard blocks.
-
-### KEYWORD TRANSLATION MATRIX (APPLY STRICTLY):
-Analyze the image and apply these search terms based on the features found:
-
-*   **IF "Três Marias" / "Babados":**
-    *   Search EN: *"Tiered maxi dress pattern", "Buffet dress pattern", "Boho gathered dress"*.
-*   **IF "Frente Única" / "Lenço":**
-    *   Search EN: *"Halter neck dress pattern", "Handkerchief hem pattern", "Open back resort dress"*.
-*   **IF "Recortes" / "Vazado na Cintura":**
-    *   Search EN: *"Cut out waist dress pattern", "Midriff baring pattern", "O-ring dress pattern"*.
-*   **IF "Manga Bufante":**
-    *   Search EN: *"Puff sleeve", "Bishop sleeve", "Balloon sleeve"*.
-*   **IF "Um ombro só":**
-    *   Search EN: *"One shoulder maxi dress pattern", "Asymmetrical greek dress pattern"*.
-*   **IF "Macaquinho":**
-    *   Search EN: *"Romper pattern", "Playsuit pattern", "Plunge neckline romper"*.
-
-### VISUAL INTELLIGENCE (FARM RIO / TROPICAL STYLE):
-The user loves the "Farm Rio" aesthetic (Antix, Borana, Agilità).
-*   Ignore the prints (tropical/floral).
-*   Focus on the **STRUCTURE**: deep V-necks, flowy viscose behavior, elastic waists, strategic skin exposure.
-
-### OUTPUT QUANTITY PROTOCOL (BATCH OPTIMIZATION):
-Generate exactly **45 HIGH-FIDELITY RESULTS** in a single run to optimize API usage:
-1.  **15 EXACT MATCHES:** Prioritize **Vikisews** (modern) and **McCalls** (classic).
-2.  **15 CLOSE ALTERNATIVES:** Prioritize **Marlene Mukai** (free/technical) and **Mood Fabrics**.
-3.  **15 VIBE/AESTHETIC MATCHES:** **Etsy** and Indie designers (Farm Rio vibe).
-
-### HYPER-LINKING STRATEGY:
-1.  **Direct Product Link:** Only if certain.
-2.  **Smart Search Link (MANDATORY):**
-    *   *Vikisews:* vikisews.com/patterns/dresses/?search=cutout
-    *   *Marlene Mukai:* marlenemukai.com.br/?s=vestido+longo
-    *   *Etsy:* etsy.com/search?q=tiered+maxi+dress+pattern
-3.  **Search Terms:** Use the ENGLISH technical terms for international sites.
-
-### JSON DATA STRUCTURE:
-Return strictly valid JSON.
-`;
-
+    // ==========================================================================================
+    // ROTA 4: ANÁLISE DE ROUPAS (BUSCA DE MOLDES)
+    // ==========================================================================================
     const JSON_SCHEMA_PROMPT = `
-RESPONSE FORMAT (JSON ONLY):
+You are a Fashion Technical Analyst. Analyze the image and return a JSON object.
+It is CRITICAL that you find matching sewing patterns available for purchase or download.
+
+MANDATORY: Return a MASSIVE LIST of 20 to 30 matches.
+Focus on "Big 4" (Vogue, McCall's, Butterick, Simplicity), BurdaStyle, Etsy, The Fold Line, Mood Fabrics, Vikisews.
+
+STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
+
 {
-  "patternName": "Name of the garment style (ex: The Tropical Cutout Maxi)",
-  "category": "Broad Category (ex: Resort Wear)",
-  "technicalDna": { 
-    "silhouette": "Technical shape (ex: A-Line with Side Cutouts)", 
-    "neckline": "Neckline (ex: Deep V Halter)", 
-    "sleeve": "Sleeve (ex: Kimono or Sleeveless)", 
-    "fabricStructure": "Fabric (ex: Viscose/Linen Blend)"
-  },
-  "matches": {
-    "exact": [
-      { 
-        "source": "Brand Name", 
-        "patternName": "Pattern Name/Number", 
-        "similarityScore": 99, 
-        "type": "PAGO/GRATIS/INDIE", 
-        "url": "VALID_URL_OR_SMART_SEARCH", 
-        "imageUrl": "OPTIONAL_IMAGE_URL",
-        "description": "Why? (ex: 'Vikisews Oona matches the waist cutout perfectly')"
-      }
-    ],
-    "close": [ { ... } ],
-    "adventurous": [ { ... } ]
+  "patternName": "Descriptive Name (PT-BR)",
+  "category": "Category",
+  "technicalDna": { "silhouette": "e.g. A-Line", "neckline": "e.g. V-Neck", "sleeve": "e.g. Puff", "fabricStructure": "e.g. Woven" },
+  "matches": { 
+      "exact": [{ "source": "Store Name", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "IMPORTANT: Try to find a valid direct image URL for the cover (jpg/png) if possible, otherwise leave empty.", "type": "PAGO", "similarityScore": 95 }], 
+      "close": [{ "source": "Etsy Search", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "OPTIONAL", "type": "INDIE", "similarityScore": 85 }], 
+      "adventurous": [] 
   },
   "curatedCollections": [
-      {
-          "sourceName": "Marlene Mukai / Vikisews / Etc",
-          "title": "Collection Title",
-          "itemCount": "15+",
-          "searchUrl": "SMART_SEARCH_URL",
-          "description": "Short reasoning",
-          "icon": "SHOPPING"
-      }
+      { "title": "Nome da Coleção (ex: Vestidos de Verão)", "searchUrl": "https://...", "itemCount": "50+ modelos", "description": "Curadoria de...", "sourceName": "Burda/Etsy" }
   ]
 }
 `;
-
     const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    
-    const parts = [
-        {
-            inline_data: {
-                mime_type: mainMimeType,
-                data: mainImageBase64
-            }
-        }
-    ];
+    const parts = [{ inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }];
+    if (secondaryImageBase64) parts.push({ inline_data: { mime_type: secondaryMimeType, data: secondaryImageBase64 } });
 
-    if (secondaryImageBase64 && secondaryMimeType) {
-        parts.push({
-            inline_data: {
-                mime_type: secondaryMimeType,
-                data: secondaryImageBase64
-            }
-        });
-    }
-
-    let promptText = `EXECUTE VINGI GLOBAL SCAN v5.4 (BATCH OPTIMIZED).
-        1. ANALYZE visual construction (Cutouts, Tiers, Asymmetry).
-        2. TRANSLATE features to English Keywords (e.g., 'Três Marias' -> 'Tiered Skirt').
-        3. SEARCH GLOBALLY: Vikisews, Mood Fabrics, McCalls, Etsy, and LOCALLY: Marlene Mukai.
-        4. GENERATE 45 Patterns (15 Exact, 15 Close, 15 Vibe).
-        ${JSON_SCHEMA_PROMPT}`;
-
-    // --- LÓGICA DE EXCLUSÃO (MANTIDA POR PRECAUÇÃO, MAS MENOS USADA COM BATCHING) ---
-    if (excludePatterns && Array.isArray(excludePatterns) && excludePatterns.length > 0) {
-        const ignoredList = excludePatterns.join(', ');
-        promptText += `\n\nEXCLUSION FILTER ACTIVE:
-        User has already seen: [${ignoredList}].
-        DO NOT return these specific patterns again.
-        FIND NEW ALTERNATIVES. Dig deeper into Etsy Vintage or Indie Designers.`;
-    }
-
+    let promptText = `EXECUTE VINGI GLOBAL SCAN. ${JSON_SCHEMA_PROMPT}`;
+    if (excludePatterns?.length) promptText += ` EXCLUDE: ${excludePatterns.join(', ')}`;
     parts.push({ text: promptText });
 
-    const payload = {
+    const payloadMain = {
         contents: [{ parts: parts }],
-        system_instruction: {
-            parts: [{ text: MASTER_SYSTEM_PROMPT }]
-        },
-        generation_config: {
-            response_mime_type: "application/json"
+        generation_config: { 
+            response_mime_type: "application/json",
+            temperature: 0.2
         }
     };
 
     const googleResponse = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payloadMain)
     });
 
-    if (!googleResponse.ok) {
-        const errorText = await googleResponse.text();
-        console.error("Gemini API Error Status:", googleResponse.status);
-        console.error("Gemini API Error Details:", errorText);
-        
-        if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
-             throw new Error("CRÍTICO: A chave (MOLDESOK) é inválida.");
-        }
-        if (googleResponse.status === 403) {
-             throw new Error("CRÍTICO: Chave bloqueada.");
-        }
-        if (googleResponse.status === 429) {
-             throw new Error("Tráfego intenso. Aguarde 30 segundos.");
-        }
-
-        throw new Error(`Google API Error (${googleResponse.status})`);
-    }
-
-    const data = await googleResponse.json();
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!googleResponse.ok) throw new Error("Erro na API de Análise");
+    const dataMain = await googleResponse.json();
+    let generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    if (!generatedText) {
-        throw new Error("A IA analisou a imagem mas não gerou texto.");
+    // --- CORREÇÃO DO ERRO DE URL (PRESERVA //) ---
+    if (generatedText) {
+        generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '');
+        const firstBrace = generatedText.indexOf('{');
+        const lastBrace = generatedText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            generatedText = generatedText.substring(firstBrace, lastBrace + 1);
+        }
     }
 
-    let cleanText = generatedText.trim();
-    if (cleanText.startsWith('```')) {
-        cleanText = cleanText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '');
+    let jsonResult;
+    try {
+        jsonResult = JSON.parse(generatedText);
+    } catch (e) {
+        console.error("JSON Parse Error Raw:", generatedText);
+        jsonResult = {
+            patternName: "Erro de Processamento",
+            category: "Geral",
+            technicalDna: { silhouette: "-", neckline: "-", sleeve: "-", fabricStructure: "-" },
+            matches: { exact: [], close: [], adventurous: [] },
+            curatedCollections: []
+        };
     }
-
-    const jsonResult = JSON.parse(cleanText);
+    
     res.status(200).json(jsonResult);
 
   } catch (error) {
-    console.error("Backend Handler Error:", error);
-    res.status(500).json({ 
-        error: error.message || 'Erro Interno do Servidor', 
-        details: error.toString() 
-    });
+    console.error("Backend Error:", error);
+    res.status(500).json({ error: error.message || 'Erro Interno' });
   }
 }
