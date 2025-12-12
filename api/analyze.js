@@ -20,11 +20,65 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
+    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns, targetUrl } = req.body;
     
     // --- GESTÃO DE CHAVES DE SEGURANÇA ---
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
+
+    // --- ROTA DE PRÉ-VISUALIZAÇÃO DE LINK (O "ROBÔ" DE IMAGENS) ---
+    // Esta é a funcionalidade que "baixa, salva e mostra" a imagem real do link
+    if (action === 'GET_LINK_PREVIEW') {
+        if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
+
+        try {
+            // 1. Fetch na página do molde simulando um browser real
+            const siteRes = await fetch(targetUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                }
+            });
+            
+            if (!siteRes.ok) throw new Error('Falha ao acessar site');
+            const html = await siteRes.text();
+
+            // 2. Extração de Metadados (og:image) via Regex (mais rápido que carregar lib HTML parser)
+            // Procura por <meta property="og:image" content="..."> ou twitter:image
+            const metaImageRegex = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']\s*\/?>/i;
+            const match = html.match(metaImageRegex);
+            
+            let imageUrl = match ? match[1] : null;
+
+            // Fallback para Etsy (busca imagem específica na estrutura deles se o og falhar)
+            if (!imageUrl && targetUrl.includes('etsy.com')) {
+                const etsyRegex = /data-src-zoom-image=["']([^"']+)["']/i;
+                const etsyMatch = html.match(etsyRegex);
+                if (etsyMatch) imageUrl = etsyMatch[1];
+            }
+
+            if (!imageUrl) {
+                // Se não achou imagem, retorna sucesso false mas sem erro, para o front usar o ícone
+                return res.status(200).json({ success: false });
+            }
+
+            // 3. Download da Imagem (Proxy)
+            // Baixamos a imagem no servidor para converter em Base64 e evitar bloqueio de CORS no navegador do usuário
+            const imgRes = await fetch(imageUrl);
+            const imgBuffer = await imgRes.arrayBuffer();
+            const base64Img = Buffer.from(imgBuffer).toString('base64');
+            const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+
+            return res.status(200).json({
+                success: true,
+                image: `data:${mimeType};base64,${base64Img}`
+            });
+
+        } catch (err) {
+            console.error("Preview Error:", err);
+            return res.status(200).json({ success: false, error: err.message });
+        }
+    }
 
     if (!apiKey) {
         return res.status(500).json({ error: "Erro de Configuração: Chave de API não encontrada." });
@@ -112,7 +166,7 @@ export default async function handler(req, res) {
 You are a Fashion Technical Analyst. Analyze the image and return a JSON object.
 It is CRITICAL that you find matching sewing patterns available for purchase or download.
 
-MANDATORY: Return a MASSIVE LIST of 20 to 30 matches.
+MANDATORY: Return a MASSIVE LIST of 30 to 45 matches. (I need many options for pagination).
 Focus on "Big 4" (Vogue, McCall's, Butterick, Simplicity), BurdaStyle, Etsy, The Fold Line, Mood Fabrics, Vikisews.
 
 STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
@@ -122,8 +176,8 @@ STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
   "category": "Category",
   "technicalDna": { "silhouette": "e.g. A-Line", "neckline": "e.g. V-Neck", "sleeve": "e.g. Puff", "fabricStructure": "e.g. Woven" },
   "matches": { 
-      "exact": [{ "source": "Store Name", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "IMPORTANT: Try to find a valid direct image URL for the cover (jpg/png) if possible, otherwise leave empty.", "type": "PAGO", "similarityScore": 95 }], 
-      "close": [{ "source": "Etsy Search", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "OPTIONAL", "type": "INDIE", "similarityScore": 85 }], 
+      "exact": [{ "source": "Store Name", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "", "type": "PAGO", "similarityScore": 95 }], 
+      "close": [{ "source": "Etsy Search", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "", "type": "INDIE", "similarityScore": 85 }], 
       "adventurous": [] 
   },
   "curatedCollections": [
@@ -157,7 +211,6 @@ STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
     const dataMain = await googleResponse.json();
     let generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    // --- CORREÇÃO DO ERRO DE URL (PRESERVA //) ---
     if (generatedText) {
         generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '');
         const firstBrace = generatedText.indexOf('{');

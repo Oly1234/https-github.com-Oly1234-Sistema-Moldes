@@ -8,7 +8,7 @@ import { MOCK_LOADING_STEPS } from './constants';
 import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal } from 'lucide-react';
 
 // --- VERSÃO DO SISTEMA ---
-const APP_VERSION = '5.8.1-SCANNER-RESTORED'; 
+const APP_VERSION = '6.1-PREVIEW-MECHANISM'; 
 
 // --- UTILITÁRIOS ---
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
@@ -60,32 +60,72 @@ const generateSafeUrl = (match: ExternalPatternMatch): string => {
     return url;
 };
 
-// --- COMPONENTES VISUAIS RICOS (RESTAURADOS) ---
+// --- COMPONENTES VISUAIS RICOS (RESTAURADOS COM MECANISMO DE PREVIEW) ---
 
 const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string }> = ({ match, safeUrl }) => {
-    // Tenta obter o domínio para o favicon
+    // Estado local para a imagem (começa com o ícone, tenta baixar a real)
+    const [displayImage, setDisplayImage] = useState<string | null>(match.imageUrl || null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
+    
     let domain = '';
     try { domain = new URL(safeUrl).hostname; } catch (e) { domain = 'google.com'; }
-    
-    // Usa a imagem fornecida pela IA ou o favicon da marca
-    const iconUrl = match.imageUrl || getBrandIcon(domain);
+    const brandIcon = getBrandIcon(domain);
+
+    // EFEITO: Mecanismo de "Baixar e Mostrar"
+    useEffect(() => {
+        // Se já temos uma imagem boa (não vazia e não igual ao ícone básico), não faz nada
+        if (match.imageUrl && match.imageUrl.length > 50) return;
+
+        // Se é uma URL de busca genérica, geralmente não tem imagem de capa boa, evitamos gastar recurso
+        if (safeUrl.includes('/search') || safeUrl.includes('google.com')) return;
+
+        let isMounted = true;
+        setLoadingPreview(true);
+
+        // Chama o backend para fazer o trabalho sujo (download do site)
+        fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: safeUrl })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (isMounted && data.success && data.image) {
+                setDisplayImage(data.image); // Atualiza com a imagem baixada (Base64)
+            }
+        })
+        .catch(err => console.log("Preview fail:", err))
+        .finally(() => {
+            if (isMounted) setLoadingPreview(false);
+        });
+
+        return () => { isMounted = false; };
+    }, [safeUrl, match.imageUrl]);
+
+    const finalImage = displayImage || brandIcon;
+    const isBrandIcon = finalImage === brandIcon;
 
     return (
-        <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full">
-            {/* ÁREA VISUAL RICA (ICONE/IMAGEM) */}
-            <div className="h-32 bg-gray-50 overflow-hidden relative border-b border-gray-100 p-4 flex items-center justify-center">
-                {/* Efeito de brilho ao passar o mouse */}
-                <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors z-10"/>
+        <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full animate-fade-in">
+            {/* ÁREA VISUAL RICA */}
+            <div className={`overflow-hidden relative border-b border-gray-100 flex items-center justify-center ${isBrandIcon ? 'h-24 bg-gray-50 p-4' : 'h-48 bg-white'}`}>
+                
+                {/* Loader do mecanismo */}
+                {loadingPreview && (
+                    <div className="absolute top-2 left-2 z-20">
+                        <div className="w-4 h-4 border-2 border-vingi-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                )}
                 
                 <img 
-                    src={iconUrl} 
+                    src={finalImage} 
                     alt={match.source} 
-                    className="w-16 h-16 object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300" 
-                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://cdn-icons-png.flaticon.com/512/3389/3389081.png'; }}
+                    className={`transition-transform duration-500 ${isBrandIcon ? 'w-16 h-16 object-contain mix-blend-multiply opacity-80' : 'w-full h-full object-cover group-hover:scale-105'}`}
+                    onError={(e) => { (e.target as HTMLImageElement).src = brandIcon; setDisplayImage(brandIcon); }}
                 />
                 
                 <div className="absolute top-2 right-2 z-20">
-                    <ExternalLink size={14} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0"/>
+                    <ExternalLink size={14} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0 bg-white/80 p-0.5 rounded shadow-sm"/>
                 </div>
             </div>
 
@@ -449,7 +489,7 @@ export default function App() {
                 </div>
             )}
             
-            {/* TELA DE LOADING COM SCANNER (RESTAURADA) */}
+            {/* TELA DE LOADING COM SCANNER (MECANISMO VISUAL RESTAURADO) */}
             {state === AppState.ANALYZING && (
                 <div className="flex flex-col items-center justify-center h-[90vh] w-full p-6 animate-fade-in">
                      <div className="relative w-full max-w-sm aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-200 bg-slate-900">
