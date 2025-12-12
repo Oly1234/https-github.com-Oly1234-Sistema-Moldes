@@ -2,16 +2,15 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MockupStudio } from './components/MockupStudio'; 
-import { PatternCreator } from './components/PatternCreator'; // IMPORT NOVO
+import { PatternCreator } from './components/PatternCreator'; 
 import { analyzeClothingImage } from './services/geminiService';
 import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollection, ViewState, ScanHistoryItem } from './types';
 import { MOCK_LOADING_STEPS } from './constants';
-import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal } from 'lucide-react';
+import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal, HelpCircle } from 'lucide-react';
 
-const APP_VERSION = '5.6.0-AI-CREATOR'; 
+const APP_VERSION = '5.6.1-MOBILE-UX'; 
 
-// ... (Funções utilitárias como getBrandIcon, compressImage, generateSafeUrl mantidas) ...
-// (Reutilizando as definições existentes para não inflar o código desnecessariamente na resposta)
+// ... (Utility functions maintained)
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve) => {
@@ -57,7 +56,7 @@ const generateSafeUrl = (match: ExternalPatternMatch): string => {
     return url;
 };
 
-// ... Componentes auxiliares (CollectionCard, etc) mantidos ...
+// ... Components
 const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string }> = ({ match, safeUrl }) => {
     return (
         <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white p-4 rounded-xl border hover:shadow-lg cursor-pointer">
@@ -66,11 +65,6 @@ const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string
         </div>
     );
 };
-const CollectionCard: React.FC<{ collection: CuratedCollection }> = ({ collection }) => (
-    <div onClick={() => window.open(collection.searchUrl, '_blank')} className="bg-white border rounded-xl p-4 cursor-pointer hover:border-vingi-400">
-        <h4 className="font-bold text-sm">{collection.title}</h4>
-    </div>
-);
 const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
     <a href={url} target="_blank" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white ${colorClass}`}>
         <Icon size={12} /> {name}
@@ -98,7 +92,6 @@ export default function App() {
   const [uploadedSecondaryImage, setUploadedSecondaryImage] = useState<string | null>(null);
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   
-  // State para integração Creator -> Mockup
   const [generatedPatternForStudio, setGeneratedPatternForStudio] = useState<string | null>(null);
   
   const [loadingStep, setLoadingStep] = useState(0);
@@ -115,7 +108,6 @@ export default function App() {
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
 
-  // --- HANDLERS ---
   const handlePatternGenerated = (url: string) => {
       setGeneratedPatternForStudio(url);
       setView('MOCKUP');
@@ -176,17 +168,13 @@ export default function App() {
   const handleFabAction = () => {
     if (state === AppState.ANALYZING) return;
     if (state === AppState.SUCCESS || state === AppState.ERROR) {
-        resetApp();
-        setView('HOME');
-        return;
+        resetApp(); setView('HOME'); return;
     }
     if (state === AppState.IDLE && uploadedImage) {
-        startAnalysis();
-        return;
+        startAnalysis(); return;
     }
     if (state === AppState.IDLE && !uploadedImage) {
-        setView('HOME');
-        setTimeout(() => cameraInputRef.current?.click(), 50);
+        setView('HOME'); setTimeout(() => cameraInputRef.current?.click(), 50);
     }
   };
 
@@ -257,13 +245,8 @@ export default function App() {
   const handleLoadMore = () => setVisibleCount(prev => prev + 12);
 
   const resetApp = () => {
-    setState(AppState.IDLE);
-    setResult(null);
-    setUploadedImage(null);
-    setUploadedSecondaryImage(null);
-    setActiveTab('ALL');
-    setVisibleCount(12);
-    setErrorMsg(null);
+    setState(AppState.IDLE); setResult(null); setUploadedImage(null); setUploadedSecondaryImage(null);
+    setActiveTab('ALL'); setVisibleCount(12); setErrorMsg(null);
   };
 
   const exactMatches = result?.matches?.exact || [];
@@ -286,7 +269,6 @@ export default function App() {
 
   if (isMobileBrowser) return <InstallGatekeeper onInstall={handleInstallClick} isIOS={isIOS} />;
 
-  // --- RENDER HISTORY VIEW ---
   const renderHistoryView = () => (
       <div className="p-6 max-w-5xl mx-auto min-h-full">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
@@ -326,11 +308,8 @@ export default function App() {
         ref={mainScrollRef}
         className="flex-1 md:ml-20 h-full overflow-y-auto overflow-x-hidden relative touch-pan-y scroll-smooth"
       >
-        {/* RENDERIZAÇÃO CONDICIONAL DAS VIEWS */}
         {view === 'MOCKUP' && <MockupStudio externalPattern={generatedPatternForStudio} />}
-        
         {view === 'CREATOR' && <PatternCreator onPatternGenerated={handlePatternGenerated} />}
-        
         {view === 'HISTORY' && renderHistoryView()}
         
         {view === 'HOME' && (
@@ -347,7 +326,19 @@ export default function App() {
             <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-full flex flex-col">
             
             {state === AppState.IDLE && (
-                <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
+                <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0 relative">
+                
+                {/* HINT BALLOON PARA INÍCIO */}
+                {!uploadedImage && (
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 animate-bounce-subtle pointer-events-none">
+                         <div className="bg-vingi-900 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg border-2 border-white flex items-center gap-2">
+                            <HelpCircle size={14} className="text-vingi-400"/>
+                            Comece por aqui
+                        </div>
+                        <div className="w-3 h-3 bg-vingi-900 border-r-2 border-b-2 border-white transform rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1.5"></div>
+                    </div>
+                )}
+
                 <div className="w-full max-w-4xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
                     <div className="flex-1 p-8 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100">
                         <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
