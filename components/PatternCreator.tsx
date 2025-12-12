@@ -51,11 +51,13 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
       setPrompt(""); 
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); 
+      // Timeout reduzido para 30s para evitar travamento longo
+      const timeoutId = setTimeout(() => controller.abort(), 30000); 
 
       try {
           const base64Clean = referenceImage.split(',')[1];
-          const mimeType = referenceImage.split(';')[0].split(':')[1];
+          const mimeTypeParts = referenceImage.split(';')[0].split(':');
+          const mimeType = mimeTypeParts.length > 1 ? mimeTypeParts[1] : 'image/jpeg';
 
           const res = await fetch('/api/analyze', {
               method: 'POST',
@@ -72,7 +74,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
 
           if (!res.ok) {
               const errText = await res.text();
-              throw new Error(errText || "Erro ao conectar com servidor.");
+              throw new Error("Falha na análise. Verifique sua conexão.");
           }
 
           const data = await res.json();
@@ -82,11 +84,15 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
           if (data.success && data.description) {
               setPrompt(data.description);
           } else {
-              throw new Error('A resposta da IA veio vazia. Tente outra imagem com melhor iluminação.');
+              throw new Error('A IA não retornou descrição. Tente outra imagem.');
           }
       } catch (e: any) {
           console.error(e);
-          setError(e.message || 'Erro ao analisar estampa.');
+          if (e.name === 'AbortError') {
+              setError("O servidor demorou para responder. Tente novamente.");
+          } else {
+              setError(e.message || 'Erro ao analisar estampa.');
+          }
       } finally {
           setIsAnalyzing(false);
       }
@@ -203,16 +209,18 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
                         </div>
                     ) : (
                         <div className="flex gap-3 items-center">
-                            <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0">
+                            <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 shrink-0 group">
                                 <img src={referenceImage} className="w-full h-full object-cover"/>
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
+                                <div className="absolute top-0 right-0 bg-green-500 p-1 rounded-bl text-white"><Check size={10}/></div>
                             </div>
                             <button 
                                 onClick={analyzeReference}
                                 disabled={isAnalyzing}
-                                className={`flex-1 py-2 rounded-lg font-bold text-[10px] shadow-sm flex items-center justify-center gap-2 ${isAnalyzing ? 'bg-gray-100 text-gray-400' : 'bg-purple-600 text-white'}`}
+                                className={`flex-1 py-2 rounded-lg font-bold text-[10px] shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all ${isAnalyzing ? 'bg-gray-100 text-gray-400' : 'bg-purple-600 text-white'}`}
                             >
                                 {isAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <ScanFace size={14}/>}
-                                {isAnalyzing ? "LENDO..." : "EXTRAIR PROMPT"}
+                                {isAnalyzing ? "ANALISANDO..." : "EXTRAIR PROMPT"}
                             </button>
                         </div>
                     )}

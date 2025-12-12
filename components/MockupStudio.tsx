@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Wand2, MonitorPlay, X, Target, Move, Trash2, Scissors, ScanFace, Sliders, Palette, Eye, Shirt, Sparkles, BoxSelect, CheckCircle2, Layers, FlipHorizontal, FlipVertical, RotateCw, ZoomIn, GripHorizontal, MousePointer2, Loader2, Download, ArrowRight, Brush, Undo2, ChevronUp, Hand } from 'lucide-react';
+import { Wand2, MonitorPlay, X, Target, Move, Trash2, Scissors, ScanFace, Sliders, Palette, Eye, Shirt, Sparkles, BoxSelect, CheckCircle2, Layers, FlipHorizontal, FlipVertical, RotateCw, ZoomIn, GripHorizontal, MousePointer2, Loader2, Download, ArrowRight, Brush, Undo2, ChevronUp, Hand, Image as ImageIcon, Upload, Check } from 'lucide-react';
 
 // --- TYPES ---
 type BodyPartType = 'FRENTE' | 'COSTAS' | 'MANGA' | 'SAIA' | 'GOLA' | 'OUTROS';
@@ -448,8 +448,12 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
         bg-white border-r border-gray-200 flex flex-col shadow-2xl z-30 transition-all duration-300
         md:w-80 md:h-full md:relative md:translate-y-0
         fixed bottom-0 left-0 w-full rounded-t-2xl md:rounded-none
-        ${activeLayer && isMobile ? 'h-[55vh]' : isMobile ? 'h-auto pb-6' : ''}
-      `}>
+        ${activeLayer && isMobile ? 'h-auto pb-4' : isMobile ? 'h-auto pb-6' : ''}
+      `}
+        style={{
+             maxHeight: isMobile && activeLayer ? '40vh' : 'auto' 
+        }}
+      >
           
           {/* Mobile Handle */}
           <div className="md:hidden w-full flex justify-center pt-2 pb-1" onClick={() => setActiveLayerId(null)}>
@@ -464,60 +468,90 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
           
           <div className="p-4 md:p-5 space-y-4 md:space-y-6 overflow-y-auto max-h-full">
                
-               {/* UPLOAD BUTTONS */}
+               {/* UPLOAD BUTTONS WITH VISUAL FEEDBACK */}
                {!activeLayer && (
                    <div className="flex gap-2 md:flex-col">
-                       <div onClick={() => moldInputRef.current?.click()} className="flex-1 p-3 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 text-center relative group flex items-center justify-center gap-2">
+                       {/* BOTÃO MOLDE */}
+                       <div onClick={() => moldInputRef.current?.click()} 
+                            className={`flex-1 p-3 border-2 rounded-xl cursor-pointer hover:bg-gray-50 text-center relative group flex flex-col items-center justify-center gap-2 transition-all ${moldImage ? 'border-green-500 bg-green-50' : 'border-dashed border-gray-300'}`}>
                           <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden"/>
-                          <Scissors size={16} className="text-gray-400"/>
-                          <span className="text-[10px] md:text-xs font-bold text-gray-500">{moldImage ? "TROCAR MOLDE" : "MOLDE"}</span>
+                          
+                          {moldImage ? (
+                              <>
+                                <div className="w-full h-12 rounded-lg overflow-hidden border border-green-300 mb-1 bg-white relative">
+                                    <img src={moldImage} className="w-full h-full object-contain" />
+                                    <div className="absolute top-0 right-0 bg-green-500 text-white p-0.5 rounded-bl"><Check size={10}/></div>
+                                </div>
+                                <span className="text-[10px] font-bold text-green-700">MOLDE OK</span>
+                              </>
+                          ) : (
+                              <>
+                                <Scissors size={20} className="text-gray-400"/>
+                                <span className="text-[10px] md:text-xs font-bold text-gray-500">MOLDE</span>
+                              </>
+                          )}
                        </div>
 
-                       <div onClick={() => patternInputRef.current?.click()} className="flex-1 p-3 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 text-center relative group flex items-center justify-center gap-2">
+                       {/* BOTÃO ESTAMPA */}
+                       <div onClick={() => patternInputRef.current?.click()} 
+                            className={`flex-1 p-3 border-2 rounded-xl cursor-pointer hover:bg-gray-50 text-center relative group flex flex-col items-center justify-center gap-2 transition-all ${patternImage ? 'border-purple-500 bg-purple-50' : 'border-dashed border-gray-300'}`}>
                           <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden"/>
-                          <Palette size={16} className="text-gray-400"/>
-                          <span className="text-[10px] md:text-xs font-bold text-gray-500">{patternImage ? "TROCAR ESTAMPA" : "ESTAMPA"}</span>
+                          
+                          {patternImage ? (
+                               <>
+                                <div className="w-full h-12 rounded-lg overflow-hidden border border-purple-300 mb-1 bg-white relative">
+                                    <img src={patternImage} className="w-full h-full object-cover" />
+                                    <div className="absolute top-0 right-0 bg-purple-500 text-white p-0.5 rounded-bl"><Check size={10}/></div>
+                                </div>
+                                <span className="text-[10px] font-bold text-purple-700">ESTAMPA OK</span>
+                               </>
+                          ) : (
+                               <>
+                                <Palette size={20} className="text-gray-400"/>
+                                <span className="text-[10px] md:text-xs font-bold text-gray-500">ESTAMPA</span>
+                               </>
+                          )}
                        </div>
                    </div>
                )}
 
-               {/* LAYER CONTROLS */}
+               {/* LAYER CONTROLS (COMPACT MODE ON MOBILE) */}
                {activeLayer ? (
-                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 shadow-sm animate-fade-in-up">
+                   <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-sm animate-fade-in-up">
                        <div className="flex justify-between items-center mb-2">
-                           <h3 className="text-[10px] font-bold text-blue-800 uppercase tracking-widest flex items-center gap-2"><Layers size={12}/> Camada Ativa</h3>
-                           <button onClick={() => setActiveLayerId(null)} className="md:hidden text-blue-500"><ChevronUp className="rotate-180" size={16}/></button>
+                           <h3 className="text-[10px] font-bold text-blue-800 uppercase tracking-widest flex items-center gap-2"><Layers size={12}/> {activeLayer.bodyPart}</h3>
+                           <button onClick={() => setActiveLayerId(null)} className="md:hidden text-blue-500 bg-white p-1 rounded-full shadow"><X size={14}/></button>
                        </div>
                        
-                       <div className="grid grid-cols-3 md:grid-cols-2 gap-2 mb-4">
+                       {/* Mobile: Grid de partes reduzido ou oculto se já selecionado */}
+                       <div className="flex overflow-x-auto gap-2 mb-3 pb-1 md:grid md:grid-cols-2">
                            {['FRENTE', 'MANGA', 'SAIA', 'COSTAS', 'GOLA', 'OUTROS'].map((part) => (
                                <button key={part} onClick={() => updateActiveLayer({ bodyPart: part as BodyPartType })}
-                                className={`px-1 py-1.5 text-[10px] font-bold rounded border transition-all ${activeLayer.bodyPart === part ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white border-gray-200 text-gray-500'}`}>
+                                className={`px-2 py-1 text-[10px] font-bold rounded border whitespace-nowrap ${activeLayer.bodyPart === part ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-500'}`}>
                                    {part}
                                </button>
                            ))}
                        </div>
 
-                       <div className="space-y-3 border-t border-blue-200 pt-3">
-                            <div className="flex gap-2 justify-center">
-                                 <button onClick={() => updateActiveLayer({ rotation: activeLayer.rotation + 90 })} className="flex-1 bg-white p-2 rounded text-blue-600 border border-blue-200 flex justify-center"><RotateCw size={16}/></button>
-                                 <button onClick={() => updateActiveLayer({ flipX: !activeLayer.flipX })} className="flex-1 bg-white p-2 rounded text-blue-600 border border-blue-200 flex justify-center"><FlipHorizontal size={16}/></button>
-                                 <button onClick={deleteActiveLayer} className="flex-1 bg-red-100 p-2 rounded text-red-500 border border-red-200 flex justify-center"><Trash2 size={16}/></button>
-                            </div>
-                            <div className="bg-white/50 p-2 rounded border border-blue-100 text-[10px] text-blue-400 text-center flex items-center justify-center gap-2">
-                                <Hand size={12}/> Use 2 dedos na tela para zoom e rotação
-                            </div>
+                       <div className="flex gap-2 justify-center mb-2">
+                            <button onClick={() => updateActiveLayer({ rotation: activeLayer.rotation + 45 })} className="flex-1 bg-white p-2 rounded-lg text-blue-600 border border-blue-200 flex justify-center shadow-sm active:scale-95"><RotateCw size={18}/></button>
+                            <button onClick={() => updateActiveLayer({ flipX: !activeLayer.flipX })} className="flex-1 bg-white p-2 rounded-lg text-blue-600 border border-blue-200 flex justify-center shadow-sm active:scale-95"><FlipHorizontal size={18}/></button>
+                            <button onClick={deleteActiveLayer} className="flex-1 bg-red-100 p-2 rounded-lg text-red-500 border border-red-200 flex justify-center shadow-sm active:scale-95"><Trash2 size={18}/></button>
+                       </div>
+                       
+                       <div className="bg-white/60 p-1.5 rounded border border-blue-100 text-[10px] text-blue-500 text-center font-bold">
+                           Use 2 dedos na imagem para zoom e girar
                        </div>
                    </div>
                ) : (
                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex gap-2">
-                       <button onClick={() => setTool('WAND')} className={`flex-1 py-3 rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 ${tool === 'WAND' ? 'bg-vingi-900 text-white shadow-lg scale-105' : 'bg-white text-gray-500'}`}>
+                       <button onClick={() => setTool('WAND')} className={`flex-1 py-3 rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 transition-all ${tool === 'WAND' ? 'bg-vingi-900 text-white shadow-lg' : 'bg-white text-gray-500'}`}>
                            <Wand2 size={18}/> APLICAR
                        </button>
-                       <button onClick={() => setTool('MOVE')} className={`flex-1 py-3 rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 ${tool === 'MOVE' ? 'bg-vingi-900 text-white shadow-lg scale-105' : 'bg-white text-gray-500'}`}>
+                       <button onClick={() => setTool('MOVE')} className={`flex-1 py-3 rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 transition-all ${tool === 'MOVE' ? 'bg-vingi-900 text-white shadow-lg' : 'bg-white text-gray-500'}`}>
                            <Move size={18}/> MOVER
                        </button>
-                       <button onClick={() => setShowVisualizer(true)} className="flex-1 py-3 bg-purple-600 text-white rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 shadow-lg">
+                       <button onClick={() => setShowVisualizer(true)} className="flex-1 py-3 bg-purple-600 text-white rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 shadow-lg active:scale-95">
                            <MonitorPlay size={18}/> 3D
                        </button>
                    </div>
@@ -526,7 +560,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
       </div>
 
       {/* WORKSPACE (CANVAS) */}
-      <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-[#e2e8f0] pb-32 md:pb-0">
+      <div className="fixed top-0 left-0 w-full h-[65vh] md:relative md:h-full md:flex-1 bg-[#e2e8f0] flex items-center justify-center overflow-hidden z-0">
            <div className="absolute inset-0 opacity-15 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#64748b 1px, transparent 1px), linear-gradient(90deg, #64748b 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
            <div className={`relative shadow-2xl bg-white border-4 border-white md:rounded-lg flex flex-col items-center justify-center overflow-hidden transition-all duration-500`}>
@@ -541,13 +575,13 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                         onTouchMove={handlePointerMove}
                         style={{ 
                             maxWidth: '100vw', 
-                            maxHeight: isMobile ? '70vh' : '85vh',
+                            maxHeight: isMobile ? '60vh' : '85vh',
                             width: 'auto',
                             height: 'auto',
                             aspectRatio: canvasDims.w > 0 ? `${canvasDims.w}/${canvasDims.h}` : 'auto',
-                            touchAction: 'none' // CRITICAL: DISABLES BROWSER SCROLLING FOR CANVAS
+                            touchAction: 'none' // IMPEDE O SCROLL DA PÁGINA AO TOCAR
                         }}
-                        className="cursor-crosshair block shadow-inner"
+                        className="cursor-crosshair block shadow-inner bg-white"
                     />
                 ) : (
                     <div className="p-10 md:p-20 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-lg m-4">
