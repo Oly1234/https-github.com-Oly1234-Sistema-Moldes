@@ -20,70 +20,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
+    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
     // --- GESTÃO DE CHAVES DE SEGURANÇA ---
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
 
     if (!apiKey) {
-        return res.status(500).json({ error: "Erro de Configuração: Chave de API não encontrada." });
+        console.error("CRITICAL: Nenhuma chave encontrada.");
+        return res.status(500).json({ 
+            error: "Erro de Configuração: Chave de API não encontrada." 
+        });
+    } else {
+        let sourceVar = "DESCONHECIDA";
+        if (process.env.MOLDESOK) sourceVar = "MOLDESOK";
+        else if (process.env.MOLDESKEY) sourceVar = "MOLDESKEY";
+        else if (process.env.API_KEY) sourceVar = "API_KEY";
+        console.log(`System: Autenticado via ${sourceVar} (Final ...${apiKey.slice(-4)})`);
     }
 
-    // ==========================================================================================
-    // ROTA 1: GERAÇÃO DE ESTAMPAS (AI PATTERN STUDIO)
-    // ==========================================================================================
-    if (action === 'GENERATE_PATTERN') {
-        const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
-        
-        // Prompt Otimizado para Texturas Têxteis
-        const textilePrompt = `Generate a high-quality seamless textile pattern. Texture design: ${prompt}. Flat lay, no perspective, infinite repeat style, fabric texture.`;
-        
-        const payload = {
-            contents: [{ parts: [{ text: textilePrompt }] }],
-            generation_config: {
-                response_mime_type: "image/jpeg",
-                // Configurações para garantir criatividade na estampa
-                temperature: 0.8 
-            }
-        };
-
-        const googleResponse = await fetch(imageEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!googleResponse.ok) {
-            const err = await googleResponse.text();
-            throw new Error(`Erro na Geração de Estampa: ${err}`);
-        }
-
-        const data = await googleResponse.json();
-        // O modelo retorna a imagem em base64 dentro de inlineData ou parts
-        // Nota: A estrutura de resposta para imagem pode variar levemente, adaptando para o padrão
-        // Se o modelo retornar imagem binária direta ou base64
-        
-        // Tenta extrair a imagem da resposta (pode vir como texto se o modelo recusar, ou blob)
-        // Para gemini-2.5-flash-image, geralmente vem em candidates[0].content.parts
-        const parts = data.candidates?.[0]?.content?.parts || [];
-        const imagePart = parts.find(p => p.inline_data);
-        
-        if (!imagePart) {
-             throw new Error("A IA não gerou uma imagem válida. Tente descrever de outra forma.");
-        }
-
-        return res.status(200).json({ 
-            success: true, 
-            image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` 
-        });
-    }
-
-    // ==========================================================================================
-    // ROTA 2: ANÁLISE TÉCNICA (PADRÃO)
-    // ==========================================================================================
-    
-    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 ---
+    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 (GLOBAL SEARCH PROTOCOL) ---
     const MASTER_SYSTEM_PROMPT = `
 ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
 MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS GLOBALLY.
@@ -212,6 +168,7 @@ RESPONSE FORMAT (JSON ONLY):
         4. GENERATE 45 Patterns (15 Exact, 15 Close, 15 Vibe).
         ${JSON_SCHEMA_PROMPT}`;
 
+    // --- LÓGICA DE EXCLUSÃO (MANTIDA POR PRECAUÇÃO, MAS MENOS USADA COM BATCHING) ---
     if (excludePatterns && Array.isArray(excludePatterns) && excludePatterns.length > 0) {
         const ignoredList = excludePatterns.join(', ');
         promptText += `\n\nEXCLUSION FILTER ACTIVE:
@@ -240,13 +197,28 @@ RESPONSE FORMAT (JSON ONLY):
 
     if (!googleResponse.ok) {
         const errorText = await googleResponse.text();
-        throw new Error(`Google API Error (${googleResponse.status}): ${errorText}`);
+        console.error("Gemini API Error Status:", googleResponse.status);
+        console.error("Gemini API Error Details:", errorText);
+        
+        if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
+             throw new Error("CRÍTICO: A chave (MOLDESOK) é inválida.");
+        }
+        if (googleResponse.status === 403) {
+             throw new Error("CRÍTICO: Chave bloqueada.");
+        }
+        if (googleResponse.status === 429) {
+             throw new Error("Tráfego intenso. Aguarde 30 segundos.");
+        }
+
+        throw new Error(`Google API Error (${googleResponse.status})`);
     }
 
     const data = await googleResponse.json();
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    if (!generatedText) throw new Error("A IA analisou a imagem mas não gerou texto.");
+    if (!generatedText) {
+        throw new Error("A IA analisou a imagem mas não gerou texto.");
+    }
 
     let cleanText = generatedText.trim();
     if (cleanText.startsWith('```')) {
