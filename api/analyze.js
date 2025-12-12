@@ -39,19 +39,20 @@ export default async function handler(req, res) {
         const endpoint = genAIEndpoint('gemini-2.5-flash');
         
         const systemPrompt = `
-        You are a Textile Prompt Engineer expert in Midjourney and Imagen 3.
-        Your goal is to take a simple user idea and expand it into a professional, high-fidelity prompt for seamless pattern generation.
+        ACT AS: World-Class Midjourney & Imagen 3 Prompt Engineer.
         
+        TASK: Upgrade the user's simple input into a "Award-Winning Textile Design" prompt.
         INPUT: "${prompt}"
         
-        GUIDELINES:
-        1. Keep the core idea but add technical modifiers.
-        2. Specify "Seamless repeating pattern".
-        3. Define Art Style (e.g., Watercolor, Vector, Gouache, Block Print).
-        4. Define Palette (if not specified).
-        5. Add quality boosters: "8k, high detailed, flat lay, fabric texture".
+        RULES:
+        1.  **NO CONVERSATION.** Return ONLY the prompt string.
+        2.  **FORMAT:** Comma-separated descriptors (Tags).
+        3.  **MANDATORY:** Define the *Medium* (e.g., Gouache, Vector, Silk Screen), the *Lighting* (e.g., Flat studio light), and *Texture* (e.g., Rough linen canvas).
+        4.  **QUALITY:** Add "8k, trending on artstation, sharp focus, seamless repeating pattern".
+        5.  **FORBIDDEN:** Do not use generic sentences like "A beautiful pattern". Use concrete visual tags.
         
-        OUTPUT: Return ONLY the enhanced prompt string. No conversational text.
+        OUTPUT EXAMPLE:
+        "Seamless pattern, tropical hibiscus flowers, watercolor technique, wet-on-wet bleed, vibrant magenta and teal, white paper texture background, 8k resolution, flat lighting, high detail"
         `;
 
         const payload = {
@@ -76,26 +77,25 @@ export default async function handler(req, res) {
     if (action === 'DESCRIBE_PATTERN') {
         const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
         
-        // PROMPT DE ENGENHARIA REVERSA TÊXTIL
-        // Focado em ignorar o modelo/roupa e extrair apenas a arte gráfica.
+        // PROMPT DE ENGENHARIA REVERSA TÊXTIL - LEVEL EXPERT
         const VISION_PROMPT = `
-          ACT AS: Expert Textile Designer & AI Prompt Engineer.
-          TASK: Reverse-engineer the surface design of this fabric into a text-to-image prompt.
+          ACT AS: Senior Textile Designer & Midjourney Prompt Expert.
+          TASK: Reverse-engineer the surface design of this fabric into a comma-separated prompt tags list.
 
           INSTRUCTIONS:
           1.  **IGNORE** the clothing silhouette, folds, shadows, wrinkles, or the person wearing it.
-          2.  **FLATTEN** the design mentally. Describe it as a 2D digital artwork file.
-          3.  **ANALYZE & EXTRACT**:
-              *   **Art Style:** (e.g., Watercolor, Vector, Screen Print, Oil Painting, Batik).
-              *   **Motifs:** (e.g., Hibiscus, Geometric diamonds, Paisley, Abstract brushstrokes).
-              *   **Colors:** Specific palette (e.g., "Cobalt blue and tangerine on a cream background").
-              *   **Scale/Repeat:** (e.g., "Dense ditsy floral", "Large scale placement print").
-
-          OUTPUT TEMPLATE (Strictly follow this structure):
-          "Seamless textile pattern, [Art Style], [Detailed Motifs], [Color Palette], [Background Color], flat lay view, 8k resolution, high quality fabric texture."
+          2.  **FLATTEN** the design. Describe it as a 2D digital artwork file.
+          3.  **EXTRACT** specific visual tags:
+              *   **Technique:** (e.g. watercolor, screen print, vector lineart, batik, embroidery).
+              *   **Motifs:** (Specific flower names, geometric shapes, animals).
+              *   **Colors:** (Use specific names like 'cobalt blue', 'burnt orange').
+              *   **Composition:** (e.g. ditsy, large scale, geometric grid).
+          
+          OUTPUT FORMAT:
+          "Seamless pattern, [Technique], [Motif 1], [Motif 2], [Color 1], [Color 2], [Background], flat lay, 8k, high quality"
 
           EXAMPLE:
-          "Seamless textile pattern, hand-painted watercolor style, vibrant tropical leaves and toucans, emerald green and bright orange palette, off-white background, flat lay view, 8k resolution."
+          "Seamless pattern, gouache painting style, large monstera leaves, pink hibiscus, emerald green background, visible brushstrokes, flat lighting, 8k resolution"
           
           RETURN ONLY THE PROMPT STRING. NO MARKDOWN.
         `;
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
                 ]
             }],
             generation_config: {
-                temperature: 0.35, // Equilíbrio entre precisão e descrição rica
+                temperature: 0.35, 
                 max_output_tokens: 500
             }
         };
@@ -127,7 +127,6 @@ export default async function handler(req, res) {
         const visionData = await visionRes.json();
         const candidate = visionData.candidates?.[0];
         
-        // Tratamento de Safety (Caso bloqueie por pele ou pessoas)
         if (candidate?.finishReason === 'SAFETY') {
              throw new Error("A imagem contém elementos bloqueados pela segurança. Tente recortar apenas o tecido.");
         }
@@ -147,7 +146,7 @@ export default async function handler(req, res) {
     if (action === 'GENERATE_PATTERN') {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
         
-        // Garante que o prompt tenha os gatilhos técnicos
+        // Reforça o prompt com gatilhos de qualidade técnica
         const finalPrompt = `Seamless repeating pattern, textile design style. ${prompt} . Flat lighting, 8k resolution, highly detailed fabric texture, no shadows, 2d vector or raster art.`;
         
         const payload = {
