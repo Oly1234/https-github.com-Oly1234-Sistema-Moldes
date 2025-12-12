@@ -30,55 +30,86 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Erro de Configuração: Chave de API não encontrada." });
     }
 
+    const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
     // ==========================================================================================
-    // ROTA 1: DESCRIÇÃO DE ESTAMPA (VISION TO PROMPT - REVERSE ENGINEERING)
+    // ROTA 1: ENHANCE PROMPT (INTELIGÊNCIA DE TEXTO)
+    // ==========================================================================================
+    if (action === 'ENHANCE_PROMPT') {
+        const endpoint = genAIEndpoint('gemini-2.5-flash');
+        
+        const systemPrompt = `
+        You are a Textile Prompt Engineer expert in Midjourney and Imagen 3.
+        Your goal is to take a simple user idea and expand it into a professional, high-fidelity prompt for seamless pattern generation.
+        
+        INPUT: "${prompt}"
+        
+        GUIDELINES:
+        1. Keep the core idea but add technical modifiers.
+        2. Specify "Seamless repeating pattern".
+        3. Define Art Style (e.g., Watercolor, Vector, Gouache, Block Print).
+        4. Define Palette (if not specified).
+        5. Add quality boosters: "8k, high detailed, flat lay, fabric texture".
+        
+        OUTPUT: Return ONLY the enhanced prompt string. No conversational text.
+        `;
+
+        const payload = {
+            contents: [{ parts: [{ text: systemPrompt }] }]
+        };
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        const enhancedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        return res.status(200).json({ success: true, enhancedPrompt: enhancedText || prompt });
+    }
+
+    // ==========================================================================================
+    // ROTA 2: DESCRIÇÃO DE ESTAMPA (VISION TO PROMPT - REVERSE ENGINEERING)
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
-        const visionEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
         
-        // --- PROMPT DE RETIFICAÇÃO ÓPTICA E ANÁLISE TÊXTIL AVANÇADA ---
-        const OPTICAL_RECTIFICATION_PROMPT = `
-          ACT AS: Senior Surface Designer & Textile Engineer AI.
-          TASK: Perform "Optical Texture Rectification" on the input image. 
+        // PROMPT DE ENGENHARIA REVERSA TÊXTIL
+        // Focado em ignorar o modelo/roupa e extrair apenas a arte gráfica.
+        const VISION_PROMPT = `
+          ACT AS: Expert Textile Designer & AI Prompt Engineer.
+          TASK: Reverse-engineer the surface design of this fabric into a text-to-image prompt.
+
+          INSTRUCTIONS:
+          1.  **IGNORE** the clothing silhouette, folds, shadows, wrinkles, or the person wearing it.
+          2.  **FLATTEN** the design mentally. Describe it as a 2D digital artwork file.
+          3.  **ANALYZE & EXTRACT**:
+              *   **Art Style:** (e.g., Watercolor, Vector, Screen Print, Oil Painting, Batik).
+              *   **Motifs:** (e.g., Hibiscus, Geometric diamonds, Paisley, Abstract brushstrokes).
+              *   **Colors:** Specific palette (e.g., "Cobalt blue and tangerine on a cream background").
+              *   **Scale/Repeat:** (e.g., "Dense ditsy floral", "Large scale placement print").
+
+          OUTPUT TEMPLATE (Strictly follow this structure):
+          "Seamless textile pattern, [Art Style], [Detailed Motifs], [Color Palette], [Background Color], flat lay view, 8k resolution, high quality fabric texture."
+
+          EXAMPLE:
+          "Seamless textile pattern, hand-painted watercolor style, vibrant tropical leaves and toucans, emerald green and bright orange palette, off-white background, flat lay view, 8k resolution."
           
-          CONTEXT: The user has uploaded a photo of a garment (3D, curved, folded, shaded).
-          YOUR GOAL: Mentally "unwrap" and "flatten" the fabric to describe the ORIGINAL 2D DIGITAL ARTWORK file used to print this fabric.
-
-          --- DEEP ANALYSIS PROTOCOL ---
-          1.  **GEOMETRY CORRECTION:** Ignore body curves, folds, and shadows. Treat the pattern as a flat, infinite 2D plane (Flat Lay).
-          2.  **ELEMENT SCALE & SPACING:** Analyze the size of motifs relative to the whole. Is it a "ditsy" (tiny) print or a "placement" (huge) print? How much "negative space" (background color) exists between elements?
-          3.  **REPEAT LOGIC (RAPPORT):** Detect if it's a Half-Drop, Grid, Brick, or Randomized repeat.
-          4.  **ART TECHNIQUE:** Distinguish between Vector (crisp lines, solid colors) vs. Raster (watercolor bleed, brush texture, noise).
-
-          --- OUTPUT REQUIREMENT ---
-          Generate a HIGH-FIDELITY IMAGE GENERATION PROMPT (for Imagen 3/Midjourney).
-          
-          Structure the prompt strictly as follows:
-          "Seamless textile pattern design, [Style/Technique], [Subject/Motif Details], [Color Palette], [Composition/Scale], [Technical Modifiers]"
-
-          MANDATORY INCLUSIONS:
-          - Start with: "Seamless textile pattern design, flat lay view..."
-          - Describe the BACKGROUND explicitly (e.g., "solid jet black background", "textured linen cream background").
-          - Describe the TECHNIQUE explicitly (e.g., "hand-painted gouache with visible bristle marks", "clean vector illustration with sharp edges").
-          - Describe the SPACING (e.g., "densely packed floral", "sparse botanical with 40% negative space").
-          - Add Quality Boosters: "8k resolution, commercial print quality, no shadows, uniform lighting".
-
-          EXAMPLE OUTPUT:
-          "Seamless textile pattern design, flat lay view, tropical maximalist style, large-scale hibiscus flowers and monstera leaves, hand-painted watercolor technique with wet-on-wet bleed effects, vibrant magenta and emerald green palette on a deep navy blue background, dense composition with minimal negative space, half-drop repeat, 8k resolution, highly detailed fabric texture."
-          
-          OUTPUT ONLY THE RAW PROMPT STRING.
+          RETURN ONLY THE PROMPT STRING. NO MARKDOWN.
         `;
 
         const visionPayload = {
             contents: [{
                 parts: [
-                    { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } },
-                    { text: OPTICAL_RECTIFICATION_PROMPT }
+                    { text: VISION_PROMPT },
+                    { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }
                 ]
             }],
             generation_config: {
-                temperature: 0.3, // Baixa temperatura para precisão técnica
-                max_output_tokens: 600
+                temperature: 0.35, // Equilíbrio entre precisão e descrição rica
+                max_output_tokens: 500
             }
         };
 
@@ -90,40 +121,40 @@ export default async function handler(req, res) {
 
         if (!visionRes.ok) {
             const errText = await visionRes.text();
-            console.error("Gemini API Error:", errText);
-            throw new Error(`Vision API Error: ${visionRes.status} - Tente novamente.`);
+            throw new Error(`Vision API Error: ${visionRes.status} - ${errText}`);
         }
         
         const visionData = await visionRes.json();
         const candidate = visionData.candidates?.[0];
         
+        // Tratamento de Safety (Caso bloqueie por pele ou pessoas)
         if (candidate?.finishReason === 'SAFETY') {
-             throw new Error("A imagem foi bloqueada por filtros de segurança. Tente uma foto apenas do tecido.");
+             throw new Error("A imagem contém elementos bloqueados pela segurança. Tente recortar apenas o tecido.");
         }
 
         const description = candidate?.content?.parts?.[0]?.text;
 
         if (!description) {
-            throw new Error("A IA analisou a imagem mas não gerou a descrição. Tente uma imagem com melhor iluminação.");
+            throw new Error("A IA analisou a imagem mas não gerou descrição. Tente outra foto.");
         }
 
         return res.status(200).json({ success: true, description: description.trim() });
     }
 
     // ==========================================================================================
-    // ROTA 2: GERAÇÃO DE ESTAMPAS (TEXT TO IMAGE - FACTORY)
+    // ROTA 3: GERAÇÃO DE ESTAMPAS (TEXT TO IMAGE - FACTORY)
     // ==========================================================================================
     if (action === 'GENERATE_PATTERN') {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
         
-        // Reforço técnico final
-        const qualityBoost = ", flat 2D texture, seamless tileable pattern, 8k resolution, macro fabric details, uniform lighting.";
-        const finalPrompt = prompt + qualityBoost;
+        // Garante que o prompt tenha os gatilhos técnicos
+        const finalPrompt = `Seamless repeating pattern, textile design style. ${prompt} . Flat lighting, 8k resolution, highly detailed fabric texture, no shadows, 2d vector or raster art.`;
         
         const payload = {
             contents: [{ parts: [{ text: finalPrompt }] }],
             generation_config: {
-                response_mime_type: "image/jpeg"
+                response_mime_type: "image/jpeg",
+                aspect_ratio: "1:1"
             }
         };
 
@@ -153,7 +184,7 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 3: ANÁLISE TÉCNICA DE ROUPAS (PADRÃO)
+    // ROTA 4: ANÁLISE TÉCNICA DE ROUPAS (PADRÃO)
     // ==========================================================================================
     
     // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 ---
