@@ -8,7 +8,7 @@ import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollectio
 import { MOCK_LOADING_STEPS } from './constants';
 import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal } from 'lucide-react';
 
-const APP_VERSION = '5.7.2-STABLE'; 
+const APP_VERSION = '5.7.3-GOLD'; 
 
 // ... Utility functions mantidas ...
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
@@ -58,16 +58,42 @@ const generateSafeUrl = (match: ExternalPatternMatch): string => {
 
 // ... Components ...
 const PatternVisualCard: React.FC<{ match: ExternalPatternMatch; safeUrl: string }> = ({ match, safeUrl }) => {
+    // Lógica para recuperar o ícone da marca se não houver imagem
+    let domain = '';
+    try { domain = new URL(match.url).hostname; } catch (e) { domain = 'google.com'; }
+    const iconUrl = match.imageUrl || getBrandIcon(domain);
+
     return (
-        <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white p-4 rounded-xl border hover:shadow-lg cursor-pointer transition-shadow">
-            <h3 className="font-bold text-sm text-gray-800 line-clamp-2">{match.patternName}</h3>
-            <div className="flex justify-between items-center mt-2">
-                <span className="text-xs text-gray-500 font-medium">{match.source}</span>
-                <span className="text-[10px] px-2 py-0.5 bg-gray-100 rounded-full text-gray-600 border border-gray-200">{match.type}</span>
+        <div onClick={() => window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full">
+            {/* ÁREA VISUAL RICA (ICONE/IMAGEM) - RESTAURADO */}
+            <div className="h-32 bg-gray-50 overflow-hidden relative border-b border-gray-100 p-4 flex items-center justify-center">
+                <img 
+                    src={iconUrl} 
+                    alt={match.source} 
+                    className="w-16 h-16 object-contain mix-blend-multiply group-hover:scale-110 transition-transform" 
+                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://cdn-icons-png.flaticon.com/512/3389/3389081.png'; }}
+                />
+                <div className="absolute top-2 right-2">
+                    <ExternalLink size={12} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                </div>
+            </div>
+
+            <div className="p-4 flex flex-col flex-1">
+                <div className="flex justify-between items-start mb-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{match.source}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${match.type === 'PAGO' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                        {match.type}
+                    </span>
+                </div>
+                <h3 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight mb-2 flex-1">{match.patternName}</h3>
+                <div className="text-xs text-vingi-500 font-medium flex items-center gap-1 group-hover:underline">
+                    Ver Molde <ArrowRightCircle size={10}/>
+                </div>
             </div>
         </div>
     );
 };
+
 const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
     <a href={url} target="_blank" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white transition-transform hover:scale-105 ${colorClass}`}>
         <Icon size={12} /> {name}
@@ -441,6 +467,27 @@ export default function App() {
                             </button>
                         </div>
                     )}
+
+                    {/* SEÇÃO DE LINKS SUGESTIVOS (RESTAURADO) */}
+                    {result.curatedCollections && result.curatedCollections.length > 0 && (
+                        <div className="mt-12 bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                             <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><BookOpen size={20} className="text-vingi-600"/> Coleções Sugestivas</h3>
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {result.curatedCollections.map((coll, i) => (
+                                    <a key={i} href={coll.searchUrl} target="_blank" className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition-all flex flex-col group">
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded">{coll.sourceName}</span>
+                                            <ExternalLink size={14} className="text-gray-300 group-hover:text-gray-600"/>
+                                        </div>
+                                        <h4 className="font-bold text-gray-800 mb-1">{coll.title}</h4>
+                                        <p className="text-xs text-gray-500 line-clamp-2">{coll.description}</p>
+                                        <div className="mt-3 text-xs font-medium text-gray-400">{coll.itemCount}</div>
+                                    </a>
+                                ))}
+                             </div>
+                        </div>
+                    )}
+
                 </div>
             )}
             </div>

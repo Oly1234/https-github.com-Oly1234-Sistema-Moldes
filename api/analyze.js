@@ -192,14 +192,14 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 4: ANÁLISE DE ROUPAS (CORREÇÃO DE URL E PROMPT)
+    // ROTA 4: ANÁLISE DE ROUPAS - RETORNO MASSIVO (25+ ITENS)
     // ==========================================================================================
     const JSON_SCHEMA_PROMPT = `
 You are a Fashion Technical Analyst. Analyze the image and return a JSON object.
 It is CRITICAL that you find matching sewing patterns available for purchase or download.
 
-MANDATORY: Return at least 6 matches in total (mix of exact/close/adventurous).
-If you cannot find a direct link, construct a valid search URL for Etsy or BurdaStyle using the key terms.
+MANDATORY: Return a MASSIVE LIST of 18 to 28 matches.
+Focus on "Big 4" (Vogue, McCall's, Butterick, Simplicity), BurdaStyle, Etsy, The Fold Line, Mood Fabrics, Vikisews.
 
 STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
 
@@ -208,11 +208,13 @@ STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
   "category": "Category",
   "technicalDna": { "silhouette": "e.g. A-Line", "neckline": "e.g. V-Neck", "sleeve": "e.g. Puff", "fabricStructure": "e.g. Woven" },
   "matches": { 
-      "exact": [{ "source": "Store Name", "patternName": "Pattern Name", "url": "https://valid-url...", "type": "PAGO", "similarityScore": 95 }], 
-      "close": [{ "source": "Etsy Search", "patternName": "Similar Vibe Pattern", "url": "https://www.etsy.com/search?q=...", "type": "INDIE", "similarityScore": 85 }], 
+      "exact": [{ "source": "Store Name", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "OPTIONAL: URL of logo or thumb", "type": "PAGO", "similarityScore": 95 }], 
+      "close": [{ "source": "Etsy Search", "patternName": "Pattern Name", "url": "https://...", "imageUrl": "OPTIONAL", "type": "INDIE", "similarityScore": 85 }], 
       "adventurous": [] 
   },
-  "curatedCollections": []
+  "curatedCollections": [
+      { "title": "Nome da Coleção (ex: Vestidos de Verão)", "searchUrl": "https://...", "itemCount": "50+ modelos", "description": "Curadoria de...", "sourceName": "Burda/Etsy" }
+  ]
 }
 `;
     const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -241,17 +243,11 @@ STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
     const dataMain = await googleResponse.json();
     let generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    // --- CORREÇÃO DO ERRO DE URL (NÃO USAR REPLACE EM LINHAS COM //) ---
+    // --- CORREÇÃO DO ERRO DE URL (MANTIDA) ---
     if (generatedText) {
-        // Remove markdown blocks
         generatedText = generatedText.replace(/```json/g, '').replace(/```/g, '');
-        
-        // Remove apenas comentários de bloco se existirem, mas preserva URLs
-        // A melhor estratégia aqui é confiar no JSON.parse ou extrair apenas o objeto
-        
         const firstBrace = generatedText.indexOf('{');
         const lastBrace = generatedText.lastIndexOf('}');
-        
         if (firstBrace !== -1 && lastBrace !== -1) {
             generatedText = generatedText.substring(firstBrace, lastBrace + 1);
         }
@@ -262,22 +258,11 @@ STRICTLY FOLLOW THIS JSON STRUCTURE. NO COMMENTS.
         jsonResult = JSON.parse(generatedText);
     } catch (e) {
         console.error("JSON Parse Error Raw:", generatedText);
-        // Fallback que tenta indicar o erro na UI de forma amigável
         jsonResult = {
             patternName: "Erro de Processamento",
             category: "Geral",
             technicalDna: { silhouette: "-", neckline: "-", sleeve: "-", fabricStructure: "-" },
-            matches: { 
-                exact: [], 
-                close: [{ 
-                    source: "Sistema", 
-                    patternName: "Tente novamente - Erro na leitura dos dados", 
-                    url: "#", 
-                    type: "GRATUITO", 
-                    similarityScore: 0 
-                }], 
-                adventurous: [] 
-            },
+            matches: { exact: [], close: [], adventurous: [] },
             curatedCollections: []
         };
     }
