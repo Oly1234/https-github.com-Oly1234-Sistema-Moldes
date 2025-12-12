@@ -36,32 +36,49 @@ export default async function handler(req, res) {
     if (action === 'DESCRIBE_PATTERN') {
         const visionEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
-        // Prompt Direto e Robusto para Visão
-        const directVisionPrompt = `
-          As a Senior Textile Designer, analyze this image to create a high-fidelity text-to-image prompt.
+        // --- PROMPT DE RETIFICAÇÃO ÓPTICA E ANÁLISE TÊXTIL AVANÇADA ---
+        const OPTICAL_RECTIFICATION_PROMPT = `
+          ACT AS: Senior Surface Designer & Textile Engineer AI.
+          TASK: Perform "Optical Texture Rectification" on the input image. 
           
-          Your goal is to describe this pattern so an AI can recreate it perfectly as a seamless texture.
+          CONTEXT: The user has uploaded a photo of a garment (3D, curved, folded, shaded).
+          YOUR GOAL: Mentally "unwrap" and "flatten" the fabric to describe the ORIGINAL 2D DIGITAL ARTWORK file used to print this fabric.
+
+          --- DEEP ANALYSIS PROTOCOL ---
+          1.  **GEOMETRY CORRECTION:** Ignore body curves, folds, and shadows. Treat the pattern as a flat, infinite 2D plane (Flat Lay).
+          2.  **ELEMENT SCALE & SPACING:** Analyze the size of motifs relative to the whole. Is it a "ditsy" (tiny) print or a "placement" (huge) print? How much "negative space" (background color) exists between elements?
+          3.  **REPEAT LOGIC (RAPPORT):** Detect if it's a Half-Drop, Grid, Brick, or Randomized repeat.
+          4.  **ART TECHNIQUE:** Distinguish between Vector (crisp lines, solid colors) vs. Raster (watercolor bleed, brush texture, noise).
+
+          --- OUTPUT REQUIREMENT ---
+          Generate a HIGH-FIDELITY IMAGE GENERATION PROMPT (for Imagen 3/Midjourney).
           
-          1. DETECT STYLE: (e.g., Watercolor, Oil Painting, Vector, Ukiyo-e, Batik, etc).
-          2. DETECT ELEMENTS: (e.g., Pink Hibiscus, Geometric Triangles, Gold Foil lines).
-          3. DETECT BACKGROUND: (Color and texture).
+          Structure the prompt strictly as follows:
+          "Seamless textile pattern design, [Style/Technique], [Subject/Motif Details], [Color Palette], [Composition/Scale], [Technical Modifiers]"
+
+          MANDATORY INCLUSIONS:
+          - Start with: "Seamless textile pattern design, flat lay view..."
+          - Describe the BACKGROUND explicitly (e.g., "solid jet black background", "textured linen cream background").
+          - Describe the TECHNIQUE explicitly (e.g., "hand-painted gouache with visible bristle marks", "clean vector illustration with sharp edges").
+          - Describe the SPACING (e.g., "densely packed floral", "sparse botanical with 40% negative space").
+          - Add Quality Boosters: "8k resolution, commercial print quality, no shadows, uniform lighting".
+
+          EXAMPLE OUTPUT:
+          "Seamless textile pattern design, flat lay view, tropical maximalist style, large-scale hibiscus flowers and monstera leaves, hand-painted watercolor technique with wet-on-wet bleed effects, vibrant magenta and emerald green palette on a deep navy blue background, dense composition with minimal negative space, half-drop repeat, 8k resolution, highly detailed fabric texture."
           
-          OUTPUT FORMAT:
-          Provide ONLY the raw prompt string.
-          Start strictly with: "Seamless textile pattern design, [Style], [Elements]..."
-          Include keywords: "flat lay, 8k resolution, fabric texture, highly detailed, infinite repeat".
+          OUTPUT ONLY THE RAW PROMPT STRING.
         `;
 
         const visionPayload = {
             contents: [{
                 parts: [
                     { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } },
-                    { text: directVisionPrompt }
+                    { text: OPTICAL_RECTIFICATION_PROMPT }
                 ]
             }],
             generation_config: {
-                temperature: 0.2, // Baixa temperatura para maior precisão descritiva
-                max_output_tokens: 300
+                temperature: 0.3, // Baixa temperatura para precisão técnica
+                max_output_tokens: 600
             }
         };
 
@@ -73,20 +90,21 @@ export default async function handler(req, res) {
 
         if (!visionRes.ok) {
             const errText = await visionRes.text();
-            throw new Error(`Vision API Error: ${errText}`);
+            console.error("Gemini API Error:", errText);
+            throw new Error(`Vision API Error: ${visionRes.status} - Tente novamente.`);
         }
         
         const visionData = await visionRes.json();
         const candidate = visionData.candidates?.[0];
         
         if (candidate?.finishReason === 'SAFETY') {
-             throw new Error("A imagem foi bloqueada pelos filtros de segurança. Tente uma imagem diferente.");
+             throw new Error("A imagem foi bloqueada por filtros de segurança. Tente uma foto apenas do tecido.");
         }
 
         const description = candidate?.content?.parts?.[0]?.text;
 
         if (!description) {
-            throw new Error("A IA não conseguiu descrever a imagem. Tente novamente.");
+            throw new Error("A IA analisou a imagem mas não gerou a descrição. Tente uma imagem com melhor iluminação.");
         }
 
         return res.status(200).json({ success: true, description: description.trim() });
@@ -98,17 +116,14 @@ export default async function handler(req, res) {
     if (action === 'GENERATE_PATTERN') {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
         
-        // Injeção de qualidade forçada
-        const qualityBoost = " . High quality commercial textile print, seamless repeating pattern, flat lighting, 8k resolution, highly detailed, fabric texture.";
+        // Reforço técnico final
+        const qualityBoost = ", flat 2D texture, seamless tileable pattern, 8k resolution, macro fabric details, uniform lighting.";
         const finalPrompt = prompt + qualityBoost;
         
         const payload = {
             contents: [{ parts: [{ text: finalPrompt }] }],
             generation_config: {
-                response_mime_type: "image/jpeg",
-                // Flash Image não usa aspect_ratio no config da API REST da mesma forma que o SDK as vezes,
-                // mas podemos tentar garantir via prompt keywords. 
-                // Nota: gemini-2.5-flash-image devolve quadrado por padrao se não especificado.
+                response_mime_type: "image/jpeg"
             }
         };
 

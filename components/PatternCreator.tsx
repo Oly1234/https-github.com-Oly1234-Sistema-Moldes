@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Sparkles, Image as ImageIcon, Wand2, ArrowRight, UploadCloud, Loader2, Download, RefreshCw, Palette, ScanFace, FileCode2, Share2, Printer, Eraser, Check, AlertCircle } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Wand2, ArrowRight, UploadCloud, Loader2, Download, RefreshCw, Palette, ScanFace, FileCode2, Share2, Printer, Eraser, Check, AlertCircle, ScanLine } from 'lucide-react';
 
 interface PatternCreatorProps {
   onPatternGenerated: (patternUrl: string) => void;
@@ -38,6 +38,10 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
       if (!referenceImage) return;
       setIsAnalyzing(true);
       setError(null);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
       try {
           const base64Clean = referenceImage.split(',')[1];
           const mimeType = referenceImage.split(';')[0].split(':')[1];
@@ -49,9 +53,12 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
                   action: 'DESCRIBE_PATTERN',
                   mainImageBase64: base64Clean,
                   mainMimeType: mimeType
-              })
+              }),
+              signal: controller.signal
           });
           
+          clearTimeout(timeoutId);
+
           if (!res.ok) {
               const errText = await res.text();
               throw new Error(errText || "Erro ao conectar com servidor.");
@@ -70,7 +77,11 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
           }
       } catch (e: any) {
           console.error(e);
-          setError(e.message || 'Erro desconhecido ao analisar estampa.');
+          if (e.name === 'AbortError') {
+              setError("O servidor demorou muito para responder. Tente uma imagem menor.");
+          } else {
+              setError(e.message || 'Erro desconhecido ao analisar estampa.');
+          }
       } finally {
           setIsAnalyzing(false);
       }
@@ -150,23 +161,34 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
                             <span className="text-xs font-bold text-center">Carregar Foto de Roupa/Tecido</span>
                         </div>
                     ) : (
-                        <div className="relative group rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                            <img src={referenceImage} className="w-full h-48 object-cover opacity-90"/>
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                                <button 
-                                    onClick={analyzeReference}
-                                    disabled={isAnalyzing}
-                                    className="bg-white text-purple-700 px-4 py-2 rounded-lg font-bold text-xs shadow-xl hover:scale-105 transition-transform flex items-center gap-2"
-                                >
-                                    {isAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <ScanFace size={14}/>}
-                                    {isAnalyzing ? "EXTRAINDO DNA..." : "CLONAR ESTILO"}
-                                </button>
+                        <div className="space-y-3">
+                            {/* IMAGEM PREVIEW */}
+                            <div className="relative group rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-gray-100">
+                                <img src={referenceImage} className="w-full h-48 object-cover"/>
+                                
+                                {isAnalyzing && (
+                                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm z-20">
+                                        <ScanLine size={32} className="text-purple-400 animate-pulse mb-2"/>
+                                        <span className="text-white text-xs font-bold tracking-widest animate-pulse">RASTREANDO DNA...</span>
+                                    </div>
+                                )}
+                                
+                                {isAnalyzing && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-900/50">
+                                        <div className="h-full bg-purple-500 animate-scan"></div>
+                                    </div>
+                                )}
                             </div>
-                            {isAnalyzing && (
-                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-200">
-                                    <div className="h-full bg-purple-600 animate-scan"></div>
-                                </div>
-                            )}
+
+                            {/* BOTÃO DE AÇÃO FIXO */}
+                            <button 
+                                onClick={analyzeReference}
+                                disabled={isAnalyzing}
+                                className={`w-full py-3 rounded-lg font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 ${isAnalyzing ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 hover:border-purple-300 hover:shadow-lg'}`}
+                            >
+                                {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <ScanFace size={16}/>}
+                                {isAnalyzing ? "ANALISANDO ESTAMPA..." : "EXTRAIR PROMPT DA ARTE"}
+                            </button>
                         </div>
                     )}
                 </div>
@@ -180,8 +202,8 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
                     <textarea 
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Descreva a estampa desejada (ex: Floral tropical estilo Farm Rio, fundo preto, textura de linho...)"
-                        className="w-full h-32 p-3 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none mb-4 font-mono text-gray-600 leading-relaxed shadow-inner"
+                        placeholder="A IA irá descrever a estampa aqui. Você também pode digitar manualmente..."
+                        className="w-full h-40 p-3 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none mb-4 font-mono text-gray-600 leading-relaxed shadow-inner"
                     />
                     
                     <button 
