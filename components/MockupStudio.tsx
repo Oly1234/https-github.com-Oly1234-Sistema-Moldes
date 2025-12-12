@@ -1,9 +1,9 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Wand2, MonitorPlay, X, Target, Move, Trash2, Scissors, ScanFace, Sliders, Palette, Eye, Shirt, Sparkles, BoxSelect, CheckCircle2, Layers, FlipHorizontal, FlipVertical, RotateCw, ZoomIn, GripHorizontal, MousePointer2, Loader2, Download, ArrowRight, Brush, Undo2, ChevronUp, Hand, Image as ImageIcon, Upload, Check } from 'lucide-react';
+import { Wand2, X, Move, Trash2, Scissors, Layers, FlipHorizontal, RotateCw, Check, Palette, Hand, PlusCircle } from 'lucide-react';
 
 // --- TYPES ---
-type BodyPartType = 'FRENTE' | 'COSTAS' | 'MANGA' | 'SAIA' | 'GOLA' | 'OUTROS';
+type BodyPartType = 'DEFAULT';
 
 interface AppliedLayer {
   id: string;
@@ -21,17 +21,7 @@ interface AppliedLayer {
   bodyPart: BodyPartType; 
 }
 
-const VIRTUAL_MODEL = {
-    skinPath: "M180,60 Q200,50 220,60 L230,150 L240,400 L230,580 L170,580 L160,400 L170,150 Z", 
-    parts: {
-        FRENTE: { path: "M175,120 Q200,150 225,120 Q235,140 230,220 Q200,230 170,220 Q165,140 175,120", zIndex: 2, shadowMap: "linear-gradient(90deg, rgba(0,0,0,0.2) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.2) 100%)" },
-        COSTAS: { path: "M175,120 Q200,130 225,120 L230,220 Q200,210 170,220 Z", zIndex: 0, shadowMap: "linear-gradient(90deg, rgba(0,0,0,0.3) 0%, transparent 50%, rgba(0,0,0,0.3) 100%)" },
-        SAIA: { path: "M170,220 Q200,230 230,220 L245,500 Q200,520 155,500 Z", zIndex: 1, shadowMap: "repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,0,0,0.1) 45px, transparent 50px)" },
-        MANGA: { pathLeft: "M175,120 Q150,110 140,160 Q150,190 170,180", pathRight: "M225,120 Q250,110 260,160 Q250,190 230,180", zIndex: 3, shadowMap: "radial-gradient(circle at 50% 0%, transparent, rgba(0,0,0,0.3))" },
-        GOLA: { path: "M175,120 Q200,150 225,120 Q200,130 175,120 Z", zIndex: 4, shadowMap: "" }
-    }
-};
-
+// Algoritmo de Flood Fill Otimizado
 const floodFill = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tol: number) => {
     const imageData = ctx.getImageData(0,0,width,height);
     const data = imageData.data;
@@ -39,7 +29,9 @@ const floodFill = (ctx: CanvasRenderingContext2D, width: number, height: number,
     const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
     const a0 = data[startPos+3];
     
+    // Se clicou em algo transparente (fundo do canvas), ignora
     if (a0 === 0) return null; 
+    
     const r0 = data[startPos]; const g0 = data[startPos + 1]; const b0 = data[startPos + 2];
 
     const stack = [[Math.floor(startX), Math.floor(startY)]];
@@ -66,7 +58,7 @@ const floodFill = (ctx: CanvasRenderingContext2D, width: number, height: number,
         }
     }
 
-    if (pixelCount < 50) return null;
+    if (pixelCount < 50) return null; // Ignora ruído
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = width; maskCanvas.height = height;
     maskCanvas.getContext('2d')!.putImageData(new ImageData(maskData, width, height), 0, 0);
@@ -100,12 +92,9 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
 
   const [tool, setTool] = useState<'WAND' | 'MOVE'>('WAND');
   
-  const [showVisualizer, setShowVisualizer] = useState(false);
-  const [visualizerPos, setVisualizerPos] = useState({ x: 50, y: 50 });
   const [isMobile, setIsMobile] = useState(false);
   
   // Refs for logic
-  const isDraggingModal = useRef(false);
   const isDraggingLayer = useRef(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
@@ -117,7 +106,6 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   const isGestureActive = useRef<boolean>(false);
 
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
-  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
   const moldInputRef = useRef<HTMLInputElement>(null);
   const patternInputRef = useRef<HTMLInputElement>(null);
 
@@ -156,7 +144,6 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   useEffect(() => {
     const handleGlobalUp = () => {
         isDraggingLayer.current = false;
-        isDraggingModal.current = false;
         isGestureActive.current = false;
     };
     window.addEventListener('mouseup', handleGlobalUp);
@@ -168,19 +155,18 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   }, []);
 
 
-  // --- MOUSE/TOUCH HANDLERS (UNIFIED) ---
+  // --- MOUSE/TOUCH HANDLERS (UNIFIED & IMPROVED) ---
 
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
-      // 1. Setup Coordinates
       if (!moldImgObj || !patternImgObj) return;
       
       const canvas = mainCanvasRef.current!;
       const rect = canvas.getBoundingClientRect();
       const isTouch = 'touches' in e;
       
-      // Multitouch Logic (2 fingers)
+      // 1. Multitouch Check (Gestures)
       if (isTouch && (e as React.TouchEvent).touches.length === 2 && activeLayerId) {
-          e.preventDefault(); // Prevent browser zoom
+          e.preventDefault(); 
           const t1 = (e as React.TouchEvent).touches[0];
           const t2 = (e as React.TouchEvent).touches[1];
           const activeLayer = layers.find(l => l.id === activeLayerId);
@@ -194,7 +180,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
           return;
       }
 
-      // Single Touch/Click Logic
+      // 2. Get Coordinates
       let clientX, clientY;
       if (isTouch) { 
           clientX = (e as React.TouchEvent).touches[0].clientX; 
@@ -209,11 +195,37 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
       const x = (clientX - rect.left) * scaleX;
       const y = (clientY - rect.top) * scaleY;
 
-      if (tool === 'WAND') {
-           const ctx = canvas.getContext('2d')!;
-           const res = floodFill(ctx, canvas.width, canvas.height, x, y, 40);
+      // 3. HIT TEST: Check if we clicked on an existing layer
+      let clickedLayerId = null;
+      for (let i = layers.length - 1; i >= 0; i--) {
+          const ctx = layers[i].maskCanvas.getContext('2d')!;
+          // Simple alpha check
+          if (ctx.getImageData(x, y, 1, 1).data[3] > 0) { 
+              clickedLayerId = layers[i].id;
+              break; 
+          }
+      }
+
+      // 4. INTELLIGENT MODE SWITCHING
+      if (clickedLayerId) {
+          // Clicked on a layer -> Select it and switch to MOVE mode
+          setActiveLayerId(clickedLayerId);
+          setTool('MOVE');
+          isDraggingLayer.current = true;
+          lastMousePos.current = { x: clientX, y: clientY };
+      } else {
+          // Clicked on EMPTY space
+          // Behavior: Always try to FILL (Wand) if we clicked empty space, 
+          // even if we were in "Move" mode for another layer.
+          
+          // Deselect current layer visually first
+          setActiveLayerId(null); 
+          
+          // Perform Flood Fill
+          const ctx = canvas.getContext('2d')!;
+          const res = floodFill(ctx, canvas.width, canvas.height, x, y, 40);
            
-           if (res) {
+          if (res) {
                const newLayer: AppliedLayer = {
                    id: Date.now().toString(),
                    maskCanvas: res.maskCanvas,
@@ -223,37 +235,21 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                    offsetY: res.centerY - (patternImgObj.height * 0.5)/2,
                    scale: 0.5, rotation: 0, 
                    flipX: false, flipY: false, skewX: 0, skewY: 0,
-                   bodyPart: 'OUTROS'
+                   bodyPart: 'DEFAULT'
                };
                setLayers(prev => [...prev, newLayer]);
                setActiveLayerId(newLayer.id);
-               setTool('MOVE');
-           }
-      } else if (tool === 'MOVE') {
-          // Hit Detection
-          let clickedId = null;
-          for (let i = layers.length - 1; i >= 0; i--) {
-              const ctx = layers[i].maskCanvas.getContext('2d')!;
-              if (ctx.getImageData(x, y, 1, 1).data[3] > 0) { 
-                  clickedId = layers[i].id;
-                  break; 
-              }
-          }
-          
-          if (clickedId) {
-              setActiveLayerId(clickedId);
-              isDraggingLayer.current = true;
-              lastMousePos.current = { x: clientX, y: clientY };
+               setTool('MOVE'); // Auto-switch to move after creation for adjustments
           }
       }
   };
 
   const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
-      if (e.cancelable) e.preventDefault(); // Critical for mobile
+      if (e.cancelable) e.preventDefault(); 
       
       const isTouch = 'touches' in e;
 
-      // --- MULTITOUCH GESTURES (SCALE & ROTATE) ---
+      // --- GESTURES ---
       if (isTouch && (e as React.TouchEvent).touches.length === 2 && isGestureActive.current && activeLayerId) {
           const t1 = (e as React.TouchEvent).touches[0];
           const t2 = (e as React.TouchEvent).touches[1];
@@ -271,7 +267,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
           return;
       }
 
-      // --- SINGLE TOUCH DRAG ---
+      // --- DRAG ---
       if (!isDraggingLayer.current || !activeLayerId || tool !== 'MOVE') return;
 
       let clientX, clientY;
@@ -373,74 +369,12 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   useEffect(() => { requestAnimationFrame(renderMain); }, [renderMain]);
 
 
-  // --- RENDER VISUALIZER ---
-  const renderVisualizer = useCallback(() => {
-      const canvas = visualizerCanvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d')!;
-      
-      if (canvas.width !== 400) { canvas.width = 400; canvas.height = 600; }
-      ctx.clearRect(0,0,400,600);
-      
-      ctx.fillStyle = '#eecfb4'; 
-      ctx.fill(new Path2D(VIRTUAL_MODEL.skinPath));
-      
-      const renderPart = (pathStr: string, type: BodyPartType, shadowStyle: string) => {
-          const sourceLayer = layers.find(l => l.bodyPart === type);
-          const path = new Path2D(pathStr);
-
-          ctx.save();
-          if (sourceLayer && sourceLayer.patternImg) {
-              const scale = sourceLayer.scale * 0.8; 
-              
-              const pC = document.createElement('canvas'); pC.width=400; pC.height=600;
-              const pCtx = pC.getContext('2d')!;
-              pCtx.translate(200, 300); 
-              pCtx.rotate((sourceLayer.rotation * Math.PI)/180);
-              pCtx.scale(scale, scale);
-              const pat = pCtx.createPattern(sourceLayer.patternImg, 'repeat');
-              if(pat) { pCtx.fillStyle = pat; pCtx.fillRect(-1000,-1000,2000,2000); }
-              
-              ctx.clip(path);
-              ctx.drawImage(pC, 0, 0);
-          } else {
-              ctx.fillStyle = '#f8fafc'; 
-              ctx.fill(path);
-          }
-          
-          ctx.globalCompositeOperation = 'multiply';
-          const grad = ctx.createLinearGradient(0,0,400,0);
-          grad.addColorStop(0, 'rgba(0,0,0,0.1)');
-          grad.addColorStop(0.2, 'transparent');
-          grad.addColorStop(0.8, 'transparent');
-          grad.addColorStop(1, 'rgba(0,0,0,0.15)');
-          ctx.fillStyle = grad;
-          ctx.fill(path);
-          
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
-          ctx.stroke(path);
-          ctx.restore();
-      };
-
-      renderPart(VIRTUAL_MODEL.parts.SAIA.path, 'SAIA', VIRTUAL_MODEL.parts.SAIA.shadowMap);
-      renderPart(VIRTUAL_MODEL.parts.FRENTE.path, 'FRENTE', VIRTUAL_MODEL.parts.FRENTE.shadowMap);
-      renderPart(VIRTUAL_MODEL.parts.MANGA.pathLeft, 'MANGA', '');
-      renderPart(VIRTUAL_MODEL.parts.MANGA.pathRight, 'MANGA', '');
-      renderPart(VIRTUAL_MODEL.parts.GOLA.path, 'GOLA', '');
-
-  }, [layers]);
-
-  useEffect(() => { if(showVisualizer) requestAnimationFrame(renderVisualizer); }, [renderVisualizer, showVisualizer]);
-
-
   const activeLayer = layers.find(l => l.id === activeLayerId);
 
   return (
     <div className="flex flex-col h-full bg-[#e2e8f0] md:flex-row overflow-hidden font-sans relative"
          onMouseMove={(e) => { 
              handlePointerMove(e);
-             if(isDraggingModal.current) setVisualizerPos(p => ({ x: p.x + e.movementX, y: p.y + e.movementY }));
          }}>
       
       {/* --- SIDEBAR / BOTTOM SHEET --- */}
@@ -451,7 +385,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
         ${activeLayer && isMobile ? 'h-auto pb-4' : isMobile ? 'h-auto pb-6' : ''}
       `}
         style={{
-             maxHeight: isMobile && activeLayer ? '40vh' : 'auto' 
+             maxHeight: isMobile && activeLayer ? '35vh' : 'auto' 
         }}
       >
           
@@ -462,7 +396,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
 
           <div className="p-4 md:p-5 border-b border-gray-100 bg-gray-50/50 hidden md:block">
               <h2 className="text-lg font-bold text-vingi-900 flex items-center gap-2">
-                  <Wand2 className="text-vingi-600" size={20} /> Vingi Studio <span className="text-[10px] bg-black text-white px-1.5 rounded">PRO</span>
+                  <Wand2 className="text-vingi-600" size={20} /> Vingi Studio <span className="text-[10px] bg-black text-white px-1.5 rounded">2D</span>
               </h2>
           </div>
           
@@ -515,32 +449,22 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                    </div>
                )}
 
-               {/* LAYER CONTROLS (COMPACT MODE ON MOBILE) */}
+               {/* LAYER CONTROLS (SIMPLIFICADO - SEM SELETOR DE PARTES) */}
                {activeLayer ? (
                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-sm animate-fade-in-up">
-                       <div className="flex justify-between items-center mb-2">
-                           <h3 className="text-[10px] font-bold text-blue-800 uppercase tracking-widest flex items-center gap-2"><Layers size={12}/> {activeLayer.bodyPart}</h3>
+                       <div className="flex justify-between items-center mb-4">
+                           <h3 className="text-[10px] font-bold text-blue-800 uppercase tracking-widest flex items-center gap-2"><Layers size={12}/> Camada Ativa</h3>
                            <button onClick={() => setActiveLayerId(null)} className="md:hidden text-blue-500 bg-white p-1 rounded-full shadow"><X size={14}/></button>
                        </div>
                        
-                       {/* Mobile: Grid de partes reduzido ou oculto se já selecionado */}
-                       <div className="flex overflow-x-auto gap-2 mb-3 pb-1 md:grid md:grid-cols-2">
-                           {['FRENTE', 'MANGA', 'SAIA', 'COSTAS', 'GOLA', 'OUTROS'].map((part) => (
-                               <button key={part} onClick={() => updateActiveLayer({ bodyPart: part as BodyPartType })}
-                                className={`px-2 py-1 text-[10px] font-bold rounded border whitespace-nowrap ${activeLayer.bodyPart === part ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-500'}`}>
-                                   {part}
-                               </button>
-                           ))}
-                       </div>
-
                        <div className="flex gap-2 justify-center mb-2">
-                            <button onClick={() => updateActiveLayer({ rotation: activeLayer.rotation + 45 })} className="flex-1 bg-white p-2 rounded-lg text-blue-600 border border-blue-200 flex justify-center shadow-sm active:scale-95"><RotateCw size={18}/></button>
-                            <button onClick={() => updateActiveLayer({ flipX: !activeLayer.flipX })} className="flex-1 bg-white p-2 rounded-lg text-blue-600 border border-blue-200 flex justify-center shadow-sm active:scale-95"><FlipHorizontal size={18}/></button>
-                            <button onClick={deleteActiveLayer} className="flex-1 bg-red-100 p-2 rounded-lg text-red-500 border border-red-200 flex justify-center shadow-sm active:scale-95"><Trash2 size={18}/></button>
+                            <button onClick={() => updateActiveLayer({ rotation: activeLayer.rotation + 45 })} className="flex-1 bg-white p-3 rounded-lg text-blue-600 border border-blue-200 flex justify-center shadow-sm active:scale-95"><RotateCw size={20}/></button>
+                            <button onClick={() => updateActiveLayer({ flipX: !activeLayer.flipX })} className="flex-1 bg-white p-3 rounded-lg text-blue-600 border border-blue-200 flex justify-center shadow-sm active:scale-95"><FlipHorizontal size={20}/></button>
+                            <button onClick={deleteActiveLayer} className="flex-1 bg-red-100 p-3 rounded-lg text-red-500 border border-red-200 flex justify-center shadow-sm active:scale-95"><Trash2 size={20}/></button>
                        </div>
                        
-                       <div className="bg-white/60 p-1.5 rounded border border-blue-100 text-[10px] text-blue-500 text-center font-bold">
-                           Use 2 dedos na imagem para zoom e girar
+                       <div className="bg-white/60 p-2 rounded border border-blue-100 text-[10px] text-blue-500 text-center font-bold flex items-center justify-center gap-2">
+                           <Hand size={14}/> Use 2 dedos para zoom/rotação
                        </div>
                    </div>
                ) : (
@@ -550,9 +474,6 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                        </button>
                        <button onClick={() => setTool('MOVE')} className={`flex-1 py-3 rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 transition-all ${tool === 'MOVE' ? 'bg-vingi-900 text-white shadow-lg' : 'bg-white text-gray-500'}`}>
                            <Move size={18}/> MOVER
-                       </button>
-                       <button onClick={() => setShowVisualizer(true)} className="flex-1 py-3 bg-purple-600 text-white rounded-lg text-xs font-bold border flex flex-col items-center justify-center gap-1 shadow-lg active:scale-95">
-                           <MonitorPlay size={18}/> 3D
                        </button>
                    </div>
                )}
@@ -584,37 +505,17 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                         className="cursor-crosshair block shadow-inner bg-white"
                     />
                 ) : (
-                    <div className="p-10 md:p-20 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-lg m-4">
-                        <Scissors size={48} className="mx-auto mb-4 opacity-30"/>
+                    <div 
+                        onClick={() => moldInputRef.current?.click()}
+                        className="p-10 md:p-20 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-lg m-4 cursor-pointer hover:bg-gray-50 active:scale-95 transition-all group"
+                    >
+                        <Scissors size={48} className="mx-auto mb-4 opacity-30 group-hover:text-vingi-900 group-hover:opacity-100 transition-all"/>
                         <p className="font-bold text-sm md:text-lg">Carregue um Molde</p>
+                        <p className="text-xs mt-2 opacity-50">Toque aqui para abrir</p>
                     </div>
                 )}
            </div>
       </div>
-
-      {/* VISUALIZER */}
-      {showVisualizer && (
-           <div className={`
-                fixed z-[9999] bg-white shadow-2xl overflow-hidden flex flex-col
-                ${isMobile ? 'inset-0' : 'w-[350px] rounded-xl border-2 border-gray-900'}
-           `}
-                style={!isMobile ? { top: visualizerPos.y, left: visualizerPos.x } : {}}
-           >
-               <div onMouseDown={() => !isMobile && (isDraggingModal.current = true)} className="bg-vingi-900 text-white p-4 flex justify-between items-center cursor-move select-none shrink-0">
-                   <span className="text-sm font-bold flex items-center gap-2"><Sparkles size={16}/> PROVADOR VIRTUAL 3D</span>
-                   <button onClick={() => setShowVisualizer(false)}><X size={20}/></button>
-               </div>
-               <div className="relative bg-gray-100 flex-1 flex items-center justify-center overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxwYXRoIGQ9Ik0wIDBoOHY4SDB6IiBmaWxsPSIjZmZmIi8+PHBhdGggZD0iTTAgMGg0djRINHptNCA0aDR2NEg0eiIgZmlsbD0iI2U1ZTVlNSIvPjwvc3ZnPg==')]">
-                   <canvas ref={visualizerCanvasRef} className="h-full w-auto drop-shadow-2xl object-contain"/>
-                   <div className="absolute bottom-8 bg-white/90 backdrop-blur px-6 py-3 rounded-full shadow-lg border border-gray-200">
-                       <p className="text-xs font-bold text-gray-600 flex items-center gap-2">
-                           <CheckCircle2 size={16} className="text-green-500"/>
-                           {layers.length} PEÇAS SINCRONIZADAS
-                       </p>
-                   </div>
-               </div>
-           </div>
-      )}
     </div>
   );
 };

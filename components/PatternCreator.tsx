@@ -298,7 +298,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onPatternGenerat
                                 {showIntegrationSuccess ? <Check size={20}/> : <FileCode2 size={20}/>}
                             </div>
                             <div className="text-left">
-                                <div className="text-sm font-bold">{showIntegrationSuccess ? "ENVIADO PARA MOCKUP" : "APLICAR NO 3D"}</div>
+                                <div className="text-sm font-bold">{showIntegrationSuccess ? "ENVIADO PARA MOCKUP" : "TESTAR NO MOLDE"}</div>
                                 <div className="text-[10px] opacity-70">Visualizar na roupa</div>
                             </div>
                         </button>
