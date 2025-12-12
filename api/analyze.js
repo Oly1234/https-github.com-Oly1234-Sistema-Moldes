@@ -33,21 +33,20 @@ export default async function handler(req, res) {
     const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     // ==========================================================================================
-    // ROTA 1: ENHANCE PROMPT (Refinamento de Texto)
+    // ROTA 1: ENHANCE PROMPT (Refinamento de Texto para Estampas)
     // ==========================================================================================
     if (action === 'ENHANCE_PROMPT') {
         const endpoint = genAIEndpoint('gemini-2.5-flash');
         
-        // Simples e direto: Melhore o texto para virar um prompt de arte
         const systemPrompt = `
-        Transforme a descrição do usuário em um PROMPT DE ARTE TÊXTIL PROFISSIONAL.
-        ENTRADA: "${prompt}"
+        ATUE COMO: Curador de Arte Têxtil Sênior.
+        TAREFA: Transformar a entrada do usuário em um prompt técnico para geração de PADRÃO CONTÍNUO (SEAMLESS PATTERN).
         
-        REGRAS:
-        1. Mantenha em PORTUGUÊS.
-        2. Adicione detalhes de textura (ex: linho, papel, seda).
-        3. Adicione técnica artística (ex: aquarela, vetor, óleo).
-        4. O texto deve ser uma lista de características visuais separadas por vírgula.
+        ENTRADA DO USUÁRIO: "${prompt}"
+        
+        SAÍDA (Apenas o texto refinado em Português):
+        Crie uma descrição rica focada em elementos visuais, estilo artístico (ex: Bauhaus, Art Nouveau, Farm Rio), paleta de cores e técnica de pintura.
+        Adicione ao final: ", design de superfície profissional, alta resolução, padrão repetitivo perfeito."
         `;
 
         const payload = {
@@ -67,24 +66,23 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 2: DESCRIÇÃO DE ESTAMPA (A CORREÇÃO SOLICITADA)
+    // ROTA 2: DESCRIÇÃO DE ESTAMPA (VISÃO COMPUTACIONAL)
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
-        // Usando Gemini Flash para visão rápida e precisa
         const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
         
-        // PROMPT DIRETO E OBJETIVO - SEM ROLEPLAY COMPLEXO
         const VISION_PROMPT = `
-          Analise esta imagem e crie um prompt detalhado para recriar esta estampa.
+          Analise esta imagem como um Designer de Estampas. 
+          Descreva EXATAMENTE o padrão visual para que uma IA geradora de imagens possa replicar o estilo.
           
-          FOCO VISUAL (Responda em PORTUGUÊS):
-          1. Que tipo de arte é essa? (Aquarela, Vetor, Geométrico, Floral, Étnico?)
-          2. Quais são os elementos principais? (Flores específicas, folhas, formas?)
-          3. Como são as cores? (Pastéis, Vibrantes, Neon, Terrosos?)
-          4. Como é o fundo? (Cor sólida, texturizado, transparente?)
-
-          SAÍDA DESEJADA (Apenas o texto descritivo):
-          "Estampa corrida seamless estilo [ESTILO], contendo [ELEMENTOS], pintado com técnica de [TÉCNICA], paleta de cores [CORES], sobre fundo [FUNDO]. Alta definição, design têxtil."
+          ESTRUTURA DA RESPOSTA (Em Português):
+          "Estampa [ESTILO: ex: Floral, Geométrico, Étnico], composta por [ELEMENTOS PRINCIPAIS], utilizando técnica de [TÉCNICA: ex: Aquarela, Vetor Flat, Óleo].
+          Paleta de cores: [CORES DOMINANTES].
+          Fundo: [COR/TEXTURA DO FUNDO].
+          Vibe: [SENSAÇÃO: ex: Tropical, Minimalista, Retrô].
+          Design repetitivo seamless (sem emendas)."
+          
+          Seja direto e técnico. Não use frases introdutórias.
         `;
 
         const visionPayload = {
@@ -95,7 +93,7 @@ export default async function handler(req, res) {
                 ]
             }],
             generation_config: {
-                temperature: 0.2, // Baixa temperatura para ser mais fiel e menos criativo
+                temperature: 0.2, 
                 max_output_tokens: 500
             }
         };
@@ -112,41 +110,32 @@ export default async function handler(req, res) {
         }
         
         const visionData = await visionRes.json();
-        const candidate = visionData.candidates?.[0];
-        
-        if (candidate?.finishReason === 'SAFETY') {
-             throw new Error("Imagem bloqueada por segurança. Tente recortar apenas o desenho.");
-        }
-
-        let description = candidate?.content?.parts?.[0]?.text;
+        let description = visionData.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!description) {
-            throw new Error("Não foi possível ler a imagem. Tente outra foto.");
+            throw new Error("Não foi possível ler a imagem.");
         }
 
-        // Limpeza básica
         description = description.replace(/^Prompt:|^Descrição:/i, '').trim();
-
         return res.status(200).json({ success: true, description: description });
     }
 
     // ==========================================================================================
-    // ROTA 3: GERAÇÃO DE ESTAMPAS
+    // ROTA 3: GERAÇÃO DE ESTAMPAS (IMAGEN / GEMINI IMAGE)
     // ==========================================================================================
     if (action === 'GENERATE_PATTERN') {
         const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
         
-        // Tradução forçada para o motor de imagem (que entende melhor inglês) mas mantendo a intenção do usuário
-        // O prompt do usuário vem em PT, o Gemini traduz internamente muito bem, mas adicionamos reforços.
+        // Reforço para Seamless Pattern
         const finalPrompt = `
-          Create a professional Seamless Textile Pattern based on this description: 
-          "${prompt}".
+          Design a High-End Seamless Textile Pattern.
+          Visual Description: "${prompt}".
           
-          Technical Requirements:
-          - Seamless repeating pattern (tileable).
-          - High resolution (8k), flat lighting, top-down view.
-          - Textile design standard.
-          - No mockups, no shadows, just the flat artwork.
+          MANDATORY REQUIREMENTS:
+          1. SEAMLESS / TILEABLE: The edges must match perfectly for repetition.
+          2. VIEW: Top-down, flat 2D design. No perspective, no folds, no mockups.
+          3. STYLE: Professional Surface Design. High detail, 8k resolution.
+          4. COMPOSITION: Balanced distribution of elements.
         `;
         
         const payload = {
@@ -164,8 +153,7 @@ export default async function handler(req, res) {
         });
 
         if (!googleResponse.ok) {
-            const err = await googleResponse.text();
-            throw new Error(`Erro na Geração: ${err}`);
+            throw new Error(`Erro na Geração: ${googleResponse.status}`);
         }
 
         const data = await googleResponse.json();
@@ -173,7 +161,7 @@ export default async function handler(req, res) {
         const imagePart = parts.find(p => p.inline_data);
         
         if (!imagePart) {
-             throw new Error("A IA não gerou a imagem (Filtro de Conteúdo). Tente simplificar o prompt.");
+             throw new Error("Conteúdo bloqueado pelos filtros de segurança. Tente um prompt mais suave.");
         }
 
         return res.status(200).json({ 
@@ -183,13 +171,8 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 4: ANÁLISE DE ROUPAS (Mantida Original)
+    // ROTA 4: ANÁLISE DE ROUPAS
     // ==========================================================================================
-    const MASTER_SYSTEM_PROMPT = `ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5)...`; // (Mantendo lógica original resumida aqui para brevidade do XML, mas o arquivo real deve conter o código completo da rota 4 anterior)
-
-    // ... (Bloco de código da Rota 4 igual ao anterior - Recriando para garantir integridade)
-    
-    // ROTA 4 COMPLETA PARA EVITAR ERROS DE ARQUIVO INCOMPLETO
     const JSON_SCHEMA_PROMPT = `
 RESPONSE FORMAT (JSON ONLY):
 {
@@ -210,7 +193,6 @@ RESPONSE FORMAT (JSON ONLY):
 
     const payloadMain = {
         contents: [{ parts: parts }],
-        //system_instruction: { parts: [{ text: MASTER_SYSTEM_PROMPT }] }, // System instruction as string part for standard generic model usage if needed, but separate works best.
         generation_config: { response_mime_type: "application/json" }
     };
 
@@ -220,7 +202,7 @@ RESPONSE FORMAT (JSON ONLY):
         body: JSON.stringify(payloadMain)
     });
 
-    if (!googleResponse.ok) throw new Error("Erro na API de Análise de Roupas");
+    if (!googleResponse.ok) throw new Error("Erro na API de Análise");
     const dataMain = await googleResponse.json();
     const generatedText = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
     const jsonResult = JSON.parse(generatedText.replace(/```json|```/g, '').trim());
