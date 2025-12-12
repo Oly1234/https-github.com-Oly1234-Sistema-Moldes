@@ -8,7 +8,7 @@ import { AppState, PatternAnalysisResult, ExternalPatternMatch, CuratedCollectio
 import { MOCK_LOADING_STEPS } from './constants';
 import { UploadCloud, RefreshCw, ExternalLink, Search, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, Share2, ArrowRightCircle, ShoppingBag, BookOpen, Star, Camera, DollarSign, Gift, ChevronUp, ChevronDown, History, Clock, Smartphone, X, Zap, Plus, Eye, DownloadCloud, Loader2, Database, Terminal, Maximize2, Minimize2, AlertTriangle, CloudOff, Info, Share, MessageCircle, Key, ShieldCheck, Lock, GripHorizontal } from 'lucide-react';
 
-const APP_VERSION = '5.7.0-PRO'; 
+const APP_VERSION = '5.7.2-STABLE'; 
 
 // ... Utility functions mantidas ...
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
@@ -184,8 +184,17 @@ export default function App() {
 
   const startAnalysis = async () => {
     if (!uploadedImage) return;
-    setState(AppState.ANALYZING); setErrorMsg(null); setVisibleCount(12);
-    // Pequeno delay para garantir que o estado de UI atualize antes do processamento pesado
+    
+    // Inicia estado de análise
+    setState(AppState.ANALYZING); 
+    setErrorMsg(null); 
+    setVisibleCount(12);
+    
+    // Timestamp de início para calcular o tempo mínimo de loading
+    const startTime = Date.now();
+    const MIN_LOADING_TIME = 3000; // 3 segundos para a animação "correr"
+
+    // Pequeno delay inicial para renderizar a UI de loading
     setTimeout(async () => {
         try {
             const compressedMain = await compressImage(uploadedImage);
@@ -200,9 +209,25 @@ export default function App() {
                 secondaryBase64 = compressedSec.split(',')[1];
                 secondaryType = compressedSec.split(';')[0].split(':')[1];
             }
+            
+            // Chama a API
             const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
-            setResult(analysisResult); addToHistory(analysisResult); setState(AppState.SUCCESS);
-        } catch (err: any) { setErrorMsg(err.message || "Erro desconhecido na análise."); setState(AppState.ERROR); }
+            
+            // Calcula quanto tempo passou
+            const elapsedTime = Date.now() - startTime;
+            const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
+
+            // Espera o tempo restante se a API foi muito rápida
+            setTimeout(() => {
+                setResult(analysisResult); 
+                addToHistory(analysisResult); 
+                setState(AppState.SUCCESS);
+            }, remainingTime);
+
+        } catch (err: any) { 
+            setErrorMsg(err.message || "Erro desconhecido na análise."); 
+            setState(AppState.ERROR); 
+        }
     }, 100); 
   };
   

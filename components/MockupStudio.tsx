@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Wand2, X, Move, Trash2, Scissors, Layers, FlipHorizontal, FlipVertical, RotateCw, Check, Palette, Hand, PlusCircle, Maximize, Pointer, ZoomIn, Grip } from 'lucide-react';
+import { Wand2, X, Move, Trash2, Scissors, Layers, FlipHorizontal, FlipVertical, RotateCw, Check, Palette, Hand, PlusCircle, Maximize, Pointer, ZoomIn, Grip, Minimize } from 'lucide-react';
 
 // --- TYPES ---
 type BodyPartType = 'DEFAULT';
@@ -72,6 +72,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [interactionMode, setInteractionMode] = useState<'VIEW' | 'EDIT'>('VIEW');
   const [panZoom, setPanZoom] = useState({ x: 0, y: 0, scale: 1 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Refs
   const isDraggingLayer = useRef(false);
@@ -122,6 +123,14 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
     return () => { window.removeEventListener('mouseup', handleGlobalUp); window.removeEventListener('touchend', handleGlobalUp); };
   }, []);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
         containerRef.current?.requestFullscreen().catch(err => {
@@ -134,13 +143,13 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
 
   // --- POINTER HANDLERS ---
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
-      e.preventDefault();
+      e.preventDefault(); // Impede scroll nativo do navegador
       const isTouch = 'touches' in e;
       const t = isTouch ? (e as React.TouchEvent).touches[0] : (e as React.MouseEvent);
       const clientX = t.clientX;
       const clientY = t.clientY;
 
-      // === 1. MODO VIEW (PAN/ZOOM TELA) ===
+      // === 1. MODO VIEW (PAN/ZOOM TELA) OU MULTITOUCH SEM CAMADA SELECIONADA ===
       if (interactionMode === 'VIEW' || (isTouch && (e as React.TouchEvent).touches.length === 2 && !activeLayerId)) {
           if (isTouch && (e as React.TouchEvent).touches.length === 2) {
               // Zoom da Tela com dois dedos
@@ -194,25 +203,32 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
           setActiveLayerId(clickedLayerId); 
           isDraggingLayer.current = true; 
           lastMousePos.current = { x: clientX, y: clientY };
+          setInteractionMode('EDIT'); // Auto switch para edit ao clicar
       } else {
-          // Criação de Nova Camada (Flood Fill)
-          setActiveLayerId(null); 
-          const ctx = canvas.getContext('2d')!;
-          const res = floodFill(ctx, canvas.width, canvas.height, x, y, 40);
-          if (res) {
-               const newLayer: AppliedLayer = {
-                   id: Date.now().toString(),
-                   maskCanvas: res.maskCanvas,
-                   maskCenter: { x: res.centerX, y: res.centerY },
-                   patternImg: patternImgObj,
-                   offsetX: res.centerX - (patternImgObj.width * 0.5)/2,
-                   offsetY: res.centerY - (patternImgObj.height * 0.5)/2,
-                   scale: 0.5, rotation: 0, flipX: false, flipY: false, skewX: 0, skewY: 0, bodyPart: 'DEFAULT'
-               };
-               setLayers(prev => [...prev, newLayer]);
-               setActiveLayerId(newLayer.id);
-               // Switch automático para edição ao criar
-               setInteractionMode('EDIT');
+          // Criação de Nova Camada (Flood Fill) apenas se estiver em modo EDIT ou se não tiver nada
+          // Mas se estiver em VIEW, deve apenas mover a tela.
+          if (interactionMode === 'EDIT' || !layers.length) {
+                setActiveLayerId(null); 
+                const ctx = canvas.getContext('2d')!;
+                const res = floodFill(ctx, canvas.width, canvas.height, x, y, 40);
+                if (res) {
+                    const newLayer: AppliedLayer = {
+                        id: Date.now().toString(),
+                        maskCanvas: res.maskCanvas,
+                        maskCenter: { x: res.centerX, y: res.centerY },
+                        patternImg: patternImgObj,
+                        offsetX: res.centerX - (patternImgObj.width * 0.5)/2,
+                        offsetY: res.centerY - (patternImgObj.height * 0.5)/2,
+                        scale: 0.5, rotation: 0, flipX: false, flipY: false, skewX: 0, skewY: 0, bodyPart: 'DEFAULT'
+                    };
+                    setLayers(prev => [...prev, newLayer]);
+                    setActiveLayerId(newLayer.id);
+                    setInteractionMode('EDIT');
+                }
+          } else {
+              // Se clicou fora em modo View, inicia Pan
+               isPanningCanvas.current = true;
+               lastMousePos.current = { x: clientX, y: clientY };
           }
       }
   };
@@ -246,7 +262,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
       }
 
       // === 2. LÓGICA DE EDIT (Camada) ===
-      if (activeLayerId) {
+      if (activeLayerId && interactionMode === 'EDIT') {
           // Gesto Multitouch na Camada
           if (isTouch && (e as React.TouchEvent).touches.length === 2 && isGestureActive.current) {
               const t1 = (e as React.TouchEvent).touches[0]; const t2 = (e as React.TouchEvent).touches[1];
@@ -375,8 +391,8 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
            {/* Ferramentas Flutuantes de Tela */}
            {moldImage && (
              <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
-                 <button onClick={toggleFullscreen} className="bg-white p-3 rounded-full shadow-lg text-gray-700 active:scale-90 transition-transform border border-gray-200" title="Tela Cheia">
-                    <Maximize size={20} />
+                 <button onClick={toggleFullscreen} className="bg-white p-3 rounded-full shadow-lg text-gray-700 active:scale-90 transition-transform border border-gray-200" title={isFullscreen ? "Sair Tela Cheia" : "Tela Cheia"}>
+                    {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
                  </button>
                  <button onClick={() => setPanZoom({x:0,y:0,scale:1})} className="bg-white p-3 rounded-full shadow-lg text-gray-700 active:scale-90 transition-transform border border-gray-200" title="Resetar Zoom">
                     <ZoomIn size={20} />
@@ -389,23 +405,22 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1 bg-white p-1 rounded-full shadow-lg border border-gray-200 z-20">
                   <button 
                     onClick={() => setInteractionMode('VIEW')} 
-                    className={`p-2 rounded-full transition-all ${interactionMode === 'VIEW' ? 'bg-vingi-900 text-white' : 'text-gray-400 hover:bg-gray-100'}`}
-                    title="Mover Tela"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-xs font-bold ${interactionMode === 'VIEW' ? 'bg-vingi-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
-                      <Hand size={18} />
+                      <Hand size={16} /> MOVER TELA
                   </button>
                   <button 
                     onClick={() => setInteractionMode('EDIT')} 
-                    className={`p-2 rounded-full transition-all ${interactionMode === 'EDIT' ? 'bg-vingi-900 text-white' : 'text-gray-400 hover:bg-gray-100'}`}
-                    title="Mover Molde"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-xs font-bold ${interactionMode === 'EDIT' ? 'bg-vingi-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
-                      <Move size={18} />
+                      <Move size={16} /> EDITAR MOLDE
                   </button>
               </div>
            )}
       </div>
 
-      {/* 2. BARRA DE FERRAMENTAS INFERIOR */}
+      {/* 2. BARRA DE FERRAMENTAS INFERIOR (Oculta em Fullscreen puro para imersão, mas acessível via hover ou sair do FS) */}
+      {!isFullscreen && (
       <div className="bg-white border-t border-gray-200 z-30 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] pb-safe relative">
           
           <div className="p-2 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center px-4">
@@ -468,6 +483,7 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ externalPattern }) =
                )}
           </div>
       </div>
+      )}
     </div>
   );
 };
