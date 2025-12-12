@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { LayoutDashboard, History, Sparkles, Download, Camera, Search, RefreshCw, Loader2, ScanLine } from 'lucide-react';
+import { LayoutDashboard, History, Sparkles, Download, Camera, Search, RefreshCw, Loader2, ScanLine, PenTool, Palette } from 'lucide-react';
 import { ViewState, AppState } from '../types';
 
 interface SidebarProps {
@@ -9,7 +10,7 @@ interface SidebarProps {
   onViewChange: (view: ViewState) => void;
   onInstallClick?: () => void;
   showInstallButton?: boolean;
-  onFabClick?: () => void; // Ação dinâmica do botão principal
+  onFabClick?: () => void; 
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -22,9 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onFabClick 
 }) => {
 
-  // Lógica visual do botão central (FAB) - O "Cérebro" da navegação mobile
   const getFabContent = () => {
-    // 1. Carregando
     if (appState === AppState.ANALYZING) {
       return {
         icon: <Loader2 size={24} className="text-white animate-spin" />,
@@ -33,7 +32,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       };
     }
 
-    // 2. Resultado na tela -> Botão para Resetar
     if (appState === AppState.SUCCESS) {
       return {
         icon: <RefreshCw size={20} className="text-white" />,
@@ -42,18 +40,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       };
     }
 
-    // 3. Imagem Carregada -> Botão de Ação Principal (PESQUISAR)
-    if (hasUploadedImage && appState === AppState.IDLE) {
+    if (hasUploadedImage && appState === AppState.IDLE && currentView === 'HOME') {
       return {
         icon: <ScanLine size={20} className="text-white animate-pulse" />,
         label: "PESQUISAR",
-        // Visual Premium: 100% Opaco com background sólido e sombra projetada
-        // A classe ring-white cria separação visual clara contra conteúdo branco/cinza
         className: "bg-vingi-600 hover:bg-vingi-500 border-2 border-white shadow-xl shadow-vingi-900/50 w-auto px-8 h-14 rounded-full animate-bounce-subtle z-50 ring-4 ring-black/10 scale-105"
       };
     }
 
-    // 4. Estado Inicial (Sem imagem) -> Botão Discreto de Câmera
     return {
       icon: <Camera size={24} className="text-white" />,
       label: null,
@@ -64,10 +58,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const fab = getFabContent();
 
   return (
-    // Adicionado overflow-visible para permitir que o botão saia da caixa sem cortar
     <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all overflow-visible shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
       
-      {/* Brand Icon (Mobile Hidden / Desktop Top) */}
+      {/* Brand Icon */}
       <div className="hidden md:flex flex-col items-center gap-6">
         <div 
           className="w-10 h-10 bg-gradient-to-br from-vingi-500 to-vingi-accent rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20 cursor-pointer hover:scale-105 transition-transform"
@@ -81,7 +74,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<LayoutDashboard size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
-            tooltip="Nova Varredura"
+            tooltip="Análise de Moldes"
+          />
+          <NavItem 
+            icon={<Palette size={24} />} 
+            active={currentView === 'CREATOR'} 
+            onClick={() => onViewChange('CREATOR')}
+            tooltip="Criador de Estampas AI"
+          />
+          <NavItem 
+            icon={<PenTool size={24} />} 
+            active={currentView === 'MOCKUP'} 
+            onClick={() => onViewChange('MOCKUP')}
+            tooltip="Mockup 3D"
           />
           <NavItem 
             icon={<History size={24} />} 
@@ -92,46 +97,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Mobile Nav (Horizontal) */}
-      <div className="flex md:hidden w-full justify-between items-center px-8 relative">
+      {/* Mobile Nav */}
+      <div className="flex md:hidden w-full justify-between items-center px-6 relative">
           
-          {/* Esquerda - Home */}
           <NavItem 
-            icon={<LayoutDashboard size={24} />} 
+            icon={<LayoutDashboard size={22} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
             isMobile
           />
+           <NavItem 
+            icon={<Palette size={22} />} 
+            active={currentView === 'CREATOR'} 
+            onClick={() => onViewChange('CREATOR')}
+            isMobile
+          />
           
-          {/* BOTÃO CENTRAL MUTANTE (FAB) */}
-          {/* Posicionado absolutamente no centro e levemente elevado */}
-          {/* top-[-32px] para subir mais e garantir destaque */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-[-32px] z-[60]">
-            <button 
-              onClick={onFabClick}
-              disabled={appState === AppState.ANALYZING}
-              className={`flex items-center justify-center gap-2 transition-all duration-300 ease-out transform ${fab.className}`}
-              style={{ minWidth: fab.label ? '140px' : '64px' }} 
-            >
-              {fab.icon}
-              {fab.label && (
-                <span className="text-white font-bold text-sm tracking-wide whitespace-nowrap animate-fade-in">
-                  {fab.label}
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Ocultar FAB se estiver no Mockup ou Creator para dar espaço à UI própria */}
+          {(currentView !== 'MOCKUP' && currentView !== 'CREATOR') ? (
+            <div className="absolute left-1/2 -translate-x-1/2 top-[-32px] z-[60]">
+                <button 
+                onClick={onFabClick}
+                disabled={appState === AppState.ANALYZING}
+                className={`flex items-center justify-center gap-2 transition-all duration-300 ease-out transform ${fab.className}`}
+                style={{ minWidth: fab.label ? '140px' : '64px' }} 
+                >
+                {fab.icon}
+                {fab.label && (
+                    <span className="text-white font-bold text-sm tracking-wide whitespace-nowrap animate-fade-in">
+                    {fab.label}
+                    </span>
+                )}
+                </button>
+            </div>
+          ) : (
+            // Placeholder invisível para manter espaçamento no mobile
+            <div className="w-12 h-12"></div>
+          )}
 
-          {/* Direita - Histórico */}
           <NavItem 
-            icon={<History size={24} />} 
+            icon={<PenTool size={22} />} 
+            active={currentView === 'MOCKUP'} 
+            onClick={() => onViewChange('MOCKUP')}
+            isMobile
+          />
+
+          <NavItem 
+            icon={<History size={22} />} 
             active={currentView === 'HISTORY'} 
             onClick={() => onViewChange('HISTORY')}
             isMobile
           />
       </div>
 
-      {/* Bottom Actions (Desktop) */}
+      {/* Bottom Actions */}
       <div className="hidden md:flex flex-col gap-6">
         {showInstallButton && (
           <button 

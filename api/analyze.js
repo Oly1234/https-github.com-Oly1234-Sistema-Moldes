@@ -20,26 +20,128 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
+    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns } = req.body;
     
     // --- GESTÃO DE CHAVES DE SEGURANÇA ---
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
 
     if (!apiKey) {
-        console.error("CRITICAL: Nenhuma chave encontrada.");
-        return res.status(500).json({ 
-            error: "Erro de Configuração: Chave de API não encontrada." 
-        });
-    } else {
-        let sourceVar = "DESCONHECIDA";
-        if (process.env.MOLDESOK) sourceVar = "MOLDESOK";
-        else if (process.env.MOLDESKEY) sourceVar = "MOLDESKEY";
-        else if (process.env.API_KEY) sourceVar = "API_KEY";
-        console.log(`System: Autenticado via ${sourceVar} (Final ...${apiKey.slice(-4)})`);
+        return res.status(500).json({ error: "Erro de Configuração: Chave de API não encontrada." });
     }
 
-    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 (GLOBAL SEARCH PROTOCOL) ---
+    // ==========================================================================================
+    // ROTA 1: DESCRIÇÃO DE ESTAMPA (VISION TO PROMPT - REVERSE ENGINEERING)
+    // ==========================================================================================
+    if (action === 'DESCRIBE_PATTERN') {
+        const visionEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        
+        // Prompt Direto e Robusto para Visão
+        const directVisionPrompt = `
+          As a Senior Textile Designer, analyze this image to create a high-fidelity text-to-image prompt.
+          
+          Your goal is to describe this pattern so an AI can recreate it perfectly as a seamless texture.
+          
+          1. DETECT STYLE: (e.g., Watercolor, Oil Painting, Vector, Ukiyo-e, Batik, etc).
+          2. DETECT ELEMENTS: (e.g., Pink Hibiscus, Geometric Triangles, Gold Foil lines).
+          3. DETECT BACKGROUND: (Color and texture).
+          
+          OUTPUT FORMAT:
+          Provide ONLY the raw prompt string.
+          Start strictly with: "Seamless textile pattern design, [Style], [Elements]..."
+          Include keywords: "flat lay, 8k resolution, fabric texture, highly detailed, infinite repeat".
+        `;
+
+        const visionPayload = {
+            contents: [{
+                parts: [
+                    { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } },
+                    { text: directVisionPrompt }
+                ]
+            }],
+            generation_config: {
+                temperature: 0.2, // Baixa temperatura para maior precisão descritiva
+                max_output_tokens: 300
+            }
+        };
+
+        const visionRes = await fetch(visionEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(visionPayload)
+        });
+
+        if (!visionRes.ok) {
+            const errText = await visionRes.text();
+            throw new Error(`Vision API Error: ${errText}`);
+        }
+        
+        const visionData = await visionRes.json();
+        const candidate = visionData.candidates?.[0];
+        
+        if (candidate?.finishReason === 'SAFETY') {
+             throw new Error("A imagem foi bloqueada pelos filtros de segurança. Tente uma imagem diferente.");
+        }
+
+        const description = candidate?.content?.parts?.[0]?.text;
+
+        if (!description) {
+            throw new Error("A IA não conseguiu descrever a imagem. Tente novamente.");
+        }
+
+        return res.status(200).json({ success: true, description: description.trim() });
+    }
+
+    // ==========================================================================================
+    // ROTA 2: GERAÇÃO DE ESTAMPAS (TEXT TO IMAGE - FACTORY)
+    // ==========================================================================================
+    if (action === 'GENERATE_PATTERN') {
+        const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+        
+        // Injeção de qualidade forçada
+        const qualityBoost = " . High quality commercial textile print, seamless repeating pattern, flat lighting, 8k resolution, highly detailed, fabric texture.";
+        const finalPrompt = prompt + qualityBoost;
+        
+        const payload = {
+            contents: [{ parts: [{ text: finalPrompt }] }],
+            generation_config: {
+                response_mime_type: "image/jpeg",
+                // Flash Image não usa aspect_ratio no config da API REST da mesma forma que o SDK as vezes,
+                // mas podemos tentar garantir via prompt keywords. 
+                // Nota: gemini-2.5-flash-image devolve quadrado por padrao se não especificado.
+            }
+        };
+
+        const googleResponse = await fetch(imageEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!googleResponse.ok) {
+            const err = await googleResponse.text();
+            throw new Error(`Erro na Geração de Estampa: ${err}`);
+        }
+
+        const data = await googleResponse.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(p => p.inline_data);
+        
+        if (!imagePart) {
+             throw new Error("A IA recusou a geração (Safety Filter). Tente descrever de forma menos específica.");
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` 
+        });
+    }
+
+    // ==========================================================================================
+    // ROTA 3: ANÁLISE TÉCNICA DE ROUPAS (PADRÃO)
+    // ==========================================================================================
+    
+    // --- PROMPT MESTRE VINGI INDUSTRIAL v5.3 ---
     const MASTER_SYSTEM_PROMPT = `
 ACT AS: VINGI SENIOR PATTERN ENGINEER (AI LEVEL 5).
 MISSION: REVERSE ENGINEER CLOTHING INTO COMMERCIAL SEWING PATTERNS GLOBALLY.
@@ -168,7 +270,6 @@ RESPONSE FORMAT (JSON ONLY):
         4. GENERATE 45 Patterns (15 Exact, 15 Close, 15 Vibe).
         ${JSON_SCHEMA_PROMPT}`;
 
-    // --- LÓGICA DE EXCLUSÃO (MANTIDA POR PRECAUÇÃO, MAS MENOS USADA COM BATCHING) ---
     if (excludePatterns && Array.isArray(excludePatterns) && excludePatterns.length > 0) {
         const ignoredList = excludePatterns.join(', ');
         promptText += `\n\nEXCLUSION FILTER ACTIVE:
@@ -197,28 +298,13 @@ RESPONSE FORMAT (JSON ONLY):
 
     if (!googleResponse.ok) {
         const errorText = await googleResponse.text();
-        console.error("Gemini API Error Status:", googleResponse.status);
-        console.error("Gemini API Error Details:", errorText);
-        
-        if (googleResponse.status === 400 && errorText.includes('API_KEY_INVALID')) {
-             throw new Error("CRÍTICO: A chave (MOLDESOK) é inválida.");
-        }
-        if (googleResponse.status === 403) {
-             throw new Error("CRÍTICO: Chave bloqueada.");
-        }
-        if (googleResponse.status === 429) {
-             throw new Error("Tráfego intenso. Aguarde 30 segundos.");
-        }
-
-        throw new Error(`Google API Error (${googleResponse.status})`);
+        throw new Error(`Google API Error (${googleResponse.status}): ${errorText}`);
     }
 
     const data = await googleResponse.json();
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    if (!generatedText) {
-        throw new Error("A IA analisou a imagem mas não gerou texto.");
-    }
+    if (!generatedText) throw new Error("A IA analisou a imagem mas não gerou texto.");
 
     let cleanText = generatedText.trim();
     if (cleanText.startsWith('```')) {
