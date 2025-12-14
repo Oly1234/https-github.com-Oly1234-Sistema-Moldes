@@ -22,12 +22,11 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, targetUrl, backupSearchTerm } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, targetUrl, backupSearchTerm, userReferenceImage } = req.body;
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
     
     // --- MOTOR DE SCRAPING HÍBRIDO (GET_LINK_PREVIEW) ---
-    // Mantido e otimizado para usar o termo contextual
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
         
@@ -41,7 +40,7 @@ export default async function handler(req, res) {
 
         const fetchHtml = async (url) => {
             const controller = new AbortController();
-            setTimeout(() => controller.abort(), 10000); 
+            setTimeout(() => controller.abort(), 8000); 
             try {
                 const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -51,42 +50,116 @@ export default async function handler(req, res) {
             }
         };
 
-        const fallbackToImageSearch = async (term) => {
-            if (!term) return null;
-            
-            // LIMPEZA E CONTEXTO ESPECÍFICO
-            // A query agora inclui o nome do site (vinda do backupSearchTerm) para tentar achar imagens daquele site no Bing.
-            // Removemos 'sewing pattern' da string bruta se ela já estiver lá para evitar duplicação
+        // SUB-FUNÇÃO: Coleta MÚLTIPLOS candidatos do Bing
+        const fetchCandidatesFromBing = async (term) => {
+            if (!term) return [];
             let cleanTerm = term.replace(/sewing pattern/gi, '').trim();
-            
-            // Query Contextual: "Burda Style Mini Dress Pattern"
-            // Isso aumenta a chance de achar a imagem correta mesmo no Bing
-            const query = `${cleanTerm} sewing pattern -car -vehicle -auto -wheel -machine`;
-            
+            // Reforça termos de moda e nega veículos
+            const query = `${cleanTerm} sewing pattern clothing garment -car -vehicle -auto -wheel -machine`;
             const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
             const html = await fetchHtml(searchUrl);
-            if (!html) return null;
-            
-            const murlMatch = html.match(/&quot;murl&quot;:&quot;(https?:\/\/[^&]+)&quot;/);
-            if (murlMatch) return murlMatch[1];
-            
-            const murlMatch2 = html.match(/"murl":"(https?:\/\/[^"]+)"/);
-            if (murlMatch2) return murlMatch2[1];
+            if (!html) return [];
 
-            const imgMatch = html.match(/src="(https:\/\/tse\d\.mm\.bing\.net\/th\?id=[^"]+)"/);
-            if (imgMatch) return imgMatch[1];
+            const candidates = [];
+            // Regex para capturar murl (URL da imagem) e t (Título/Contexto)
+            // Bing estrutura: murl:"url", ..., t:"Título"
+            const regex = /murl&quot;:&quot;(https?:\/\/[^&]+)&quot;.*?&quot;t&quot;:&quot;([^&]+)&quot;/g;
+            let match;
+            let count = 0;
+            
+            // Tenta o formato encoded
+            while ((match = regex.exec(html)) !== null && count < 8) {
+                candidates.push({ url: match[1], title: match[2] });
+                count++;
+            }
 
-            return null;
+            // Fallback para formato JSON limpo
+            if (candidates.length === 0) {
+                 const regex2 = /"murl":"(https?:\/\/[^"]+)".*?"t":"([^"]+)"/g;
+                 while ((match = regex2.exec(html)) !== null && count < 8) {
+                    candidates.push({ url: match[1], title: match[2] });
+                    count++;
+                }
+            }
+
+            // Fallback bruto (apenas URLs)
+            if (candidates.length === 0) {
+                 const imgMatch = html.match(/src="(https:\/\/tse\d\.mm\.bing\.net\/th\?id=[^"]+)"/g);
+                 if (imgMatch) {
+                     imgMatch.slice(0, 5).forEach(src => {
+                         const cleanSrc = src.replace('src="', '').replace('"', '');
+                         candidates.push({ url: cleanSrc, title: "Bing Image Result" });
+                     });
+                 }
+            }
+            
+            return candidates;
+        };
+
+        // SUB-FUNÇÃO: AI Visual Re-Ranking (O Juiz)
+        const selectBestMatchAI = async (candidates, userRefImage) => {
+            if (!candidates || candidates.length === 0) return null;
+            if (!userRefImage || !apiKey) return candidates[0].url; // Sem ref, retorna o primeiro
+
+            try {
+                // Prepara o prompt para o Gemini julgar
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                
+                const candidatesText = candidates.map((c, i) => `ID ${i}: [TITLE: ${c.title}]`).join('\n');
+                
+                const JUDGE_PROMPT = `
+                TASK: Visual Curator.
+                INPUT: 1 Reference Image (User's Garment) + List of Search Results (Titles).
+                GOAL: Select the ID of the image that BEST matches the garment style/category.
+                
+                CRITICAL RULES:
+                1. ELIMINATE CARS (Mini Cooper), VEHICLES, FURNITURE. 
+                2. Prioritize 'Pattern', 'Sewing', 'Dress', 'Clothing' in titles.
+                3. Match the visual vibe of the reference image.
+                
+                CANDIDATES:
+                ${candidatesText}
+                
+                OUTPUT JSON ONLY: { "bestId": 0 }
+                `;
+
+                // Enviamos a imagem de referência (pequena) + texto dos candidatos
+                // Nota: Não enviamos as URLs das imagens candidatas para o Gemini baixar (lento/bloqueio),
+                // usamos o TÍTULO/CONTEXTO para filtrar semanticamente (ex: "Mini Cooper" vs "Mini Dress")
+                // e a imagem de referência para dar o contexto visual do que estamos procurando.
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: JUDGE_PROMPT },
+                            { inline_data: { mime_type: "image/jpeg", data: userRefImage } } // userRefImage já vem limpa do frontend
+                        ]
+                    }],
+                    generation_config: { response_mime_type: "application/json" }
+                };
+
+                const response = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                const decision = JSON.parse(cleanJson(text));
+                
+                const bestIndex = decision.bestId !== undefined ? decision.bestId : 0;
+                return candidates[bestIndex] ? candidates[bestIndex].url : candidates[0].url;
+
+            } catch (e) {
+                console.error("AI Judging failed, using first result", e);
+                return candidates[0].url;
+            }
         };
 
         try {
             let imageUrl = null;
             const isSearchPage = targetUrl.includes('/search') || targetUrl.includes('google.com') || targetUrl.includes('bing.com');
             
+            // Tenta pegar imagem oficial primeiro
             if (!isSearchPage) {
                 const html = await fetchHtml(targetUrl);
                 if (html) {
-                    const jsonLdRegex = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
+                     const jsonLdRegex = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
                     let match;
                     while ((match = jsonLdRegex.exec(html)) !== null) {
                         try {
@@ -105,17 +178,25 @@ export default async function handler(req, res) {
                         const og = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
                         if (og) imageUrl = og[1];
                     }
-                    if (!imageUrl) {
-                        if (targetUrl.includes('etsy')) {
-                            const etsy = html.match(/src="(https:\/\/i\.etsystatic\.com\/[^"]+il_[^"]+\.jpg)"/i);
-                            if (etsy) imageUrl = etsy[1];
-                        }
+                    if (!imageUrl && targetUrl.includes('etsy')) {
+                         const etsy = html.match(/src="(https:\/\/i\.etsystatic\.com\/[^"]+il_[^"]+\.jpg)"/i);
+                         if (etsy) imageUrl = etsy[1];
                     }
                 }
             }
 
+            // SE NÃO ACHOU OFICIAL OU É PÁGINA DE BUSCA -> USA O JUIZ VISUAL
             if (!imageUrl && backupSearchTerm) {
-                imageUrl = await fallbackToImageSearch(backupSearchTerm);
+                const candidates = await fetchCandidatesFromBing(backupSearchTerm);
+                if (candidates.length > 0) {
+                    if (userReferenceImage && apiKey) {
+                        // Usa IA para escolher a melhor entre as candidatas
+                        imageUrl = await selectBestMatchAI(candidates, userReferenceImage);
+                    } else {
+                        // Fallback simples
+                        imageUrl = candidates[0].url;
+                    }
+                }
             }
 
             if (imageUrl) {
@@ -174,7 +255,7 @@ export default async function handler(req, res) {
         } catch (e) { return res.status(500).json({ error: "Vision Failed" }); }
     }
 
-    // --- ROTA PRINCIPAL: SCANNER DE MOLDES (INTELECTO REFINADO) ---
+    // --- ROTA PRINCIPAL: SCANNER DE MOLDES (MASSIVE SEARCH) ---
     if (action === 'SCAN_CLOTHING' || !action) { 
         if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
         
@@ -183,15 +264,19 @@ export default async function handler(req, res) {
         ACT AS: Senior Pattern Maker & Fashion Tech Expert.
         TASK: Analyze the garment in the image to find the EXACT sewing pattern online.
         
-        CRITICAL: Identify the specific attributes (Silhouette + Neckline + Sleeve + Length + Details).
+        CRITICAL: Identify attributes for technical specification.
         
         OUTPUT JSON:
         {
-          "patternName": "Technical Name (e.g. 'Milkmaid Bodice Mini Dress', 'Wide Leg Pleated Trousers')",
+          "patternName": "Technical Name (e.g. 'Milkmaid Bodice Mini Dress')",
           "technicalDna": { 
              "silhouette": "Specific Silhouette (e.g. A-Line, Bodycon, Boxy)", 
              "neckline": "Specific Neckline (e.g. Square, Cowl, Sweetheart)",
-             "details": "Key construction details (e.g. Puff sleeves, Darted bodice)"
+             "sleeve": "Sleeve Type (e.g. Puff, Raglan, Sleeveless)",
+             "length": "Length (e.g. Mini, Midi, Floor-Length)",
+             "fit": "Fit Type (e.g. Oversized, Fitted, Bias Cut)",
+             "fabric": "Best Fabric Suggestion (e.g. Linen, Silk Charmeuse, Heavy Cotton)",
+             "details": "Key construction details"
           },
           "searchQuery": "Highly descriptive search string optimized for search engines. Combine all details. (e.g. 'Square neck puff sleeve bodycon mini dress sewing pattern')"
         }
@@ -208,50 +293,66 @@ export default async function handler(req, res) {
         const text = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
         let analysis = JSON.parse(cleanJson(text));
         
-        // 2. Lógica de Busca Aprimorada
-        // Usamos a 'searchQuery' (cauda longa) gerada pela IA, não apenas o nome simples.
+        // 2. LOGICA DE MATRIZ DE LOJAS
         const mainQuery = analysis.searchQuery || `${analysis.patternName} sewing pattern`;
         const shortName = analysis.patternName;
 
-        // Função de Link Refinada: Inclui o NOME DA LOJA no termo de backup
-        // Isso força o Bing Images a achar uma imagem visualmente coerente com a loja (ex: "Burda Style dress").
         const createRealLink = (source, type, urlBase, termQuery, score) => ({
             source,
-            patternName: shortName, // Nome legível no Card
+            patternName: shortName, 
             type: type,
             linkType: "SEARCH_QUERY",
             url: `${urlBase}${encodeURIComponent(termQuery)}`,
-            
-            // TRUQUE VISUAL: O termo de backup inclui a FONTE. 
-            // Se o site oficial falhar, o Bing busca "Burda Style Square Neck Dress Pattern"
-            // Isso aumenta drasticamente a chance da miniatura parecer com o site original.
             backupSearchTerm: `${source} ${termQuery}`, 
-            
             similarityScore: score,
             imageUrl: null 
         });
 
-        // Usamos a query detalhada para todos os motores de busca
+        // Matriz de Fontes Globais
+        const stores = [
+            // Exact / Paid
+            { name: "Etsy Global", type: "PAGO", url: "https://www.etsy.com/search?q=", group: "exact", boost: 0 },
+            { name: "Burda Style", type: "PAGO", url: "https://www.burdastyle.com/catalogsearch/result/?q=", group: "exact", boost: 0 },
+            { name: "Vikisews", type: "PREMIUM", url: "https://vikisews.com/search/?q=", group: "exact", boost: 0 },
+            { name: "Simplicity", type: "CLASSICO", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: -5 },
+            
+            // Indie / Close
+            { name: "The Fold Line", type: "INDIE", url: "https://thefoldline.com/?s=", group: "close", boost: 0 },
+            { name: "Makerist", type: "INDIE", url: "https://www.makerist.com/search?q=", group: "close", boost: 0 },
+            { name: "Mood Fabrics", type: "GRATIS", url: "https://www.moodfabrics.com/blog/?s=", group: "close", boost: -5 },
+            { name: "Something Delightful", type: "BIG4", url: "https://somethingdelightful.com/search.php?search_query=", group: "close", boost: -5 },
+            
+            // Adventurous / General
+            { name: "Google Shopping", type: "GERAL", url: "https://www.google.com/search?tbm=shop&q=", group: "adventurous", boost: 0 },
+            { name: "Pinterest", type: "INSPIRACAO", url: "https://www.pinterest.com/search/pins/?q=", group: "adventurous", boost: -5 },
+            { name: "Youtube", type: "VIDEO", url: "https://www.youtube.com/results?search_query=sewing+pattern+", group: "adventurous", boost: -10 },
+            { name: "Sew Direct", type: "UK", url: "https://www.sewdirect.com/?s=", group: "close", boost: -2 },
+            { name: "Grasser", type: "RUSSO", url: "https://en-grasser.com/search/?q=", group: "exact", boost: -2 },
+            { name: "Peppermint Mag", type: "GRATIS", url: "https://peppermintmag.com/?s=", group: "close", boost: -5 }
+        ];
+
         const matches = {
-            exact: [
-                createRealLink("Etsy Global", "PAGO", "https://www.etsy.com/search?q=", mainQuery, 98),
-                createRealLink("Burda Style", "PAGO", "https://www.burdastyle.com/catalogsearch/result/?q=", mainQuery, 95),
-                createRealLink("Vikisews", "PREMIUM", "https://vikisews.com/search/?q=", mainQuery, 92),
-            ],
-            close: [
-                createRealLink("Makerist", "INDIE", "https://www.makerist.com/search?q=", mainQuery, 88),
-                createRealLink("The Fold Line", "INDIE", "https://thefoldline.com/?s=", mainQuery, 85),
-                createRealLink("Google Shopping", "GERAL", "https://www.google.com/search?tbm=shop&q=", mainQuery, 80),
-            ],
-            adventurous: [
-                createRealLink("Pinterest Ideas", "INSPIRACAO", "https://www.pinterest.com/search/pins/?q=", `${mainQuery} outfit`, 75),
-                createRealLink("Youtube Tutorials", "VIDEO", "https://www.youtube.com/results?search_query=", `How to sew ${shortName}`, 70)
-            ]
+            exact: [],
+            close: [],
+            adventurous: []
         };
+
+        stores.forEach(store => {
+            let score = 95 + store.boost;
+            if (store.group === 'close') score = 85 + store.boost;
+            if (store.group === 'adventurous') score = 75 + store.boost;
+
+            const link = createRealLink(store.name, store.type, store.url, mainQuery, score);
+            matches[store.group].push(link);
+
+            if (['Etsy Global', 'The Fold Line'].includes(store.name)) {
+                matches[store.group].push(createRealLink(store.name + " (Variação)", store.type, store.url, `${shortName} sewing pattern`, score - 2));
+            }
+        });
 
         return res.status(200).json({
             patternName: analysis.patternName,
-            technicalDna: analysis.technicalDna,
+            technicalDna: analysis.technicalDna, 
             matches: matches,
             curatedCollections: [],
             recommendedResources: []

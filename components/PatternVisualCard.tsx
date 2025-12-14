@@ -1,23 +1,44 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ExternalLink, ArrowRightCircle, Search, ShoppingBag } from 'lucide-react';
+import { ExternalLink, ArrowRightCircle, Search, ShoppingBag, Check } from 'lucide-react';
 import { ExternalPatternMatch } from '../types';
 
 // --- HELPERS VISUAIS ---
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-// Proxy visual para garantir que imagens extraídas carreguem (evita bloqueio de hotlink no frontend)
 const getProxyUrl = (url: string) => `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=400&h=400&fit=cover&a=top&output=webp`;
 
-// Cache Simples em Memória para evitar re-requests na mesma sessão
+// Cache Simples
 const imgCache = new Map<string, string>();
 
-export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ match }) => {
+interface PatternVisualCardProps {
+    match: ExternalPatternMatch;
+    userReferenceImage?: string | null; // Novo: Imagem do usuário para comparação
+}
+
+// Helper para criar miniatura leve da referência para enviar na API (economiza banda)
+const createTinyRef = async (base64: string): Promise<string | null> => {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.src = base64;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const scale = 200 / Math.max(img.width, img.height); // Max 200px é suficiente para IA reconhecer forma/cor
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // Retorna apenas a parte base64 sem o prefixo data url para a API
+            resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]); 
+        };
+        img.onerror = () => resolve(null);
+    });
+};
+
+export const PatternVisualCard: React.FC<PatternVisualCardProps> = ({ match, userReferenceImage }) => {
     if (!match) return null;
 
     const safeUrl = match.url;
     const initialImage = (match.imageUrl && match.imageUrl.length > 10) ? match.imageUrl : null;
-    
-    // Preparação do termo de backup para busca visual
     const backupTerm = match.backupSearchTerm || match.patternName.replace('Busca: ', '');
 
     const [displayImage, setDisplayImage] = useState<string | null>(initialImage);
@@ -29,7 +50,6 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
     try { if (safeUrl) domain = new URL(safeUrl).hostname; } catch (e) { domain = 'google.com'; }
     const primaryIcon = getBrandIcon(domain);
 
-    // Observer para carregar a imagem apenas quando o card aparecer na tela
     useEffect(() => {
         const observer = new IntersectionObserver(([entry]) => {
             if (entry.isIntersecting) { setIsVisible(true); observer.disconnect(); }
@@ -38,7 +58,6 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
         return () => observer.disconnect();
     }, []);
 
-    // Scraping Trigger
     useEffect(() => {
         if (!isVisible || initialImage || !safeUrl) return;
         
@@ -52,15 +71,20 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
 
         const fetchScrapedImage = async () => {
             try {
-                // Chama nosso "Smart Scraper" no Backend
-                // Envia a URL alvo E o termo de backup. Se a URL falhar, o backend busca imagem do termo.
+                // Prepara a imagem de referência leve (se existir)
+                let tinyRef = null;
+                if (userReferenceImage) {
+                    tinyRef = await createTinyRef(userReferenceImage);
+                }
+
                 const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         action: 'GET_LINK_PREVIEW', 
                         targetUrl: safeUrl,
-                        backupSearchTerm: backupTerm 
+                        backupSearchTerm: backupTerm,
+                        userReferenceImage: tinyRef // Envia para o Juiz Visual
                     })
                 });
                 const data = await res.json();
@@ -69,8 +93,6 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
                     if (data.success && data.image) {
                         imgCache.set(safeUrl, data.image);
                         setDisplayImage(getProxyUrl(data.image));
-                    } else {
-                        // Se falhar tudo, mantém o null (que mostrará o ícone no render)
                     }
                 }
             } catch (e) {
@@ -80,27 +102,26 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
             }
         };
 
-        // Pequeno delay aleatório para evitar bombardear o backend
-        const timeout = setTimeout(fetchScrapedImage, Math.random() * 800);
+        const timeout = setTimeout(fetchScrapedImage, Math.random() * 1000); // Spread requests
         return () => { active = false; clearTimeout(timeout); };
-    }, [isVisible, safeUrl, initialImage, backupTerm]);
+    }, [isVisible, safeUrl, initialImage, backupTerm, userReferenceImage]);
 
     return (
         <div ref={cardRef} onClick={() => safeUrl && window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full animate-fade-in relative min-h-[260px]">
             <div className="overflow-hidden relative border-b border-gray-100 flex items-center justify-center h-48 bg-gray-50">
-                {/* Loader Overlay */}
                 {loading && (
                     <div className="absolute inset-0 bg-gray-100/50 flex items-center justify-center z-10 backdrop-blur-[1px]">
-                        <div className="w-4 h-4 border-2 border-vingi-500 border-t-transparent rounded-full animate-spin"></div>
+                        <div className="flex flex-col items-center gap-2">
+                             <div className="w-4 h-4 border-2 border-vingi-500 border-t-transparent rounded-full animate-spin"></div>
+                             <span className="text-[8px] font-bold text-vingi-400 animate-pulse">AI CURATION</span>
+                        </div>
                     </div>
                 )}
                 
-                {/* Imagem Principal ou Fallback para Ícone */}
                 <img 
                     src={displayImage || primaryIcon} 
                     alt={match.source} 
                     onError={(e) => {
-                        // Se a imagem extraída falhar ao carregar, volta para o ícone
                         e.currentTarget.src = primaryIcon;
                         e.currentTarget.classList.add('p-12', 'opacity-30', 'grayscale');
                         e.currentTarget.classList.remove('object-cover');
@@ -109,7 +130,6 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
                     className={`transition-all duration-700 w-full h-full ${displayImage ? 'object-cover group-hover:scale-105' : 'object-contain p-12 opacity-30 grayscale mix-blend-multiply'}`}
                 />
                 
-                {/* Badge de Busca */}
                 <div className="absolute top-2 left-2 z-20">
                      {match.linkType === 'SEARCH_QUERY' ? (
                          <span className="bg-blue-600/90 text-white text-[9px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm backdrop-blur-sm"><Search size={8}/> BUSCA</span>

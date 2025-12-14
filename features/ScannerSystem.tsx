@@ -7,10 +7,9 @@ import { PatternVisualCard } from '../components/PatternVisualCard';
 import { 
     UploadCloud, RefreshCw, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, 
     Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine,
-    Move, Minimize2, Maximize2, ZoomIn
+    Move, Minimize2, Maximize2, ZoomIn, Scissors, Ruler, Shirt, Info
 } from 'lucide-react';
 
-// --- MODAL FLUTUANTE 2.0 (DRAGGABLE & RESIZABLE REAL) ---
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); 
     const [size, setSize] = useState(180);
@@ -123,6 +122,15 @@ const FilterTab = ({ label, count, active, onClick, icon: Icon }: any) => (
     </button>
 );
 
+const SpecBadge = ({ label, value, icon: Icon }: any) => (
+    <div className="flex flex-col bg-white border border-gray-100 rounded-lg p-3 shadow-sm min-w-[120px]">
+        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1">
+            <Icon size={10} /> {label}
+        </span>
+        <span className="text-xs font-bold text-gray-800 capitalize leading-tight">{value || "N/A"}</span>
+    </div>
+);
+
 export const ScannerSystem: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.IDLE);
   const [result, setResult] = useState<PatternAnalysisResult | null>(null);
@@ -131,8 +139,6 @@ export const ScannerSystem: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  
-  // PAGINAÇÃO: Começa com 10
   const [visibleCount, setVisibleCount] = useState(10);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -186,7 +192,7 @@ export const ScannerSystem: React.FC = () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING);
     setErrorMsg(null);
-    setVisibleCount(10); // Reset para 10
+    setVisibleCount(10); 
     
     setTimeout(async () => {
         try {
@@ -228,13 +234,12 @@ export const ScannerSystem: React.FC = () => {
     if (state === AppState.IDLE && !uploadedImage) { cameraInputRef.current?.click(); }
   };
 
-  // Safe Accessors
   const exactMatches = result?.matches?.exact || [];
   const closeMatches = result?.matches?.close || [];
   const vibeMatches = result?.matches?.adventurous || [];
   
   const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches]
-        .filter(m => m && typeof m === 'object' && m.patternName); // Extra safety check
+        .filter(m => m && typeof m === 'object' && m.patternName); 
 
   const getFilteredMatches = () => {
       switch(activeTab) {
@@ -373,74 +378,66 @@ export const ScannerSystem: React.FC = () => {
             )}
             {state === AppState.SUCCESS && result && (
                 <div className="animate-fade-in space-y-8 pb-20">
-                {uploadedImage && (
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-6 flex flex-col md:flex-row gap-6 items-start">
-                         <img src={uploadedImage} className="w-24 h-32 object-cover rounded-lg shadow-md border border-gray-100" />
-                         <div className="flex-1">
-                             <div className="flex items-center gap-2 mb-2">
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wide">Identificado</span>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col md:flex-row">
+                        <div className="w-full md:w-1/3 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-6 flex items-center justify-center">
+                            {uploadedImage && <img src={uploadedImage} className="max-h-64 object-contain rounded-lg shadow-md mix-blend-multiply" />}
+                        </div>
+                        <div className="flex-1 p-6">
+                             <div className="mb-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="px-2 py-0.5 bg-vingi-900 text-white text-[10px] font-bold rounded uppercase tracking-wide">Identificado</span>
+                                </div>
+                                <h2 className="text-3xl font-bold text-gray-900 mb-1">{result.patternName}</h2>
+                                <p className="text-sm text-gray-500 max-w-xl">{result.technicalDna.silhouette} with {result.technicalDna.neckline} and {result.technicalDna.sleeve}</p>
                              </div>
-                             <h2 className="text-2xl font-bold text-gray-900 mb-2">{result.patternName}</h2>
-                             <div className="flex flex-wrap gap-2 text-sm text-gray-600">
-                                <span className="bg-gray-50 border border-gray-200 px-3 py-1 rounded-full font-medium">{result.technicalDna.silhouette}</span>
-                                <span className="bg-gray-50 border border-gray-200 px-3 py-1 rounded-full font-medium">{result.technicalDna.neckline}</span>
+                             
+                             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Info size={12}/> Especificações Técnicas</h4>
+                             <div className="flex flex-wrap gap-3">
+                                 <SpecBadge label="Silhueta" value={result.technicalDna.silhouette} icon={Scissors} />
+                                 <SpecBadge label="Decote" value={result.technicalDna.neckline} icon={Shirt} />
+                                 <SpecBadge label="Comprimento" value={result.technicalDna.length} icon={Ruler} />
+                                 <SpecBadge label="Tecido" value={result.technicalDna.fabric} icon={Layers} />
+                                 <SpecBadge label="Ajuste" value={result.technicalDna.fit} icon={Move} />
                              </div>
-                         </div>
-                    </div>
-                )}
-                <div className="flex items-center justify-between overflow-x-auto pb-2">
-                    <h3 className="text-lg font-bold text-gray-800 mr-4">Resultados ({filteredData.length})</h3>
-                    <div className="flex gap-2">
-                        <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => setActiveTab('ALL')} icon={Layers} />
-                        <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => setActiveTab('EXACT')} icon={CheckCircle2} />
-                        <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => setActiveTab('CLOSE')} icon={Sparkles} />
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {visibleData.map((match, i) => (
-                        match ? <PatternVisualCard key={i} match={match} /> : null
-                    ))}
-                </div>
-                {visibleCount < filteredData.length && (
-                    <div className="mt-8 flex justify-center flex-col items-center">
-                        <p className="text-xs text-gray-400 mb-2">Exibindo {visibleCount} de {filteredData.length} resultados</p>
-                        <button 
-                            onClick={() => setVisibleCount(p => p + 10)} 
-                            className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all transform hover:-translate-y-1"
-                        >
-                            Carregar Mais Moldes (+10)
-                        </button>
-                    </div>
-                )}
-                {result.curatedCollections && result.curatedCollections.length > 0 && (
-                    <div className="mt-12 bg-gray-50 p-8 rounded-2xl border border-gray-200 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-vingi-100 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2"></div>
-                        <h4 className="font-bold text-lg mb-6 flex items-center gap-2 relative z-10"><BookOpen size={20} className="text-vingi-600"/> Coleções Sugeridas (Links Inteligentes)</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
-                            {result.curatedCollections.map((coll, i) => (
-                                <a key={i} href={coll.searchUrl} target="_blank" className="bg-white p-5 rounded-xl border border-gray-200 hover:border-vingi-300 hover:shadow-lg transition-all flex flex-col group cursor-pointer">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <span className="text-[10px] font-bold bg-purple-50 text-purple-700 px-2 py-1 rounded uppercase tracking-wider">{coll.sourceName}</span>
-                                        <ExternalLink size={14} className="text-gray-300 group-hover:text-vingi-500 transition-colors"/>
-                                    </div>
-                                    <h5 className="font-bold text-gray-800 mb-1 group-hover:text-vingi-700 transition-colors">{coll.title}</h5>
-                                    <p className="text-xs text-gray-500 line-clamp-2 mb-3">{coll.description}</p>
-                                    <div className="mt-auto pt-3 border-t border-gray-50 flex items-center text-xs font-bold text-gray-400">
-                                        <ShoppingBag size={12} className="mr-1"/> {coll.itemCount}
-                                    </div>
-                                </a>
-                            ))}
                         </div>
                     </div>
-                )}
-                <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200">
-                    <h4 className="font-bold mb-4 flex items-center gap-2 text-sm text-gray-500 uppercase tracking-widest"><Globe size={14}/> Pesquisa Global Manual</h4>
-                    <div className="flex gap-2 flex-wrap">
-                        <ExternalSearchButton name="Google Imagens" url={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(strictQuery)}`} colorClass="bg-blue-600" icon={Globe} />
-                        <ExternalSearchButton name="Pinterest" url={`https://www.pinterest.com/search/pins/?q=${encodeURIComponent(strictQuery)}`} colorClass="bg-red-600" icon={Share2} />
-                        <ExternalSearchButton name="Etsy Global" url={`https://www.etsy.com/search?q=${encodeURIComponent(strictQuery + ' sewing pattern')}`} colorClass="bg-orange-500" icon={ShoppingBag} />
+
+                    <div className="flex items-center justify-between overflow-x-auto pb-2 sticky top-16 bg-[#f8fafc]/90 backdrop-blur z-20 py-2">
+                        <h3 className="text-lg font-bold text-gray-800 mr-4 whitespace-nowrap">Resultados ({filteredData.length})</h3>
+                        <div className="flex gap-2">
+                            <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => { setActiveTab('ALL'); setVisibleCount(10); }} icon={Layers} />
+                            <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => { setActiveTab('EXACT'); setVisibleCount(10); }} icon={CheckCircle2} />
+                            <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => { setActiveTab('CLOSE'); setVisibleCount(10); }} icon={Sparkles} />
+                        </div>
                     </div>
-                </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {visibleData.map((match, i) => (
+                            // Passamos uploadedImage para cada card para a curadoria IA
+                            match ? <PatternVisualCard key={i} match={match} userReferenceImage={uploadedImage} /> : null
+                        ))}
+                    </div>
+                    
+                    {visibleCount < filteredData.length && (
+                        <div className="mt-8 flex justify-center flex-col items-center">
+                            <p className="text-xs text-gray-400 mb-2">Exibindo {visibleCount} de {filteredData.length} resultados encontrados</p>
+                            <button 
+                                onClick={() => setVisibleCount(p => p + 10)} 
+                                className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all transform hover:-translate-y-1 flex items-center gap-2"
+                            >
+                                <Plus size={16}/> Carregar Mais (+10)
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200">
+                        <h4 className="font-bold mb-4 flex items-center gap-2 text-sm text-gray-500 uppercase tracking-widest"><Globe size={14}/> Pesquisa Global Manual</h4>
+                        <div className="flex gap-2 flex-wrap">
+                            <ExternalSearchButton name="Google Imagens" url={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(strictQuery)}`} colorClass="bg-blue-600" icon={Globe} />
+                            <ExternalSearchButton name="Pinterest" url={`https://www.pinterest.com/search/pins/?q=${encodeURIComponent(strictQuery)}`} colorClass="bg-red-600" icon={Share2} />
+                            <ExternalSearchButton name="Etsy Global" url={`https://www.etsy.com/search?q=${encodeURIComponent(strictQuery + ' sewing pattern')}`} colorClass="bg-orange-500" icon={ShoppingBag} />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

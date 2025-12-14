@@ -1,10 +1,11 @@
 
-
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
   sleeve: string;
-  fabricStructure: string;
+  length: string;      // Novo
+  fit: string;         // Novo
+  fabric: string;      // Novo
   designDetails: string[];
 }
 
@@ -35,10 +36,10 @@ export interface PatternPiece {
 }
 
 export interface CuratedCollection {
-  sourceName: string; // ex: "Etsy Vintage", "Burda Specials"
-  title: string; // ex: "Seleção de Vestidos Midi Envelope"
-  itemCount: string; // ex: "120+ opções"
-  searchUrl: string; // URL da busca pronta
+  sourceName: string; 
+  title: string; 
+  itemCount: string; 
+  searchUrl: string; 
   description: string;
   icon: 'SHOPPING' | 'VINTAGE' | 'MODERN' | 'FREE';
 }
@@ -84,7 +85,7 @@ export interface PatternAnalysisResult {
   smartSearchTerms: string[];
   matches: MatchGroups;
   curatedCollections: CuratedCollection[];
-  recommendedResources: RecommendedResource[]; // Lista rica de links profundos
+  recommendedResources: RecommendedResource[]; 
 }
 
 export interface ScanHistoryItem {
@@ -93,12 +94,12 @@ export interface ScanHistoryItem {
   patternName: string;
   dnaSummary: string;
   category: string;
-  thumbnailUrl?: string; // Opcional, pois não salvaremos base64 pesado no localstorage
+  thumbnailUrl?: string; 
 }
 
 export interface PantoneColor {
   name: string;
-  code: string; // ex: "19-4052 TCX"
+  code: string; 
   hex: string;
 }
 
