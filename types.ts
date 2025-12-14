@@ -1,5 +1,4 @@
 
-
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
@@ -96,6 +95,12 @@ export interface ScanHistoryItem {
   thumbnailUrl?: string; // Opcional, pois não salvaremos base64 pesado no localstorage
 }
 
+export interface PantoneColor {
+  name: string;
+  code: string; // ex: "19-4052 TCX"
+  hex: string;
+}
+
 export enum AppState {
   IDLE = 'IDLE',
   ANALYZING = 'ANALYZING',
@@ -103,4 +108,4 @@ export enum AppState {
   ERROR = 'ERROR'
 }
 
-export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP';
+export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP' | 'CREATOR';
