@@ -1,111 +1,47 @@
 
-// DEPARTAMENTO: AQUISIÇÃO DE DADOS (Scraper Rápido)
-// Responsabilidade: Buscar a melhor imagem REPRESENTATIVA para o link, sem bloquear o usuário.
+// DEPARTAMENTO: AQUISIÇÃO DE DADOS (Scraper Visual / TBN Proxy)
+// Responsabilidade: Buscar a imagem REPRESENTATIVA usando Inversão de Fluxo (Search Engine Proxy).
 
 export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType = 'CLOTHING', linkType = 'DIRECT') => {
     
-    const browserHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    // ESTRATÉGIA: BING THUMBNAIL PROXY (TBN)
+    // Documentação não oficial: https://tse{1-4}.mm.bing.net/th?q={QUERY}&w={W}&h={H}&c={MODE}...
+    // Isso evita 100% dos bloqueios de sites como Etsy/Burda, pois estamos pedindo a imagem ao Bing, não ao site.
+    
+    const generateBingProxyUrl = (term) => {
+        if (!term) return null;
+        const encodedTerm = encodeURIComponent(term.trim());
+        // c=7: Smart Crop (Foca no objeto)
+        // rs=1: Resize / Scale
+        // w=500, h=500: Tamanho ideal para o card
+        // p=0: Prioridade alta
+        // dpr=2: Alta densidade (Retina)
+        return `https://tse2.mm.bing.net/th?q=${encodedTerm}&w=500&h=500&c=7&rs=1&p=0&dpr=2&pid=1.7`;
     };
 
-    const fetchHtml = async (url) => {
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 5000); // Timeout agressivo (5s) para velocidade
+    // 1. SELEÇÃO DO TERMO DE BUSCA VISUAL
+    // Preferimos o backupSearchTerm pois ele foi otimizado pelo Dept. de Engenharia (ex: "Simplicity 8555 pattern envelope")
+    // Se não tiver, extraímos do nome do produto.
+    let searchTerm = backupSearchTerm;
+    
+    if (!searchTerm && targetUrl) {
+        // Fallback básico: tentar extrair algo da URL
         try {
-            const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
-            if (!response.ok) return null;
-            return await response.text();
-        } catch (e) { return null; }
-    };
-
-    const fetchCandidatesFromBing = async (term, specificDomain = null) => {
-        if (!term) return [];
-        let query = term.trim();
-        if (specificDomain) query += ` site:${specificDomain}`;
-
-        // Busca imagens com filtro de aspecto para evitar banners (aspect=Wide/Tall/Square)
-        // Usamos &first=1 para pegar os primeiros resultados
-        const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
-        const html = await fetchHtml(searchUrl);
-        if (!html) return [];
-
-        const candidates = [];
-        // Regex para extrair URL da imagem e Título
-        const regex = /murl&quot;:&quot;(https?:\/\/[^&]+)&quot;.*?&quot;t&quot;:&quot;([^&]+)&quot;/g;
-        let match;
-        let count = 0;
-        
-        while ((match = regex.exec(html)) !== null && count < 10) { 
-            const url = match[1];
-            const title = match[2];
-            // Filtros Heurísticos Rápidos (Substitui a IA Lenta)
-            const isLogo = /logo|banner|sprite|icon/i.test(title) || /logo|banner/i.test(url);
-            const isProduct = /dress|pattern|skirt|shirt|top|trousers|fabric|print/i.test(title);
-            
-            if (!isLogo) {
-                // Pontuação simples
-                let score = 0;
-                if (isProduct) score += 5;
-                if (url.includes('jpg') || url.includes('png')) score += 2;
-                
-                candidates.push({ url, title, score });
-                count++;
+            const urlObj = new URL(targetUrl);
+            const pathSegments = urlObj.pathname.split('/').filter(s => s.length > 3);
+            if (pathSegments.length > 0) {
+                searchTerm = pathSegments[pathSegments.length - 1].replace(/-/g, ' ');
             }
-        }
-        // Ordena por pontuação heurística
-        return candidates.sort((a, b) => b.score - a.score);
-    };
-
-    // --- LÓGICA DE EXECUÇÃO ---
-    let imageUrl = null;
-    let domain = '';
-    try { domain = new URL(targetUrl).hostname; } catch(e) {}
-
-    // 1. SELETORES DIRETOS (Rápido, se funcionar)
-    // Se não for busca genérica, tenta pegar do HTML da loja
-    const shouldScrapeDirect = linkType !== 'SEARCH_QUERY' && !targetUrl.includes('search');
-    
-    if (shouldScrapeDirect) {
-        const html = await fetchHtml(targetUrl);
-        if (html) {
-            const storeSelectors = [
-                { regex: /<meta property="og:image" content="([^"]+)"/i },
-                { regex: /<meta name="twitter:image" content="([^"]+)"/i },
-                { regex: /class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i }
-            ];
-            for (const s of storeSelectors) {
-                const match = html.match(s.regex);
-                if (match && match[1]) { imageUrl = match[1]; break; }
-            }
-        }
+        } catch(e) {}
     }
 
-    // 2. BUSCA VISUAL NO BING (Backup ou Principal para Busca)
-    // Se o método direto falhou ou se é uma página de busca
-    if (!imageUrl && backupSearchTerm) {
-        // Tenta buscar no Bing restringindo ao site da loja (ex: "vestido site:simplicity.com")
-        let candidates = [];
-        if (domain && !domain.includes('google')) {
-             candidates = await fetchCandidatesFromBing(backupSearchTerm, domain);
-        }
-        
-        // Se falhar, busca na web aberta
-        if (candidates.length === 0) {
-             candidates = await fetchCandidatesFromBing(backupSearchTerm, null);
-        }
-
-        if (candidates.length > 0) {
-            // Seleciona o melhor candidato baseado na heurística (Top 1)
-            imageUrl = candidates[0].url;
-        }
+    if (searchTerm) {
+        // Retorna DIRETAMENTE a URL do proxy. O frontend vai carregar a imagem.
+        // Não fazemos fetch no backend para economizar tempo e evitar timeout da Vercel.
+        return generateBingProxyUrl(searchTerm);
     }
 
-    // 3. LIMPEZA FINAL
-    if (imageUrl) {
-        imageUrl = imageUrl.replace(/&amp;/g, '&');
-        if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-    }
-    
-    return imageUrl;
+    // 2. FALLBACK EXTREMO (Se não tiver termo nenhum)
+    // Retorna null para o frontend usar o favicon ou placeholder
+    return null;
 };
