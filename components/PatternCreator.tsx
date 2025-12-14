@@ -232,7 +232,10 @@ export const PatternCreator: React.FC = () => {
                                         >
                                             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000)', backgroundSize: '4px 4px', backgroundPosition: '0 0, 2px 2px' }} />
                                         </div>
-                                        <span className="text-[9px] font-mono text-gray-500 truncate">{color.code.split(' ')[1]}</span>
+                                        {/* FIX CRÍTICO: Validação segura para evitar crash em códigos mal formatados */}
+                                        <span className="text-[9px] font-mono text-gray-500 truncate">
+                                            {color.code ? (color.code.includes(' ') ? color.code.split(' ')[1] : color.code) : 'N/A'}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
