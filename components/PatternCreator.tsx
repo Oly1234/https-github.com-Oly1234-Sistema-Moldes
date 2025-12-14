@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, Layers, ShoppingBag, Grid3X3, Target, Globe } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, Layers, ShoppingBag, Grid3X3, Target, Globe, Box, Maximize2, Feather } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -45,7 +45,6 @@ export const PatternCreator: React.FC = () => {
                 const res = ev.target?.result as string;
                 if (res) {
                     setReferenceImage(res);
-                    // Reset
                     setGeneratedPattern(null);
                     setDetectedColors([]);
                     setFabricMatches([]);
@@ -137,7 +136,7 @@ export const PatternCreator: React.FC = () => {
         <div className="flex flex-col h-full bg-[#f8fafc] overflow-hidden">
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                 
-                {/* ESQUERDA: LABORATÓRIO (CONTROLES) */}
+                {/* ESQUERDA: LABORATÓRIO */}
                 <div className="w-full md:w-[380px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 shadow-xl">
                     <div className="p-5 border-b border-gray-100 bg-gray-50/50 sticky top-0 backdrop-blur z-20">
                         <h2 className="text-lg font-bold text-vingi-900 flex items-center gap-2">
@@ -157,24 +156,42 @@ export const PatternCreator: React.FC = () => {
                         {referenceImage && (
                             <button onClick={analyzeReference} disabled={isAnalyzing} className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg">
                                 {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Grid3X3 size={16}/>} 
-                                {isAnalyzing ? 'Curadoria Digital...' : 'Buscar Estampas Reais'}
+                                {isAnalyzing ? 'Engenharia Têxtil...' : 'Decompor Estampa'}
                             </button>
                         )}
 
-                        {/* 2. DADOS TÉCNICOS */}
+                        {/* 2. DADOS TÉCNICOS DETALHADOS */}
                         {technicalSpecs && (
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2">
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
                                 <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><Target size={12}/> DNA de Superfície</h3>
                                 <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="bg-white p-2 rounded border border-gray-100">
-                                        <span className="block text-gray-400 text-[9px]">Repetição</span>
+                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
+                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Grid3X3 size={8}/> Repetição</span>
                                         <span className="font-bold text-gray-700">{technicalSpecs.repeat || 'N/A'}</span>
                                     </div>
-                                    <div className="bg-white p-2 rounded border border-gray-100">
-                                        <span className="block text-gray-400 text-[9px]">Motivo</span>
-                                        <span className="font-bold text-gray-700">{technicalSpecs.motif || 'N/A'}</span>
+                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
+                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Maximize2 size={8}/> Escala</span>
+                                        <span className="font-bold text-gray-700">{technicalSpecs.scale || 'N/A'}</span>
+                                    </div>
+                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
+                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Box size={8}/> Densidade</span>
+                                        <span className="font-bold text-gray-700">{technicalSpecs.density || 'N/A'}</span>
+                                    </div>
+                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
+                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Feather size={8}/> Técnica</span>
+                                        <span className="font-bold text-gray-700">{technicalSpecs.technique || 'N/A'}</span>
                                     </div>
                                 </div>
+                                {technicalSpecs.elements && (
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <span className="text-[9px] text-gray-400 block mb-1">Motivos Chave</span>
+                                        <div className="flex flex-wrap gap-1">
+                                            {technicalSpecs.elements.map((el: string, i: number) => (
+                                                <span key={i} className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[10px] text-gray-600">{el}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -203,7 +220,7 @@ export const PatternCreator: React.FC = () => {
                     </div>
                 </div>
 
-                {/* DIREITA: RESULTADOS (SPLIT VIEW) */}
+                {/* DIREITA: RESULTADOS */}
                 <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#e2e8f0]">
                     
                     {/* PARTE SUPERIOR: GERAÇÃO DIGITAL */}

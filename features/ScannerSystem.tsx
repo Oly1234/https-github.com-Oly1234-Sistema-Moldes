@@ -7,7 +7,7 @@ import { PatternVisualCard } from '../components/PatternVisualCard';
 import { 
     UploadCloud, RefreshCw, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, 
     Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine,
-    Move, Minimize2, Maximize2, ZoomIn, Scissors, Ruler, Shirt, Info
+    Move, Minimize2, Maximize2, ZoomIn, Scissors, Ruler, Shirt, Info, MousePointer2
 } from 'lucide-react';
 
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
@@ -18,6 +18,7 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     const dragOffset = useRef({ x: 0, y: 0 });
     const modalRef = useRef<HTMLDivElement>(null);
 
+    // Handlers otimizados para evitar "stuck state"
     const handleStart = (clientX: number, clientY: number) => {
         setIsDragging(true);
         dragOffset.current = { x: clientX - position.x, y: clientY - position.y };
@@ -27,31 +28,39 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
         if (!isDragging) return;
         let newX = clientX - dragOffset.current.x;
         let newY = clientY - dragOffset.current.y;
+        
+        // Limites da tela
         const maxX = window.innerWidth - size;
-        const maxY = window.innerHeight - (size * 1.5); 
+        const maxY = window.innerHeight - 50; 
+        
         setPosition({
             x: Math.max(0, Math.min(newX, maxX)),
             y: Math.max(0, Math.min(newY, maxY))
         });
     };
 
-    useEffect(() => {
-        const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
-        const onTouchMove = (e: TouchEvent) => handleMove(e.touches[0].clientX, e.touches[0].clientY);
-        const onEnd = () => setIsDragging(false);
+    const handleEnd = () => {
+        setIsDragging(false);
+    };
 
+    // Attach global listeners to window to ensure we catch 'mouseup' even outside the div
+    useEffect(() => {
         if (isDragging) {
-            window.addEventListener('mousemove', onMouseMove);
-            window.addEventListener('mouseup', onEnd);
+            const onMouseMove = (e: MouseEvent) => { e.preventDefault(); handleMove(e.clientX, e.clientY); };
+            const onTouchMove = (e: TouchEvent) => { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); };
+            
+            window.addEventListener('mousemove', onMouseMove, { passive: false });
             window.addEventListener('touchmove', onTouchMove, { passive: false });
-            window.addEventListener('touchend', onEnd);
+            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('touchend', handleEnd);
+            
+            return () => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('touchmove', onTouchMove);
+                window.removeEventListener('mouseup', handleEnd);
+                window.removeEventListener('touchend', handleEnd);
+            };
         }
-        return () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onEnd);
-            window.removeEventListener('touchmove', onTouchMove);
-            window.removeEventListener('touchend', onEnd);
-        };
     }, [isDragging, size]);
 
     if (isMinimized) {
@@ -68,22 +77,27 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     return (
         <div 
             ref={modalRef}
-            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow"
-            style={{ left: position.x, top: position.y, width: size, touchAction: 'none' }}
+            className={`fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow ${isDragging ? 'cursor-grabbing shadow-xl scale-105' : 'shadow-md'}`}
+            style={{ 
+                left: position.x, 
+                top: position.y, 
+                width: size, 
+                touchAction: 'none' // CRUCIAL: Previne scroll da página no mobile
+            }}
         >
             <div 
-                className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-move active:cursor-grabbing"
+                className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none"
                 onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
                 onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
             >
-                <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Comparar</span>
+                <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Ref</span>
                 <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                     <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
                     <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
                 </div>
             </div>
-            <div className="relative bg-gray-100">
-                <img src={image} className="w-full object-contain bg-white" style={{ maxHeight: size * 1.5 }} draggable={false} />
+            <div className="relative bg-gray-100 group">
+                <img src={image} className="w-full object-contain bg-white pointer-events-none select-none" style={{ maxHeight: size * 1.5 }} />
             </div>
         </div>
     );
@@ -151,7 +165,7 @@ export const ScannerSystem: React.FC = () => {
     let interval: any;
     if (state === AppState.ANALYZING) {
         setLoadingStep(0);
-        interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length); }, 2000);
+        interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length); }, 1500); // Acelerado
     }
     return () => clearInterval(interval);
   }, [state]);
@@ -214,7 +228,7 @@ export const ScannerSystem: React.FC = () => {
             setErrorMsg(err.message || "Erro desconhecido na análise.");
             setState(AppState.ERROR);
         }
-    }, 500); 
+    }, 100); // Delay reduzido para iniciar mais rápido
   };
   
   const resetApp = () => {

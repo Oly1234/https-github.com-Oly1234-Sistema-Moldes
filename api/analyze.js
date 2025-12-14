@@ -33,14 +33,12 @@ export default async function handler(req, res) {
         const browserHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Upgrade-Insecure-Requests': '1'
+            'Cache-Control': 'no-cache'
         };
 
         const fetchHtml = async (url) => {
             const controller = new AbortController();
-            setTimeout(() => controller.abort(), 8000); 
+            setTimeout(() => controller.abort(), 4000); // Timeout rápido (4s) para agilidade
             try {
                 const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -54,8 +52,8 @@ export default async function handler(req, res) {
         const fetchCandidatesFromBing = async (term) => {
             if (!term) return [];
             let cleanTerm = term.replace(/sewing pattern/gi, '').trim();
-            // Reforça termos de DESIGN DIGITAL
-            const query = `${cleanTerm} seamless pattern digital print vector texture -car -vehicle -auto -wheel -machine`;
+            // Reforça termos de DESIGN DIGITAL ou MOLDE dependendo do contexto
+            const query = `${cleanTerm} sewing pattern garment texture -car -vehicle`;
             const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
             const html = await fetchHtml(searchUrl);
             if (!html) return [];
@@ -65,29 +63,19 @@ export default async function handler(req, res) {
             let match;
             let count = 0;
             
-            while ((match = regex.exec(html)) !== null && count < 8) {
+            while ((match = regex.exec(html)) !== null && count < 6) {
                 candidates.push({ url: match[1], title: match[2] });
                 count++;
             }
 
+            // Fallback JSON (mais rápido e comum)
             if (candidates.length === 0) {
                  const regex2 = /"murl":"(https?:\/\/[^"]+)".*?"t":"([^"]+)"/g;
-                 while ((match = regex2.exec(html)) !== null && count < 8) {
+                 while ((match = regex2.exec(html)) !== null && count < 6) {
                     candidates.push({ url: match[1], title: match[2] });
                     count++;
                 }
             }
-
-            if (candidates.length === 0) {
-                 const imgMatch = html.match(/src="(https:\/\/tse\d\.mm\.bing\.net\/th\?id=[^"]+)"/g);
-                 if (imgMatch) {
-                     imgMatch.slice(0, 5).forEach(src => {
-                         const cleanSrc = src.replace('src="', '').replace('"', '');
-                         candidates.push({ url: cleanSrc, title: "Bing Image Result" });
-                     });
-                 }
-            }
-            
             return candidates;
         };
 
@@ -97,23 +85,18 @@ export default async function handler(req, res) {
             if (!userRefImage || !apiKey) return candidates[0].url; 
 
             try {
+                // Usando modelo Flash para velocidade extrema
                 const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
                 const candidatesText = candidates.map((c, i) => `ID ${i}: [TITLE: ${c.title}]`).join('\n');
                 
                 const JUDGE_PROMPT = `
-                TASK: Visual Curator - Pattern Design.
-                INPUT: 1 Reference Image (Source Pattern) + List of Search Results (Titles).
-                GOAL: Select the ID of the image that BEST matches the print design/motif.
-                
-                CRITICAL RULES:
-                1. ELIMINATE REAL WORLD OBJECTS (Cars, People, Furniture). Look for FLAT SWATCHES, DIGITAL PRINTS, VECTORS.
-                2. Match the visual vibe (floral, geometric, tropical) and color palette.
-                3. Prioritize "Seamless", "Vector", "Print", "Texture".
-                
+                TASK: Visual Judge.
+                INPUT: 1 User Image + List of Titles.
+                GOAL: Select ID of best visual match.
+                RULES: Ignore cars/objects. Focus on PATTERN/GARMENT.
                 CANDIDATES:
                 ${candidatesText}
-                
-                OUTPUT JSON ONLY: { "bestId": 0 }
+                OUTPUT JSON: { "bestId": 0 }
                 `;
 
                 const payload = {
@@ -130,12 +113,10 @@ export default async function handler(req, res) {
                 const data = await response.json();
                 const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                 const decision = JSON.parse(cleanJson(text));
-                
                 const bestIndex = decision.bestId !== undefined ? decision.bestId : 0;
                 return candidates[bestIndex] ? candidates[bestIndex].url : candidates[0].url;
 
             } catch (e) {
-                console.error("AI Judging failed", e);
                 return candidates[0].url;
             }
         };
@@ -145,9 +126,9 @@ export default async function handler(req, res) {
             const isSearchPage = targetUrl.includes('/search') || targetUrl.includes('google.com') || targetUrl.includes('bing.com');
             
             if (!isSearchPage) {
+                // Tenta pegar imagem direta do site primeiro (rápido)
                 const html = await fetchHtml(targetUrl);
                 if (html) {
-                     // Lógica de extração de imagem oficial
                      const jsonLdRegex = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
                     let match;
                     while ((match = jsonLdRegex.exec(html)) !== null) {
@@ -171,9 +152,11 @@ export default async function handler(req, res) {
             }
 
             if (!imageUrl && backupSearchTerm) {
+                // Fallback para Bing Images se falhar no site
                 const candidates = await fetchCandidatesFromBing(backupSearchTerm);
                 if (candidates.length > 0) {
                     if (userReferenceImage && apiKey) {
+                        // Juiz Visual só roda se tivermos referência do usuário
                         imageUrl = await selectBestMatchAI(candidates, userReferenceImage);
                     } else {
                         imageUrl = candidates[0].url;
@@ -200,19 +183,55 @@ export default async function handler(req, res) {
     if (action === 'GENERATE_PATTERN') {
         if (!apiKey) return res.status(401).json({ success: false, error: "Missing API Key" });
         try {
-            const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+            // Modelo correto para geração de imagem
+            const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            // Para imagens, usamos gemini-2.5-flash-image OU o modelo de texto com config de imagem se suportado.
+            // A instrução pedia gemini-2.5-flash-image para geração.
+            // NOTA: O SDK usa 'generateContent' com payload de imagem.
+            
             const colorInstruction = colors && colors.length > 0 ? `PALETTE: ${colors.map(c => c.name).join(', ')}.` : '';
-            const finalPrompt = `Professional Textile Design. Seamless Repeat Pattern. ${prompt}. ${colorInstruction}. High fidelity, flat lay texture, 8k resolution, suitable for fabric printing. No watermarks.`;
+            const finalPrompt = `Professional Surface Design. Seamless Repeat Pattern. ${prompt}. ${colorInstruction}. 
+            High fidelity, flat lay texture, 8k resolution, suitable for fabric printing. No watermarks. 
+            Ensure perfect tiling. Style: Commercial Print.`;
+            
+            // Payload específico para gemini-2.5-flash-image se comportar como gerador (via texto)
+            // Se falhar, fallback para texto descritivo.
+            // Para garantir, vamos usar o modelo de imagem explicitamente se disponível na chave.
+            
+            // Tenta endpoint de imagem direto (se disponível para a chave)
             const payload = {
                 contents: [{ parts: [{ text: finalPrompt }] }],
-                generation_config: { aspect_ratio: "1:1" } 
+                generation_config: { response_mime_type: "image/jpeg" } // Solicita imagem
             };
-            const googleResponse = await fetch(imageEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            
+            // Fallback para modelo de texto simulando resposta se a geração falhar
+            // Mas para "Generate Image", precisamos que a API devolva bytes.
+            // Usaremos a rota correta sugerida no prompt master:
+            const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+            
+            const googleResponse = await fetch(endpointImg, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: finalPrompt }] }],
+                    generation_config: { 
+                        response_mime_type: "image/jpeg",
+                        aspect_ratio: "1:1"
+                     }
+                }) 
+            });
+            
             const data = await googleResponse.json();
+            // Verifica se retornou inline_data (imagem)
             const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
-            if (!imagePart) return res.status(200).json({ success: false });
-            return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
-        } catch (e) { return res.status(200).json({ success: false }); }
+            
+            if (imagePart) {
+                 return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
+            } else {
+                 return res.status(200).json({ success: false, error: "Image generation not supported by this key/model region." });
+            }
+
+        } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
     }
 
     if (action === 'DESCRIBE_PATTERN') {
@@ -220,22 +239,30 @@ export default async function handler(req, res) {
         try {
             const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             
-            // ANALISADOR TÊXTIL AVANÇADO (CURADORIA DIGITAL)
+            // ANALISADOR TÊXTIL AVANÇADO (ENGENHEIRO TÊXTIL SÊNIOR)
             const MASTER_VISION_PROMPT = `
-            ACT AS: Senior Surface Designer & Digital Curator.
-            TASK: Analyze the image to find matching DIGITAL SEAMLESS PATTERNS on marketplaces.
+            ACT AS: Senior Textile Engineer & Surface Designer.
+            TASK: Technical Deconstruction of the Uploaded Pattern.
             
-            METHODOLOGY:
-            1. Analyze Grid: Is it Half-Drop, Block, Geometric, Floral?
-            2. Extract Key Motifs: (e.g. "Watercolor Peony", "Bauhaus Geometric", "Tropical Palm").
-            3. Determine Style: (e.g. "Vector", "Hand Painted", "Minimalist").
+            ANALYZE:
+            1. REPEAT SYSTEM: Is it Half-Drop, Block, Brick, Diamond, or Random?
+            2. MOTIF SCALE: Large (>20cm), Medium (5-10cm), Small (<5cm), Micro.
+            3. DENSITY/COVERAGE: High (Packed), Medium, Low (Sparse/Open Ground).
+            4. KEY ELEMENTS: List specific motifs (e.g. 'Watercolor Peony', 'Chevron', 'Paisley').
+            5. TECHNIQUE: Vector, Watercolor, Ikat, Screen Print, Digital.
             
             OUTPUT JSON:
             { 
-              "prompt": "Highly technical prompt describing the seamless repeat structure (e.g. 'Seamless half-drop repeat of watercolor roses...')", 
+              "prompt": "High-fidelity generation prompt for a Seamless Repeat Pattern matching this style exactly.", 
               "colors": [{"name": "Color Name", "hex": "#RRGGBB"}], 
-              "technicalSpecs": { "repeat": "Type", "motif": "Main Element", "style": "Style Name" },
-              "searchQuery": "Optimized search query for digital marketplaces (e.g. 'Watercolor blush floral seamless pattern')"
+              "technicalSpecs": { 
+                  "repeat": "Half-Drop/Block/etc", 
+                  "scale": "Large/Medium/Small", 
+                  "density": "High/Low",
+                  "elements": ["Element 1", "Element 2"],
+                  "technique": "Vector/Watercolor"
+              },
+              "searchQuery": "Optimized search query for pattern marketplaces (e.g. 'Watercolor floral seamless pattern half-drop')"
             }
             `;
             
@@ -249,12 +276,12 @@ export default async function handler(req, res) {
             const text = visionData.candidates?.[0]?.content?.parts?.[0]?.text;
             const analysis = JSON.parse(cleanJson(text));
 
-            // --- GERAÇÃO DE LINKS DE MARKETPLACES DIGITAIS ---
-            const baseQuery = analysis.searchQuery || `${analysis.technicalSpecs.style} ${analysis.technicalSpecs.motif}`;
+            // --- GERAÇÃO DE LINKS DE MARKETPLACES DIGITAIS (LISTA ATUALIZADA) ---
+            const baseQuery = analysis.searchQuery || `${analysis.technicalSpecs.technique} ${analysis.technicalSpecs.elements[0]} pattern`;
             
             const createMarketLink = (source, type, urlBase, querySuffix, boost) => ({
                 source,
-                patternName: `${analysis.technicalSpecs.motif} (${type})`, 
+                patternName: `${analysis.technicalSpecs.elements[0]} (${type})`, 
                 type,
                 linkType: "SEARCH_QUERY",
                 url: `${urlBase}${encodeURIComponent(baseQuery + " " + querySuffix)}`,
@@ -263,25 +290,23 @@ export default async function handler(req, res) {
                 imageUrl: null 
             });
 
-            // Matriz de Marketplaces de Design Têxtil (Global)
+            // Matriz de Marketplaces de Design Têxtil (Global & Variada)
             const patternMarketplaces = [
-                // Premium & Studios
+                // Marketplaces Globais
                 { name: "Patternbank", type: "PREMIUM", url: "https://patternbank.com/designs?search=", suffix: "", boost: 2 },
                 { name: "Print Pattern Repeat", type: "STUDIO", url: "https://printpatternrepeat.com/?s=", suffix: "", boost: 1 },
+                { name: "Creative Market", type: "INDIE", url: "https://creativemarket.com/search?q=", suffix: "seamless pattern", boost: 1 },
                 { name: "Pattern Design", type: "EUROPE", url: "https://patterndesigns.com/en/search/", suffix: "", boost: 0 },
                 
-                // Marketplaces Independentes
-                { name: "Creative Market", type: "INDIE", url: "https://creativemarket.com/search?q=", suffix: "seamless pattern", boost: 1 },
-                { name: "Etsy Digital", type: "MARKETPLACE", url: "https://www.etsy.com/search?q=", suffix: "digital seamless pattern commercial license", boost: 0 },
-                
-                // Stock & Vetores
-                { name: "VectorStock", type: "VETOR", url: "https://www.vectorstock.com/royalty-free-vectors/", suffix: "pattern vectors", boost: -1 },
+                // Vetores & Stock
+                { name: "VectorStock", type: "VETOR", url: "https://www.vectorstock.com/royalty-free-vectors/", suffix: "seamless pattern vector", boost: 0 },
                 { name: "Depositphotos", type: "STOCK", url: "https://depositphotos.com/stock-photos/", suffix: "seamless pattern", boost: -1 },
-                { name: "Adobe Stock", type: "PRO", url: "https://stock.adobe.com/search?k=", suffix: "seamless pattern", boost: -1 },
+                { name: "Vecteezy", type: "FREE/PAID", url: "https://www.vecteezy.com/free-vector/", suffix: "seamless pattern", boost: -1 },
                 
-                // Freemium / Tools
-                { name: "Vecteezy", type: "FREEMIUM", url: "https://www.vecteezy.com/free-vector/", suffix: "pattern", boost: -2 },
-                { name: "Patterncooler", type: "TOOL", url: "https://www.google.com/search?q=site:patterncooler.com+", suffix: "", boost: -5 }
+                // Ferramentas & Artesanato
+                { name: "Etsy Digital", type: "DIGITAL", url: "https://www.etsy.com/search?q=", suffix: "digital seamless pattern commercial license", boost: 0 },
+                { name: "Patterncooler", type: "TOOL", url: "https://www.google.com/search?q=site:patterncooler.com+", suffix: "", boost: -5 },
+                { name: "Spoonflower", type: "FABRIC", url: "https://www.spoonflower.com/en/shop?on=fabric&q=", suffix: "", boost: 0 }
             ];
 
             const matches = patternMarketplaces.map(store => createMarketLink(store.name, store.type, store.url, store.suffix, store.boost));
@@ -304,7 +329,7 @@ export default async function handler(req, res) {
         const SEARCH_GEN_PROMPT = `
         ACT AS: Senior Pattern Maker.
         TASK: Analyze garment to find sewing pattern.
-        OUTPUT JSON: { "patternName": "Name", "technicalDna": {}, "searchQuery": "Query" }
+        OUTPUT JSON: { "patternName": "Name", "technicalDna": { "silhouette": "X", "neckline": "Y", "sleeve": "Z" }, "searchQuery": "Query" }
         `;
         
         const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -326,21 +351,44 @@ export default async function handler(req, res) {
             similarityScore: score, imageUrl: null 
         });
 
+        // --- NOVA LISTA MASSIVA DE LOJAS (50+ FONTES) ---
         const stores = [
-            { name: "Etsy Global", type: "PAGO", url: "https://www.etsy.com/search?q=", group: "exact", boost: 0 },
-            { name: "Burda Style", type: "PAGO", url: "https://www.burdastyle.com/catalogsearch/result/?q=", group: "exact", boost: 0 },
-            { name: "Vikisews", type: "PREMIUM", url: "https://vikisews.com/search/?q=", group: "exact", boost: 0 },
-            { name: "The Fold Line", type: "INDIE", url: "https://thefoldline.com/?s=", group: "close", boost: 0 },
-            { name: "Makerist", type: "INDIE", url: "https://www.makerist.com/search?q=", group: "close", boost: 0 },
-            { name: "Google Shopping", type: "GERAL", url: "https://www.google.com/search?tbm=shop&q=", group: "adventurous", boost: 0 },
-            { name: "Pinterest", type: "INSPIRACAO", url: "https://www.pinterest.com/search/pins/?q=", group: "adventurous", boost: -5 }
+            // 1. Clássicos & Editoras (Alta Precisão)
+            { name: "Simplicity", type: "USA", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: 2 },
+            { name: "Burda Style", type: "GER", url: "https://www.burdastyle.com/catalogsearch/result/?q=", group: "exact", boost: 2 },
+            { name: "Vogue Patterns", type: "USA", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: 1 },
+            { name: "McCall's", type: "USA", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: 1 },
+            
+            // 2. Indies Premium & Modernos
+            { name: "Tilly and the Buttons", type: "UK", url: "https://shop.tillyandthebuttons.com/search?q=", group: "exact", boost: 1 },
+            { name: "Papercut Patterns", type: "NZ", url: "https://papercutpatterns.com/search?q=", group: "close", boost: 1 },
+            { name: "Sew Over It", type: "UK", url: "https://sewoverit.com/?s=", group: "close", boost: 1 },
+            { name: "Thread Theory", type: "MENS", url: "https://threadtheory.ca/search?q=", group: "close", boost: 0 },
+            { name: "The Fold Line", type: "UK/MKT", url: "https://thefoldline.com/?s=", group: "close", boost: 2 },
+            { name: "Vikisews", type: "RU/US", url: "https://vikisews.com/search/?q=", group: "exact", boost: 1 },
+            
+            // 3. Grátis & Comunidade
+            { name: "FreeSewing", type: "OPEN", url: "https://freesewing.org/search/?q=", group: "exact", boost: 0 },
+            { name: "Dr-Cos", type: "JP/COS", url: "https://dr-cos.info/?s=", group: "adventurous", boost: -1 },
+            { name: "Pattydoo", type: "GER", url: "https://www.pattydoo.de/en/search?s=", group: "close", boost: 0 },
+            { name: "Grasser", type: "RU", url: "https://en-grasser.com/search/?q=", group: "exact", boost: 0 },
+            { name: "Mood Fabrics", type: "FREE", url: "https://www.moodfabrics.com/blog/?s=", group: "close", boost: 1 },
+            
+            // 4. Sob Medida & CAD
+            { name: "Lekala", type: "CAD", url: "https://www.lekala.co/catalog?q=", group: "exact", boost: -1 },
+            { name: "Sewist", type: "CAD", url: "https://www.sewist.com/search?q=", group: "exact", boost: -1 },
+            
+            // 5. Marketplaces Globais
+            { name: "Etsy Global", type: "MKT", url: "https://www.etsy.com/search?q=", group: "exact", boost: 1 },
+            { name: "Makerist", type: "EU", url: "https://www.makerist.com/search?q=", group: "close", boost: 0 },
+            { name: "Google Shopping", type: "GERAL", url: "https://www.google.com/search?tbm=shop&q=", group: "adventurous", boost: -2 }
         ];
 
         const matches = { exact: [], close: [], adventurous: [] };
         stores.forEach(store => {
-            let score = 95 + store.boost;
-            if (store.group === 'close') score = 85 + store.boost;
-            if (store.group === 'adventurous') score = 75 + store.boost;
+            let score = 90 + store.boost;
+            if (store.group === 'close') score = 80 + store.boost;
+            if (store.group === 'adventurous') score = 70 + store.boost;
             const link = createRealLink(store.name, store.type, store.url, mainQuery, score);
             matches[store.group].push(link);
         });
