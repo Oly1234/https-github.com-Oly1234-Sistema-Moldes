@@ -57,8 +57,17 @@ export default async function handler(req, res) {
         // SUB-FUNÇÃO: Scraper de Imagens do Bing (Fallback Visual Robusto)
         const fallbackToImageSearch = async (term) => {
             if (!term) return null;
-            // Adiciona parâmetros para tentar obter HTML mais simples
-            const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(term + " sewing pattern")}&first=1&scenario=ImageBasicHover`;
+            
+            // LIMPEZA E CONTEXTO (CORREÇÃO DE AMBIGUIDADE "MINI COOPER")
+            // 1. Remove termos duplicados e limpa
+            let cleanTerm = term.replace(/sewing pattern/gi, '').trim();
+            
+            // 2. Query de Alta Precisão:
+            // - Adiciona 'clothing garment' para forçar contexto de moda
+            // - Adiciona Keywords Negativas (-car -vehicle -auto) para remover carros e objetos
+            const query = `${cleanTerm} clothing sewing pattern -car -vehicle -auto -wheel -machine`;
+            
+            const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
             const html = await fetchHtml(searchUrl);
             if (!html) return null;
             
@@ -125,7 +134,6 @@ export default async function handler(req, res) {
             // TENTATIVA 2: Fallback Inteligente (Bing Image Search)
             // Se falhou em pegar a imagem oficial, busca uma imagem visual baseada no nome do molde
             if (!imageUrl && backupSearchTerm) {
-                // console.log("Tentando fallback visual para:", backupSearchTerm);
                 imageUrl = await fallbackToImageSearch(backupSearchTerm);
             }
 
@@ -161,23 +169,19 @@ export default async function handler(req, res) {
             const payload = {
                 contents: [{ parts: [{ text: finalPrompt }] }],
                 // CRITICAL FIX: response_mime_type NÃO é suportado pelo modelo gemini-2.5-flash-image.
-                // Sua inclusão causava erro 400 da API Google.
                 generation_config: { aspect_ratio: "1:1" } 
             };
             
             const googleResponse = await fetch(imageEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const data = await googleResponse.json();
             
-            // Itera pelas partes para encontrar a imagem (pode vir misturado com texto)
             const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
             
             if (!imagePart) {
-                 console.error("GenAI Error:", JSON.stringify(data));
                  return res.status(200).json({ success: false });
             }
             return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
         } catch (e) { 
-            console.error("GenAI Exception:", e);
             return res.status(200).json({ success: false }); 
         }
     }
@@ -187,7 +191,6 @@ export default async function handler(req, res) {
         if (!apiKey) return res.status(500).json({ error: "No Key" });
         try {
             const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            // Prompt focado em FABRIC MATCHING
             const MASTER_VISION_PROMPT = `
             ACT AS: Senior Textile Designer.
             TASK: Analyze the PRINT/TEXTURE.
@@ -214,15 +217,19 @@ export default async function handler(req, res) {
         if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
         
         // 1. Extração de Palavras-Chave (DNA)
+        // ATUALIZADO: Prompt força termos compostos para evitar ambiguidade (Mini -> Mini Dress)
         const SEARCH_GEN_PROMPT = `
         VOCÊ É: Especialista em Modelagem de Roupas.
         TAREFA: Analise a imagem e identifique o molde (sewing pattern).
         OUTPUT JSON APENAS:
         {
-          "patternName": "Nome Técnico Exato",
+          "patternName": "Nome Técnico Exato (ex: 'A-Line Skirt', 'Wrap Dress')",
           "technicalDna": { "silhouette": "...", "neckline": "..." },
-          "searchKeywords": ["Termo Ingles 1", "Termo Ingles 2"]
+          "searchKeywords": ["Termo + Tipo de Peca (ex: 'Mini Dress' e não apenas 'Mini')"]
         }
+        REGRAS:
+        1. Palavras-chave DEVEM incluir o tipo de roupa (Dress, Skirt, Blouse).
+        2. Evite termos ambíguos como 'Mini', 'Tube', 'Boxy' isolados.
         `;
         
         const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -236,22 +243,24 @@ export default async function handler(req, res) {
         const text = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
         let analysis = JSON.parse(cleanJson(text));
         
-        // 2. Construção de Links REAIS (Baseados em Busca)
+        // 2. Construção de Links REAIS
         const mainTerm = analysis.searchKeywords?.[0] || analysis.patternName || "Sewing Pattern";
         
-        // IMPORTANTE: Adiciona o backupSearchTerm para o fallback de imagem funcionar
+        // IMPORTANTE: Adiciona o backupSearchTerm LIMPO
         const createRealLink = (source, type, urlBase, term, score) => ({
             source,
             patternName: `Busca: ${term}`,
             type: type,
             linkType: "SEARCH_QUERY",
             url: `${urlBase}${encodeURIComponent(term)}`,
-            backupSearchTerm: `${term} ${source} sewing pattern`, // TERMO DE BACKUP PARA BUSCA VISUAL
+            // BACKUP VISUAL LIMPO: Usa apenas o termo principal do molde + 'sewing pattern'
+            // Ignora o nome da loja (ex: 'Burda') e o termo específico (term) para garantir que a imagem
+            // seja puramente do MOLDE e não do logo da loja.
+            backupSearchTerm: `${mainTerm} sewing pattern`, 
             similarityScore: score,
             imageUrl: null 
         });
 
-        // DEFINIÇÃO DAS FONTES GLOBAIS
         const matches = {
             exact: [
                 createRealLink("Etsy Global", "PAGO", "https://www.etsy.com/search?q=", `${mainTerm} sewing pattern`, 98),
