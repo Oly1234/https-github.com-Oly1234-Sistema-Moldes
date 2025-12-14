@@ -1,41 +1,47 @@
 
 // api/modules/surface.js
-// DEPARTAMENTO: ESTÚDIO DE DESIGN DE SUPERFÍCIE & COLORIMETRIA
+// DEPARTAMENTO: ESTÚDIO DE DESIGN DE SUPERFÍCIE & TENDÊNCIAS
 // RESPONSÁVEL: Diretor de Arte Vingi
 
 export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType, cleanJson) => {
-    // 1. ANÁLISE PROFUNDA DE COR E ESTILO
+    // 1. ANÁLISE PROFUNDA DE COR E TENDÊNCIA
     const ART_DIRECTOR_PROMPT = `
-    ACT AS: Senior Textile Art Director & Colorist.
+    ACT AS: Senior Textile Art Director & Trend Forecaster.
     TASK: Analyze the uploaded print/pattern to create a comprehensive 'Market & Color Strategy'.
     
-    1. COLOR ANALYSIS (PANTONE TCX):
-    - Extract 6 distinct colors from the image.
-    - Classify them: 'Base' (Background), 'Main' (Dominant Element), 'Secondary' (Details), 'Accent' (Pop of color), 'Shadow' (Dark tones).
-    - Provide a plausible Pantone TCX code for each (e.g., "19-4052 TCX").
+    1. COLOR ANALYSIS & TRENDS (Pantone TCX):
+    - Extract 6 distinct colors.
+    - Classify them (Base/Main/Accent/Shadow).
+    - Assign a 'trendContext' (e.g., "WGSN S/S 25", "Color of the Year").
+    - Provide Pantone TCX code.
     
-    2. VISUAL SEARCH STRATEGY:
-    - We need to find this EXACT style on marketplaces.
-    - KEY: You MUST include the DOMINANT COLORS in the search query.
-    - Example: Instead of "Tropical floral", use "Mustard Yellow and Fuchsia Tropical Floral".
+    2. VISUAL SEARCH STRATEGY (SAFE SEARCH):
+    - Create a search query for marketplaces (Shutterstock, Patternbank).
+    - IMPORTANT: Ensure the query describes the PATTERN (e.g., "Watercolor Floral"), NOT a person wearing it.
+    - Include dominant colors.
+    
+    3. GENERATION PROMPT (SAFETY FIRST):
+    - Write a prompt to RECREATE this texture using AI.
+    - KEYWORD FOCUS: "Seamless Pattern", "Texture", "Vector", "Illustration".
+    - AVOID: "Woman", "Model", "Skin", "Body". Focus ONLY on the artwork.
     
     OUTPUT JSON:
     { 
         "colors": [
-            { "name": "Classic Blue", "hex": "#0f4c81", "code": "19-4052 TCX", "role": "Base" },
-            { "name": "Living Coral", "hex": "#ff6f61", "code": "16-1546 TCX", "role": "Accent" }
-            ... (6 colors total)
+            { "name": "Peach Fuzz", "hex": "#FFBE98", "code": "13-1023 TCX", "role": "Base", "trendContext": "Color of the Year 2024" }
         ], 
+        "prompt": "Safe generation prompt (e.g. 'Seamless vector pattern of tropical hibiscus flowers, yellow and pink, flat illustration')",
         "technicalSpecs": { 
-            "technique": "Watercolor/Vector/Gouache/Photo", 
-            "elements": ["Palm leaf", "Hibiscus", "Geometric"] 
+            "technique": "Watercolor/Vector", 
+            "elements": ["Palm leaf"] 
         },
         "marketStrategy": {
-            "textile_professional": "Highly specific query for Patternbank (e.g. 'Oversized watercolor floral yellow pink')",
-            "fabric_pod": "Fabric-focused query for Spoonflower (e.g. 'Seamless tropical hibiscus mustard background')",
-            "vector_asset": "Graphic asset query for Creative Market (e.g. 'Hand-painted tropical vector pack')",
-            "vintage_archive": "Historical query (e.g. '1960s floral fabric scan')",
-            "craft_digital": "Craft query (e.g. 'Tropical digital paper yellow pink')"
+            "textile_professional": "Patternbank query",
+            "fabric_pod": "Spoonflower query",
+            "stock_photo": "Shutterstock query",
+            "vector_asset": "Creative Market query",
+            "vintage_archive": "Museum query",
+            "craft_digital": "Etsy query"
         }
     }
     `;
@@ -53,7 +59,6 @@ export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType
     
     const analysis = JSON.parse(cleanJson(text));
     
-    // Fallback de prompt
     if (!analysis.prompt) analysis.prompt = analysis.marketStrategy.textile_professional;
     
     return analysis;
@@ -61,7 +66,6 @@ export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType
 
 export const getSurfaceMarketplaces = (analysis) => {
     const s = analysis.marketStrategy;
-    // Extraímos as cores principais para ajudar no "backup search" caso a query principal falhe
     const mainColors = analysis.colors.slice(0, 2).map(c => c.name).join(' ');
 
     const createStudioLink = (storeName, type, urlBase, specificQuery, visualStyle, boost) => ({
@@ -70,7 +74,7 @@ export const getSurfaceMarketplaces = (analysis) => {
         type,
         linkType: "SEARCH_QUERY",
         url: `${urlBase}${encodeURIComponent(specificQuery)}`,
-        // Backup Search: Adiciona as cores explicitamente para garantir realismo
+        // Backup com foco em 'texture' para garantir flat lay
         backupSearchTerm: `"${storeName}" ${specificQuery} ${mainColors} ${visualStyle}`, 
         similarityScore: 90 + boost,
         imageUrl: null 
@@ -78,31 +82,18 @@ export const getSurfaceMarketplaces = (analysis) => {
 
     const matches = [];
 
-    // 1. DIVISÃO TÊXTIL PROFISSIONAL (Patternbank, Designious)
-    matches.push(createStudioLink("Patternbank", "PREMIUM", "https://patternbank.com/designs?search=", s.textile_professional, "textile design print flat", 2));
-    matches.push(createStudioLink("Designious", "VECTOR", "https://www.designious.com/?s=", s.vector_asset, "vector pack detail", 1));
-    matches.push(createStudioLink("Textile Hive", "ARCHIVE", "https://www.textilehive.com/search?q=", s.vintage_archive, "fabric swatch high res", 1));
-
-    // 2. DIVISÃO POD & TECIDOS (Spoonflower, Raspberry Creek)
+    // Prioridade para sites de TEXTURA e não de PRODUTO FINAL
+    matches.push(createStudioLink("Patternbank", "PREMIUM", "https://patternbank.com/designs?search=", s.textile_professional, "textile design print flat swatch", 2));
+    matches.push(createStudioLink("Shutterstock", "STOCK", "https://www.shutterstock.com/search/", s.stock_photo, "seamless pattern vector flat view", 2));
     matches.push(createStudioLink("Spoonflower", "FABRIC", "https://www.spoonflower.com/en/shop?on=fabric&q=", s.fabric_pod, "printed fabric texture zoom", 2));
-    matches.push(createStudioLink("Raspberry Creek", "US FABRIC", "https://raspberrycreekfabrics.com/search?q=", s.fabric_pod, "fabric print close up", 1));
-    matches.push(createStudioLink("Hawthorne Supply", "MODERN", "https://www.hawthornesupplyco.com/search?q=", s.fabric_pod, "quilting cotton fabric swatch", 1));
-
-    // 3. DIVISÃO DE ATIVOS DIGITAIS (Creative Market, Adobe, Freepik)
-    matches.push(createStudioLink("Creative Market", "INDIE", "https://creativemarket.com/search?q=", s.vector_asset, "pattern background texture", 2));
-    matches.push(createStudioLink("Freepik", "STOCK", "https://www.freepik.com/search?format=search&query=", s.vector_asset, "seamless pattern vector flat", 0));
-    matches.push(createStudioLink("Adobe Stock", "PRO", "https://stock.adobe.com/search?k=", s.textile_professional, "fabric texture background", 1));
-    matches.push(createStudioLink("Shutterstock", "STOCK", "https://www.shutterstock.com/search/", s.vector_asset, "seamless pattern vector", 0));
-    matches.push(createStudioLink("Rawpixel", "ART", "https://www.rawpixel.com/search/", s.vintage_archive, "public domain pattern art cc0", 1));
     
-    // 4. DIVISÃO DE ARQUIVO & HISTÓRIA (Museus)
-    matches.push(createStudioLink("V&A Museum", "HISTORY", "https://collections.vam.ac.uk/search/?q=", s.vintage_archive, "textile fragment museum", 2));
-    matches.push(createStudioLink("The Met", "MUSEUM", "https://www.metmuseum.org/search-results?q=", s.vintage_archive, "pattern design art", 1));
-
-    // 5. DIVISÃO DE ARTESANATO (Etsy)
+    matches.push(createStudioLink("Adobe Stock", "PRO", "https://stock.adobe.com/search?k=", s.stock_photo, "fabric texture background swatch", 2));
+    matches.push(createStudioLink("Designious", "VECTOR", "https://www.designious.com/?s=", s.vector_asset, "vector pack detail", 1));
+    matches.push(createStudioLink("Creative Market", "INDIE", "https://creativemarket.com/search?q=", s.vector_asset, "digital paper background texture", 2));
+    
+    matches.push(createStudioLink("Hawthorne Supply", "MODERN", "https://www.hawthornesupplyco.com/search?q=", s.fabric_pod, "quilting cotton fabric swatch", 1));
     matches.push(createStudioLink("Etsy Digital", "MKT", "https://www.etsy.com/search?q=", s.craft_digital, "digital paper seamless", 1));
-    matches.push(createStudioLink("Zazzle", "POD", "https://www.zazzle.com/s/", s.craft_digital, "pattern texture", 0));
-    matches.push(createStudioLink("Redbubble", "ARTIST", "https://www.redbubble.com/shop/?query=", s.craft_digital, "pattern design artwork", 0));
+    matches.push(createStudioLink("Rawpixel", "ART", "https://www.rawpixel.com/search/", s.vintage_archive, "public domain pattern art cc0", 1));
 
     return matches;
 };

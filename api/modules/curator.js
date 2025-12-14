@@ -19,24 +19,23 @@ export const selectVisualTwin = async (apiKey, candidates, userReferenceImage, c
 
         if (contextType === 'CLOTHING') {
             CRITERIA_PROMPT = `
-            CONTEXT: We are looking for a SEWING PATTERN image that matches the User Reference.
+            CONTEXT: The user is looking for a SEWING PATTERN or GARMENT.
             
-            STRICT SELECTION RULES:
-            1. REJECT COVERS/ENVELOPES: If the User Reference is a real person, DO NOT pick a drawn envelope cover or illustration unless it's the only option. Look for the "Model Photo".
-            2. REJECT LOGOS: Never pick an image that looks like a store logo or banner.
-            3. VISUAL TWIN: Pick the image that visually matches the User Reference (Pose, Color, Cut).
-            4. PRIORITY: Real Model Photo > Mannequin > Technical Drawing > Pattern Envelope > Random Stock Photo.
+            STRICT FILTERING RULES (TOLERANCE ZERO):
+            1. ACCEPT ONLY: Photos of a PERSON modeling the clothes, a MANNEQUIN, or a SEWING PATTERN ENVELOPE/DRAWING.
+            2. REJECT HARD: Any image that is just a fabric swatch, a logo, a landscape, or an object that is not clothing.
+            3. GOAL: Find the image that best shows the SILHOUETTE and FIT of the garment referenced.
             `;
         } else {
-            // SURFACE / TEXTURE (ATUALIZADO PARA COR)
+            // SURFACE / TEXTURE - REGRAS RÍGIDAS DE FLAT LAY
             CRITERIA_PROMPT = `
-            CONTEXT: We are looking for a SURFACE PATTERN / TEXTURE that matches the User Reference.
+            CONTEXT: The user is looking for a PRINT DESIGN FILE (Surface Pattern).
             
-            STRICT SELECTION RULES:
-            1. COLOR MATCH IS KING: The dominant color of the result MUST match the reference. If reference is Yellow, reject Blue images.
-            2. TEXTURE FOCUS: We want a flat swatch or a clear view of the print.
-            3. REJECT MOCKUPS: Avoid images where the print is distorted on a pillow/mug.
-            4. REJECT LOGOS: Never pick a brand logo (like 'Freepik' logo).
+            STRICT FILTERING RULES (TOLERANCE ZERO):
+            1. ACCEPT ONLY: Flat 2D views of the pattern, digital swatches, or direct scans of fabric.
+            2. REJECT HARD: Mockups on 3D objects (Mugs, Pillows, Phone cases, T-shirts) where the pattern is distorted. We need the RAW FILE view.
+            3. REJECT HARD: Logos, text banners, or blurry thumbnails.
+            4. COLOR MATCH: The image MUST match the dominant colors of the reference.
             `;
         }
 

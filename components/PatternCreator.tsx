@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -81,27 +81,44 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
-// CARTÃO PANTONE ATUALIZADO
-const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => (
-    <div className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group h-full">
-        <div className="h-20 w-full relative" style={{ backgroundColor: color.hex }}>
-             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <div className="bg-white/90 rounded text-[8px] font-mono px-1 py-0.5">{color.hex}</div>
-             </div>
-        </div>
-        <div className="p-3 flex flex-col justify-between flex-1">
-            <div className="mb-2">
-                <span className="block text-[10px] font-extrabold text-gray-900 leading-tight uppercase tracking-tight">{color.name}</span>
-                <span className="block text-[9px] text-gray-500 font-mono mt-0.5">{color.code || 'TCX PENDING'}</span>
+// CARTÃO PANTONE INTERATIVO & TRENDY
+const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
+    const handleSearch = () => {
+        const query = `Pantone ${color.code} ${color.name} trend`;
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`, '_blank');
+    };
+
+    return (
+        <div onClick={handleSearch} className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg transition-all cursor-pointer group h-full hover:scale-[1.02]">
+            <div className="h-20 w-full relative" style={{ backgroundColor: color.hex }}>
+                 <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <div className="bg-white/90 rounded text-[8px] font-mono px-1 py-0.5">{color.hex}</div>
+                 </div>
+                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10">
+                     <Search className="text-white drop-shadow-md" size={16}/>
+                 </div>
             </div>
-            {color.role && (
-                <span className="self-start text-[8px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 uppercase tracking-wider">
-                    {color.role}
-                </span>
-            )}
+            <div className="p-3 flex flex-col justify-between flex-1">
+                <div className="mb-2">
+                    <span className="block text-[10px] font-extrabold text-gray-900 leading-tight uppercase tracking-tight">{color.name}</span>
+                    <span className="block text-[9px] text-gray-500 font-mono mt-0.5">{color.code || 'TCX PENDING'}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                    {color.role && (
+                        <span className="self-start text-[8px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 uppercase tracking-wider">
+                            {color.role}
+                        </span>
+                    )}
+                    {color.trendContext && (
+                        <span className="self-start text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1.5 py-0.5 rounded border border-vingi-100 flex items-center gap-1">
+                            <TrendingUp size={8}/> {color.trendContext}
+                        </span>
+                    )}
+                </div>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const PatternCreator: React.FC = () => {
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -130,7 +147,7 @@ export const PatternCreator: React.FC = () => {
                     setGeneratedPattern(null);
                     setDetectedColors([]);
                     setFabricMatches([]);
-                    setVisibleMatchesCount(10); // Reset paginação
+                    setVisibleMatchesCount(10);
                     setTechnicalSpecs(null);
                     setPrompt('');
                     setGenError(null);
@@ -191,7 +208,7 @@ export const PatternCreator: React.FC = () => {
             if (data.success && data.image) { 
                 setGeneratedPattern(data.image); 
             } else {
-                setGenError(data.error || "Erro na geração. Tente novamente.");
+                setGenError(data.error || "Erro na geração. A IA pode estar sobrecarregada.");
             }
         } catch (error: any) {
             setGenError(error.message || "Erro na geração.");
@@ -208,12 +225,18 @@ export const PatternCreator: React.FC = () => {
         link.click();
     };
 
-    // Paginação dos dados
-    const visibleData = fabricMatches.slice(0, visibleMatchesCount);
+    // DEDUPLICAÇÃO DE RESULTADOS
+    // Filtramos por URL para evitar que a mesma loja apareça duas vezes com o mesmo link
+    const uniqueMatches = fabricMatches.filter((match, index, self) =>
+        index === self.findIndex((m) => (
+            m.url === match.url
+        ))
+    );
+
+    const visibleData = uniqueMatches.slice(0, visibleMatchesCount);
 
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden relative">
-            {/* MODAL DE REFERÊNCIA FLUTUANTE */}
             {referenceImage && <FloatingComparisonModal image={referenceImage} />}
 
             <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0 z-20 shadow-sm">
@@ -222,7 +245,6 @@ export const PatternCreator: React.FC = () => {
             </header>
 
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                {/* COLUNA 1: LABORATÓRIO (DEPARTAMENTO DE CRIAÇÃO) */}
                 <div className="w-full md:w-[380px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 custom-scrollbar">
                     <div className="p-6 space-y-8">
                         <div>
@@ -259,7 +281,7 @@ export const PatternCreator: React.FC = () => {
                             <div className="animate-fade-in space-y-6">
                                 <div>
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Palette size={14}/> Pantone® Color IQ
+                                        <Palette size={14}/> Pantone® Trend IQ
                                     </h3>
                                     {detectedColors.length > 0 ? (
                                         <div className="grid grid-cols-2 gap-3">
@@ -288,7 +310,7 @@ export const PatternCreator: React.FC = () => {
                     </div>
                 </div>
 
-                {/* COLUNA 2: RESULTADOS VISUAIS (DEPARTAMENTO DE PESQUISA) */}
+                {/* COLUNA 2: RESULTADOS VISUAIS */}
                 <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f1f5f9]">
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -327,15 +349,14 @@ export const PatternCreator: React.FC = () => {
                         )}
                     </div>
                     
-                    {/* ÁREA DE MERCADO COM PAGINAÇÃO */}
                     <div className="p-6 md:p-8">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                 <Globe className="text-vingi-600"/> Marketplaces Globais
                             </h3>
-                            {fabricMatches.length > 0 && <span className="text-xs bg-white border border-gray-200 px-3 py-1 rounded-full text-gray-500 font-bold">{fabricMatches.length} Encontrados</span>}
+                            {uniqueMatches.length > 0 && <span className="text-xs bg-white border border-gray-200 px-3 py-1 rounded-full text-gray-500 font-bold">{uniqueMatches.length} Encontrados</span>}
                         </div>
-                        {fabricMatches.length === 0 ? (
+                        {uniqueMatches.length === 0 ? (
                              technicalSpecs ? (
                                 <div className="flex items-center justify-center h-32 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                                     <p className="text-gray-400 text-sm">Nenhuma correspondência exata encontrada nos marketplaces.</p>
@@ -353,13 +374,13 @@ export const PatternCreator: React.FC = () => {
                                     ))}
                                 </div>
                                 
-                                {visibleMatchesCount < fabricMatches.length && (
+                                {visibleMatchesCount < uniqueMatches.length && (
                                     <div className="mt-8 flex justify-center">
                                         <button 
                                             onClick={() => setVisibleMatchesCount(p => p + 10)} 
                                             className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all flex items-center gap-2"
                                         >
-                                            <Plus size={16}/> Carregar Mais ({fabricMatches.length - visibleMatchesCount})
+                                            <Plus size={16}/> Carregar Mais ({uniqueMatches.length - visibleMatchesCount})
                                         </button>
                                     </div>
                                 )}

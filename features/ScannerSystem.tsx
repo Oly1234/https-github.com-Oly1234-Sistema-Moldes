@@ -141,8 +141,6 @@ export const ScannerSystem: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  
-  // AUMENTADO DE 10 PARA 25 PARA EXIBIR MAIS VARIEDADE INICIALMENTE
   const [visibleCount, setVisibleCount] = useState(25);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -238,18 +236,29 @@ export const ScannerSystem: React.FC = () => {
     if (state === AppState.IDLE && !uploadedImage) { cameraInputRef.current?.click(); }
   };
 
-  const exactMatches = result?.matches?.exact || [];
-  const closeMatches = result?.matches?.close || [];
-  const vibeMatches = result?.matches?.adventurous || [];
+  // DEDUPLICAÇÃO DE RESULTADOS
+  // Filtramos por URL para evitar que a mesma loja apareça duas vezes com o mesmo link
+  const getUniqueMatches = (list: any[]) => {
+      const seen = new Set();
+      return list.filter(m => {
+          if (!m || !m.url) return false;
+          if (seen.has(m.url)) return false;
+          seen.add(m.url);
+          return true;
+      });
+  };
+
+  const exactMatches = getUniqueMatches(result?.matches?.exact || []);
+  const closeMatches = getUniqueMatches(result?.matches?.close || []);
+  const vibeMatches = getUniqueMatches(result?.matches?.adventurous || []);
   
-  const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches]
-        .filter(m => m && typeof m === 'object' && m.patternName); 
+  const allMatches = getUniqueMatches([...exactMatches, ...closeMatches, ...vibeMatches]);
 
   const getFilteredMatches = () => {
       switch(activeTab) {
-          case 'EXACT': return exactMatches.filter(m => m);
-          case 'CLOSE': return closeMatches.filter(m => m);
-          case 'VIBE': return vibeMatches.filter(m => m);
+          case 'EXACT': return exactMatches;
+          case 'CLOSE': return closeMatches;
+          case 'VIBE': return vibeMatches;
           default: return allMatches;
       }
   };
