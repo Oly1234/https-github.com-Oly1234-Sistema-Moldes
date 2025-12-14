@@ -19,10 +19,18 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         } catch (e) { return null; }
     };
 
-    // SUB-ROTINA: Busca no Bing (Diversificada)
-    const fetchCandidatesFromBing = async (term) => {
+    // SUB-ROTINA: Busca no Bing (Com Inteligência de Domínio)
+    const fetchCandidatesFromBing = async (term, specificDomain = null) => {
         if (!term) return [];
-        const query = term.replace(/sewing pattern/gi, 'pattern').trim();
+        
+        let query = term.replace(/sewing pattern/gi, 'pattern').trim();
+        
+        // NOVA TECNOLOGIA: Busca Dedicada por Site
+        // Se tivermos o domínio, forçamos a busca DENTRO dele primeiro
+        if (specificDomain) {
+            query += ` site:${specificDomain}`;
+        }
+
         const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
         const html = await fetchHtml(searchUrl);
         if (!html) return [];
@@ -38,30 +46,29 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         return candidates;
     };
 
-    // SUB-ROTINA: Juiz Visual (IA)
-    const selectBestMatchAI = async (candidates, userRefImage, diversityOffset) => {
+    // SUB-ROTINA: Juiz Visual (IA) - Modo Estrito
+    const selectBestMatchAI = async (candidates, userRefImage) => {
         if (!candidates || candidates.length === 0) return null;
-        
-        // Se não tiver chave ou imagem, usa lógica determinística
-        if (!userRefImage || !apiKey) {
-            const safeIndex = diversityOffset % Math.min(candidates.length, 3);
-            return candidates[safeIndex].url;
-        }
+        if (!userRefImage || !apiKey) return candidates[0].url;
 
         try {
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            const candidatesText = candidates.map((c, i) => `ID ${i}: ${c.title} (URL: ...)`).join('\n');
+            const candidatesText = candidates.map((c, i) => `ID ${i}: ${c.title}`).join('\n');
             
-            // PROMPT REFINADO: Comparação Visual Direta
+            // PROMPT ATUALIZADO: Foco em "Gêmeo Visual"
             const JUDGE_PROMPT = `
-            ACT AS: Visual Curator.
-            TASK: Compare the User Reference Image with the Candidate Images descriptions/context.
-            GOAL: Pick the Candidate ID that visualy resembles the Reference Image the most.
+            ACT AS: Strict Visual Curator.
+            TASK: Pick the image that is the "Visual Twin" of the User Reference.
             
-            CRITERIA:
-            1. SIMILARITY: Must match the motif (e.g., if reference is floral, pick floral).
-            2. QUALITY: Avoid low-res logos or icons. Prefer full product/pattern shots.
-            3. CONTEXT: If the candidate title describes exactly what is seen in the reference, pick it.
+            INPUT:
+            - Reference Image (User's photo)
+            - Candidate List (Search results)
+
+            RULES:
+            1. LINK DEDICATION: We prefer images that look like they belong to the specific store listed in the title.
+            2. VISUAL MATCH: Match the COLOR, SHAPE, and ANGLE of the reference.
+            3. IGNORE: Icons, Logos, Text-only images.
+            4. PRIORITY: If the reference is a Model wearing a dress, pick a Model wearing a dress. If it's a technical drawing, pick a drawing.
             
             CANDIDATES:
             ${candidatesText}
@@ -90,15 +97,17 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             return candidates[bestIndex].url;
 
         } catch (e) {
-            const safeIndex = diversityOffset % Math.min(candidates.length, 3);
-            return candidates[safeIndex].url;
+            return candidates[0].url;
         }
     };
 
     // --- LÓGICA PRINCIPAL DO SCRAPER ---
     let imageUrl = null;
-    
-    // 1. TENTATIVA DIRETA
+    let domain = '';
+    try { domain = new URL(targetUrl).hostname; } catch(e) {}
+
+    // 1. TENTATIVA DIRETA (Seletores DOM)
+    // ... (Mantido igual para velocidade)
     const html = await fetchHtml(targetUrl);
     if (html) {
         const storeSelectors = [
@@ -124,25 +133,36 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         }
     }
 
-    // 2. FALLBACK COM CURADORIA VISUAL
+    // 2. FALLBACK INTELIGENTE (Se falhar a direta ou for imagem ruim)
     if ((!imageUrl || imageUrl.includes('logo') || imageUrl.length < 20) && backupSearchTerm) {
-        const candidates = await fetchCandidatesFromBing(backupSearchTerm);
+        
+        // Estratégia A: Busca Dedicada (site:loja.com Termo)
+        // Isso garante que a imagem venha DO SITE do link
+        let candidates = [];
+        if (domain && domain.length > 3 && !domain.includes('google')) {
+             candidates = await fetchCandidatesFromBing(backupSearchTerm, domain);
+        }
+
+        // Estratégia B: Busca Genérica (Se a dedicada falhar)
+        if (candidates.length === 0) {
+             candidates = await fetchCandidatesFromBing(backupSearchTerm, null);
+        }
+
         if (candidates.length > 0) {
-            // Se tiver a imagem de referência do usuário, usa a IA para escolher a melhor
-            // Isso garante que cada link tenha uma imagem dedicada e próxima da referência
             if (userReferenceImage && apiKey) {
-                // Passamos diversityOffset = 0 pois queremos a MELHOR escolha visual, 
-                // a diversidade já vem do termo de busca único de cada loja
-                imageUrl = await selectBestMatchAI(candidates, userReferenceImage, 0);
+                // Passamos para a IA escolher a imagem mais parecida com a referência
+                imageUrl = await selectBestMatchAI(candidates, userReferenceImage);
             } else {
+                // Fallback matemático se não tiver IA
                 let domainHash = 0;
-                try { domainHash = new URL(targetUrl).hostname.charCodeAt(0); } catch(e) { domainHash = 1; }
-                const diversityOffset = domainHash % 3;
-                imageUrl = candidates[diversityOffset % candidates.length].url;
+                try { domainHash = domain.charCodeAt(0); } catch(e) { domainHash = 1; }
+                const diversityOffset = domainHash % candidates.length;
+                imageUrl = candidates[diversityOffset].url;
             }
         }
     }
 
+    // Limpeza Final
     if (imageUrl) {
         imageUrl = imageUrl.replace(/&amp;/g, '&');
         if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;

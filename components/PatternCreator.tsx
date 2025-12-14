@@ -1,8 +1,66 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2 } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
+
+// Modal Flutuante para Comparação (Reutilizado para consistência)
+const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
+    const [position, setPosition] = useState({ x: window.innerWidth - 220, y: 100 }); 
+    const [size, setSize] = useState(180);
+    const [isMinimized, setIsMinimized] = useState(false);
+    
+    const dragOffset = useRef({ x: 0, y: 0 });
+    const isDragging = useRef(false);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        isDragging.current = true;
+        dragOffset.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+        setPosition({
+            x: Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - size)),
+            y: Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - 50))
+        });
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDragging.current = false;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+
+    if (isMinimized) {
+        return (
+            <div className="fixed top-24 right-4 bg-vingi-900 text-white p-3 rounded-full shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform" onClick={() => setIsMinimized(false)}>
+                <ImageIcon size={24} />
+            </div>
+        );
+    }
+
+    return (
+        <div 
+            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow shadow-md"
+            style={{ left: position.x, top: position.y, width: size, touchAction: 'none' }}
+        >
+            <div 
+                className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none"
+                onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp}
+            >
+                <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Ref</span>
+                <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+                    <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
+                    <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
+                </div>
+            </div>
+            <div className="relative bg-gray-100 group">
+                <img src={image} className="w-full object-contain bg-white pointer-events-none select-none" style={{ maxHeight: size * 1.5 }} />
+            </div>
+        </div>
+    );
+};
 
 const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -23,7 +81,6 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
-// Componente Cartão Pantone
 const PantoneCard: React.FC<{ color: PantoneColor }> = ({ color }) => (
     <div className="flex flex-col bg-white shadow-md rounded-sm overflow-hidden aspect-[3/4] border border-gray-200 hover:scale-105 transition-transform cursor-pointer group">
         <div className="flex-1" style={{ backgroundColor: color.hex }}></div>
@@ -47,11 +104,8 @@ export const PatternCreator: React.FC = () => {
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
     const [fabricMatches, setFabricMatches] = useState<ExternalPatternMatch[]>([]);
-    
-    // Technical Data
     const [technicalSpecs, setTechnicalSpecs] = useState<any>(null);
     const [genError, setGenError] = useState<string | null>(null);
-
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,10 +138,7 @@ export const PatternCreator: React.FC = () => {
             const compressedBase64 = await compressImage(referenceImage);
             const parts = compressedBase64.split(',');
             const data = parts[1];
-            
-            // Assume JPEG pós-compressão
             const mimeType = 'image/jpeg'; 
-
             const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -97,10 +148,8 @@ export const PatternCreator: React.FC = () => {
                     mainMimeType: mimeType
                 })
             });
-
             if (!response.ok) throw new Error("API Error");
             const resData = await response.json();
-            
             if (resData.success) {
                 setPrompt(resData.prompt || '');
                 setDetectedColors(Array.isArray(resData.colors) ? resData.colors : []);
@@ -108,7 +157,6 @@ export const PatternCreator: React.FC = () => {
                 setTechnicalSpecs(resData.technicalSpecs || null);
             }
         } catch (error) {
-            console.error("Analysis failed:", error);
             setPrompt("Could not analyze texture.");
         } finally {
             setIsAnalyzing(false);
@@ -133,10 +181,9 @@ export const PatternCreator: React.FC = () => {
             if (data.success && data.image) { 
                 setGeneratedPattern(data.image); 
             } else {
-                setGenError(data.error || "Erro na geração.");
+                setGenError(data.error || "Erro na geração. Tente novamente.");
             }
         } catch (error: any) {
-            console.error("Gen Error", error);
             setGenError(error.message || "Erro na geração.");
         } finally {
             setIsGenerating(false);
@@ -152,19 +199,19 @@ export const PatternCreator: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden">
+        <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden relative">
+            {/* MODAL DE REFERÊNCIA FLUTUANTE */}
+            {referenceImage && <FloatingComparisonModal image={referenceImage} />}
+
             <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0 z-20 shadow-sm">
                 <Palette className="text-vingi-600 mr-2" size={20} />
                 <h2 className="text-lg font-bold text-gray-800">Pattern Studio <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 ml-2">BETA</span></h2>
             </header>
 
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                
-                {/* COLUNA 1: LABORATÓRIO E ANÁLISE (Entrada & Dados) */}
+                {/* COLUNA 1: LABORATÓRIO */}
                 <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10">
                     <div className="p-6 space-y-8">
-                        
-                        {/* 1. UPLOAD SECTION */}
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <ImageIcon size={14}/> 1. Amostra de Referência
@@ -188,7 +235,6 @@ export const PatternCreator: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-
                             {referenceImage && !technicalSpecs && (
                                 <button onClick={analyzeReference} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
                                     {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Search size={16}/>} 
@@ -196,11 +242,8 @@ export const PatternCreator: React.FC = () => {
                                 </button>
                             )}
                         </div>
-
-                        {/* 2. RESULTADOS TÉCNICOS (Só aparece após análise) */}
                         {technicalSpecs && (
                             <div className="animate-fade-in space-y-6">
-                                {/* PANTONE LAB */}
                                 <div>
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                         <Palette size={14}/> Pantone® Studio
@@ -213,30 +256,6 @@ export const PatternCreator: React.FC = () => {
                                         <p className="text-xs text-gray-400 italic">Nenhuma cor dominante detectada.</p>
                                     )}
                                 </div>
-
-                                {/* DNA TÊXTIL */}
-                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-3"><Target size={12}/> Especificações Técnicas</h3>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div className="bg-white p-2 rounded border border-gray-100">
-                                            <span className="text-gray-400 text-[9px] block">Repetição</span>
-                                            <span className="font-bold text-gray-700">{technicalSpecs.repeat || 'N/A'}</span>
-                                        </div>
-                                        <div className="bg-white p-2 rounded border border-gray-100">
-                                            <span className="text-gray-400 text-[9px] block">Técnica</span>
-                                            <span className="font-bold text-gray-700">{technicalSpecs.technique || 'N/A'}</span>
-                                        </div>
-                                    </div>
-                                    {technicalSpecs.elements && (
-                                        <div className="pt-2 mt-2 border-t border-gray-100 flex flex-wrap gap-1">
-                                            {technicalSpecs.elements.map((el: string, i: number) => (
-                                                <span key={i} className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[10px] text-gray-600">{el}</span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* AÇÃO DE GERAÇÃO (Sempre disponível após análise) */}
                                 <div className="pt-4 border-t border-gray-100">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                         <Sparkles size={14}/> IA Generativa
@@ -256,18 +275,15 @@ export const PatternCreator: React.FC = () => {
                     </div>
                 </div>
 
-                {/* COLUNA 2: RESULTADOS VISUAIS (Geração + Busca) */}
+                {/* COLUNA 2: RESULTADOS VISUAIS */}
                 <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f1f5f9]">
-                    
-                    {/* ÁREA SUPERIOR: PREVIEW DA GERAÇÃO */}
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-                        
                         {!generatedPattern && !isGenerating ? (
                             <div className="text-center opacity-40 max-w-md">
                                 <Layers size={64} className="mx-auto mb-4 text-gray-300"/>
                                 <h3 className="text-xl font-bold text-gray-800">Estúdio de Criação</h3>
-                                <p className="text-gray-500 mt-2">Use o botão "Criar Estampa Exclusiva" no menu lateral para gerar uma textura seamless baseada na sua referência.</p>
+                                <p className="text-gray-500 mt-2">Use o botão "Criar Estampa Exclusiva" para gerar uma textura seamless baseada na sua referência.</p>
                             </div>
                         ) : isGenerating ? (
                              <div className="flex flex-col items-center justify-center">
@@ -297,8 +313,6 @@ export const PatternCreator: React.FC = () => {
                             </div>
                         )}
                     </div>
-
-                    {/* ÁREA INFERIOR: PESQUISA DE MERCADO */}
                     <div className="p-6 md:p-8">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -306,7 +320,6 @@ export const PatternCreator: React.FC = () => {
                             </h3>
                             {fabricMatches.length > 0 && <span className="text-xs bg-white border border-gray-200 px-3 py-1 rounded-full text-gray-500 font-bold">{fabricMatches.length} Encontrados</span>}
                         </div>
-                        
                         {fabricMatches.length === 0 ? (
                              technicalSpecs ? (
                                 <div className="flex items-center justify-center h-32 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
