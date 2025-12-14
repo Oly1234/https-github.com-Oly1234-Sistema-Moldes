@@ -17,6 +17,9 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
     const safeUrl = match.url;
     const initialImage = (match.imageUrl && match.imageUrl.length > 10) ? match.imageUrl : null;
     
+    // Preparação do termo de backup para busca visual
+    const backupTerm = match.backupSearchTerm || match.patternName.replace('Busca: ', '');
+
     const [displayImage, setDisplayImage] = useState<string | null>(initialImage);
     const [loading, setLoading] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
@@ -49,11 +52,16 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
 
         const fetchScrapedImage = async () => {
             try {
-                // Chama nosso "Python-in-Node" scraper
+                // Chama nosso "Smart Scraper" no Backend
+                // Envia a URL alvo E o termo de backup. Se a URL falhar, o backend busca imagem do termo.
                 const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: safeUrl })
+                    body: JSON.stringify({ 
+                        action: 'GET_LINK_PREVIEW', 
+                        targetUrl: safeUrl,
+                        backupSearchTerm: backupTerm 
+                    })
                 });
                 const data = await res.json();
                 
@@ -62,7 +70,7 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
                         imgCache.set(safeUrl, data.image);
                         setDisplayImage(getProxyUrl(data.image));
                     } else {
-                        // Se falhar o scraping, fica com o ícone padrão (já definido no fallback do img tag)
+                        // Se falhar tudo, mantém o null (que mostrará o ícone no render)
                     }
                 }
             } catch (e) {
@@ -75,7 +83,7 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
         // Pequeno delay aleatório para evitar bombardear o backend
         const timeout = setTimeout(fetchScrapedImage, Math.random() * 800);
         return () => { active = false; clearTimeout(timeout); };
-    }, [isVisible, safeUrl, initialImage]);
+    }, [isVisible, safeUrl, initialImage, backupTerm]);
 
     return (
         <div ref={cardRef} onClick={() => safeUrl && window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full animate-fade-in relative min-h-[260px]">

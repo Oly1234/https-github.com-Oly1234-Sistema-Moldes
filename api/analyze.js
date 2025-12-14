@@ -22,120 +22,127 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, targetUrl } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, targetUrl, backupSearchTerm } = req.body;
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
     
-    // --- MOTOR DE SCRAPING "PYTHON-STYLE" (GET_LINK_PREVIEW) ---
+    // --- MOTOR DE SCRAPING HÍBRIDO (GET_LINK_PREVIEW) ---
+    // Estratégia: 
+    // 1. Tenta extrair metadados da URL oficial (Etsy, Burda, etc).
+    // 2. Se falhar (bloqueio 403/Captcha), aciona o "Search Scraper" (Bing Images) usando o termo de busca.
+    // Isso garante que SEMPRE tenhamos uma imagem visual.
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
         
-        // Evita gastar recursos tentando raspar a home do Google Search, pois não tem og:image útil
-        if (targetUrl.includes('google.com/search') && !targetUrl.includes('tbm=isch')) {
-             return res.status(200).json({ success: false }); 
-        }
-
-        // Simulação de Browser (Headers)
+        // Headers que simulam um navegador real para evitar bloqueios simples
         const browserHeaders = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.google.com/',
             'Cache-Control': 'no-cache',
             'Upgrade-Insecure-Requests': '1'
         };
 
         const fetchHtml = async (url) => {
             const controller = new AbortController();
-            setTimeout(() => controller.abort(), 12000); // 12s timeout
-            const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.text();
+            setTimeout(() => controller.abort(), 8000); // 8s timeout
+            try {
+                const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.text();
+            } catch (e) {
+                return null;
+            }
+        };
+
+        // SUB-FUNÇÃO: Scraper de Imagens do Bing (Fallback Visual)
+        // Usado quando o site alvo bloqueia o acesso direto.
+        const fallbackToImageSearch = async (term) => {
+            if (!term) return null;
+            const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(term + " sewing pattern official")}&first=1`;
+            const html = await fetchHtml(searchUrl);
+            if (!html) return null;
+            
+            // Extração de URLs de miniaturas do Bing (geralmente .jpg acessíveis)
+            // Procura padroes como murl (media url) ou turl (thumbnail url)
+            const match = html.match(/murl&quot;:&quot;(https?:\/\/[^&]+)&quot;/);
+            if (match) return match[1];
+            
+            const match2 = html.match(/src="(https:\/\/tse\d\.mm\.bing\.net\/th\?id=[^"]+)"/);
+            if (match2) return match2[1];
+
+            return null;
         };
 
         try {
-            const html = await fetchHtml(targetUrl);
+            // TENTATIVA 1: Scraping Direto da URL Alvo
             let imageUrl = null;
+            
+            // Pular scraping direto para URLs de busca complexas (Google/Bing) pois falham muito
+            // Ir direto para o fallback visual pode ser mais rápido
+            const isSearchPage = targetUrl.includes('/search') || targetUrl.includes('google.com') || targetUrl.includes('bing.com');
+            
+            if (!isSearchPage) {
+                const html = await fetchHtml(targetUrl);
+                
+                if (html) {
+                    // Lógica JSON-LD (E-commerce Standard)
+                    const jsonLdRegex = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
+                    let match;
+                    while ((match = jsonLdRegex.exec(html)) !== null) {
+                        try {
+                            const json = JSON.parse(match[1]);
+                            const extract = (obj) => {
+                                if (!obj) return null;
+                                if (obj.image) return Array.isArray(obj.image) ? obj.image[0] : (typeof obj.image === 'object' ? obj.image.url : obj.image);
+                                if (obj.thumbnailUrl) return obj.thumbnailUrl;
+                                return null;
+                            };
+                            const img = extract(json) || (json.itemListElement && extract(json.itemListElement[0]?.item));
+                            if (img) { imageUrl = img; break; }
+                        } catch (e) {}
+                    }
 
-            // ESTRATÉGIA 1: JSON-LD (Dados Estruturados - A mais confiável)
-            // Sites modernos (Etsy, Pinterest, E-commerces) injetam dados do produto aqui.
-            const jsonLdRegex = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
-            let match;
-            while ((match = jsonLdRegex.exec(html)) !== null) {
-                try {
-                    const json = JSON.parse(match[1]);
-                    // Procura imagem em estruturas comuns
-                    const extract = (obj) => {
-                        if (!obj) return null;
-                        if (obj.image) return Array.isArray(obj.image) ? obj.image[0] : (typeof obj.image === 'object' ? obj.image.url : obj.image);
-                        if (obj.thumbnailUrl) return obj.thumbnailUrl;
-                        return null;
-                    };
-                    
-                    // Se for lista de produtos (Página de Busca), pega o primeiro
-                    if (json.itemListElement && Array.isArray(json.itemListElement)) {
-                        const firstItem = json.itemListElement[0];
-                        const img = extract(firstItem) || extract(firstItem.item);
-                        if (img) { imageUrl = img; break; }
+                    // Lógica Open Graph
+                    if (!imageUrl) {
+                        const og = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
+                        if (og) imageUrl = og[1];
                     }
                     
-                    // Se for produto único
-                    const directImg = extract(json);
-                    if (directImg) { imageUrl = directImg; break; }
-
-                } catch (e) { continue; }
-            }
-
-            // ESTRATÉGIA 2: Open Graph & Twitter Cards (Padrão Social)
-            if (!imageUrl) {
-                const ogMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
-                if (ogMatch) imageUrl = ogMatch[1];
-            }
-            if (!imageUrl) {
-                const twMatch = html.match(/<meta\s+name="twitter:image"\s+content="([^"]+)"/i);
-                if (twMatch) imageUrl = twMatch[1];
-            }
-
-            // ESTRATÉGIA 3: Scraping Específico por Domínio (Fallback "Na Unha")
-            if (!imageUrl) {
-                if (targetUrl.includes('etsy.com')) {
-                    // Tenta pegar imagem do grid v2
-                    const etsyGrid = html.match(/src="(https:\/\/i\.etsystatic\.com\/[^"]+il_[^"]+\.jpg)"/i);
-                    if (etsyGrid) imageUrl = etsyGrid[1];
-                } 
-                else if (targetUrl.includes('burdastyle')) {
-                    const burda = html.match(/class="product-image-photo"[^>]*src="([^"]+)"/i);
-                    if (burda) imageUrl = burda[1];
-                }
-                else if (targetUrl.includes('pinterest')) {
-                    const pin = html.match(/src="(https:\/\/i\.pinimg\.com\/[^"]+)"/i);
-                    if (pin) imageUrl = pin[1];
+                    // Fallbacks Específicos
+                    if (!imageUrl) {
+                        if (targetUrl.includes('etsy')) {
+                            const etsy = html.match(/src="(https:\/\/i\.etsystatic\.com\/[^"]+il_[^"]+\.jpg)"/i);
+                            if (etsy) imageUrl = etsy[1];
+                        }
+                    }
                 }
             }
 
-            // LIMPEZA FINAL DA URL
+            // TENTATIVA 2: Fallback Inteligente (Bing Image Search)
+            // Se o site bloqueou (html null) ou não achamos imagem, e temos um termo de busca...
+            if (!imageUrl && backupSearchTerm) {
+                console.log("Scraping direto falhou ou bloqueado. Tentando busca visual para:", backupSearchTerm);
+                imageUrl = await fallbackToImageSearch(backupSearchTerm);
+            }
+
+            // TRATAMENTO FINAL DA IMAGEM
             if (imageUrl) {
-                // Remove escapes HTML
                 imageUrl = imageUrl.replace(/&amp;/g, '&');
-                // Corrige URLs relativas
                 if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-                else if (imageUrl.startsWith('/')) {
-                    const urlObj = new URL(targetUrl);
-                    imageUrl = `${urlObj.protocol}//${urlObj.hostname}${imageUrl}`;
-                }
                 
-                // Hack de Qualidade: Tenta trocar thumbnails por imagens maiores (Etsy/Shopify)
+                // Melhoria de qualidade para Etsy
                 if (imageUrl.includes('etsystatic') && imageUrl.includes('340x270')) {
-                    imageUrl = imageUrl.replace('340x270', '794xN'); // Força alta resolução Etsy
+                    imageUrl = imageUrl.replace('340x270', '794xN');
                 }
                 
                 return res.status(200).json({ success: true, image: imageUrl });
             }
 
-            return res.status(200).json({ success: false, message: "No image found in metadata" });
+            return res.status(200).json({ success: false, message: "No visual found" });
 
         } catch (err) {
-            console.error("Scraper Error:", err.message);
+            console.error("Scraper Error:", err);
             return res.status(200).json({ success: false, error: err.message });
         }
     }
@@ -219,14 +226,16 @@ export default async function handler(req, res) {
         // 2. Construção de Links REAIS (Baseados em Busca)
         const mainTerm = analysis.searchKeywords?.[0] || analysis.patternName || "Sewing Pattern";
         
+        // IMPORTANTE: Adiciona o backupSearchTerm para o fallback de imagem funcionar
         const createRealLink = (source, type, urlBase, term, score) => ({
             source,
             patternName: `Busca: ${term}`,
             type: type,
             linkType: "SEARCH_QUERY",
             url: `${urlBase}${encodeURIComponent(term)}`,
+            backupSearchTerm: `${term} ${source} sewing pattern`, // TERMO DE BACKUP PARA BUSCA VISUAL
             similarityScore: score,
-            imageUrl: null // O Frontend vai acionar GET_LINK_PREVIEW para raspar a imagem real
+            imageUrl: null 
         });
 
         // DEFINIÇÃO DAS FONTES GLOBAIS
