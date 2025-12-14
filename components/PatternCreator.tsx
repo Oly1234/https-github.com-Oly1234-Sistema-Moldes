@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, ExternalLink, ShoppingCart, Layers } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
@@ -56,9 +56,9 @@ export const PatternCreator: React.FC = () => {
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
     
-    // Agora tipamos corretamente como ExternalPatternMatch para usar o Visual Card
+    // Resultados de Stock Real (vindos do Backend)
     const [stockMatches, setStockMatches] = useState<ExternalPatternMatch[]>([]);
-    const [visibleStockCount, setVisibleStockCount] = useState(10);
+    const [visibleStockCount, setVisibleStockCount] = useState(15);
     
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -75,7 +75,7 @@ export const PatternCreator: React.FC = () => {
                 setDetectedColors([]);
                 setStockMatches([]);
                 setPrompt('');
-                setVisibleStockCount(10);
+                setVisibleStockCount(15);
             };
             reader.readAsDataURL(file);
         }
@@ -102,52 +102,60 @@ export const PatternCreator: React.FC = () => {
             if (!response.ok) throw new Error("API Offline");
 
             const data = await response.json();
+            
             if (data.success) {
                 setPrompt(data.prompt);
-                setDetectedColors(data.colors || []);
-                // Garantir que stockMatches seja um array
+                const colors = data.colors || [];
+                setDetectedColors(colors);
+                
+                // Exibe APENAS matches retornados pelo Backend (Links Reais)
+                // Não geramos mais nada fake aqui. Se a lista for vazia, o usuário verá vazio.
+                // Mas o PatternVisualCard vai tentar scrapear a imagem da URL.
                 setStockMatches(data.stockMatches || []);
+                
+                // DISPARA A GERAÇÃO DA ESTAMPA AUTOMATICAMENTE
+                // Usando o prompt e as cores detectadas
+                if (data.prompt) {
+                    generatePatternFromData(data.prompt, colors);
+                }
             } else {
                 throw new Error("Dados inválidos");
             }
         } catch (error) {
-            console.log("Usando Fallback Local para Pattern Creator");
-            setPrompt("Seamless textile pattern design, Tropical Boho style. Watercolor technique with wet-on-wet effects.");
-            setDetectedColors([
-                { name: "Emerald", code: "PANTONE 17-5641 TCX", hex: "#009B77" },
-                { name: "Coral Pink", code: "PANTONE 16-1546 TCX", hex: "#FF6F61" },
-                { name: "Gold Ochre", code: "PANTONE 16-0948 TCX", hex: "#D1B250" },
-                { name: "Cream", code: "PANTONE 11-0601 TCX", hex: "#F0EAD6" }
-            ]);
-            // Fallback Stock Data
-            setStockMatches([
-                { source: "Patternbank", patternName: "Tropical Summer Print", type: "PREMIUM", url: "https://patternbank.com", similarityScore: 90, linkType: "DIRECT" } as ExternalPatternMatch,
-                { source: "Shutterstock", patternName: "Vector Floral Seamless", type: "ROYALTY-FREE", url: "https://shutterstock.com", similarityScore: 85, linkType: "DIRECT" } as ExternalPatternMatch
-            ]);
+            console.log("Erro na análise:", error);
+            // Fallback Mínimo apenas para não travar a UI
+            setPrompt("Could not analyze image pattern.");
         } finally {
             setIsAnalyzing(false);
         }
     };
 
-    const generatePattern = async () => {
-        if (!prompt) return;
+    // Função separada para permitir re-geração manual ou automática
+    const generatePatternFromData = async (promptText: string, colorsData: PantoneColor[]) => {
         setIsGenerating(true);
         try {
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'GENERATE_PATTERN', prompt: prompt })
+                body: JSON.stringify({ 
+                    action: 'GENERATE_PATTERN', 
+                    prompt: promptText,
+                    colors: colorsData
+                })
             });
-            if (!response.ok) throw new Error("API Offline or Busy");
+            if (!response.ok) throw new Error("API Busy");
             const data = await response.json();
             if (data.success && data.image) { setGeneratedPattern(data.image); } 
-            else { throw new Error("Falha na geração"); }
         } catch (error) {
-            const localPattern = generateFallbackPattern(detectedColors);
+            const localPattern = generateFallbackPattern(colorsData);
             setGeneratedPattern(localPattern);
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const handleManualGenerate = () => {
+        if (prompt) generatePatternFromData(prompt, detectedColors);
     };
 
     const handleDownload = () => {
@@ -239,12 +247,12 @@ export const PatternCreator: React.FC = () => {
                     </div>
 
                     <button 
-                        onClick={generatePattern}
+                        onClick={handleManualGenerate}
                         disabled={!prompt || isGenerating}
                         className="w-full py-4 bg-gradient-to-r from-vingi-600 to-vingi-500 text-white font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 transform active:scale-95 flex items-center justify-center gap-2 border border-white/10 ring-2 ring-transparent hover:ring-vingi-300"
                     >
                         {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18}/>}
-                        {isGenerating ? 'TECELANDO PIXELS...' : 'GERAR ESTAMPA 8K'}
+                        {isGenerating ? 'TECELANDO PIXELS...' : 'RE-GERAR ESTAMPA'}
                     </button>
                 </div>
             </div>
@@ -290,7 +298,9 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-800">Marketplace de Estampas</h3>
-                                    <p className="text-sm text-gray-500">Opções comerciais prontas para compra baseadas na sua referência.</p>
+                                    <p className="text-sm text-gray-500">
+                                        Opções reais encontradas em bancos de imagens.
+                                    </p>
                                 </div>
                             </div>
                             
@@ -303,10 +313,10 @@ export const PatternCreator: React.FC = () => {
                             {visibleStockCount < stockMatches.length && (
                                 <div className="mt-8 flex justify-center">
                                     <button 
-                                        onClick={() => setVisibleStockCount(p => p + 10)}
+                                        onClick={() => setVisibleStockCount(p => p + 15)}
                                         className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 text-gray-600 transition-all"
                                     >
-                                        Carregar Mais Estampas (+10)
+                                        Carregar Mais Estampas (+15)
                                     </button>
                                 </div>
                             )}
