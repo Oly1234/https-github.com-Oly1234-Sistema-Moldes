@@ -17,7 +17,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
 
-  // Helper de limpeza JSON
   const cleanJson = (text) => {
       if (!text) return null;
       let cleaned = text.replace(/```json/g, '').replace(/```/g, '');
@@ -34,16 +33,19 @@ export default async function handler(req, res) {
 
     if (!apiKey) return res.status(500).json({ error: "Missing API Key" });
 
-    // --- ROTEAMENTO MODULAR ---
-
-    // 1. LINK PREVIEW & SCRAPING (Bing / Crawler)
+    // 1. LINK PREVIEW & CURADORIA (Bing / Scraper / Curator)
     if (action === 'GET_LINK_PREVIEW') {
-        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, cleanJson);
+        // Detecta o contexto baseado no termo de busca (heurística simples) ou passado pelo front
+        // Se o termo tem "pattern" e não "texture", provavelmente é roupa.
+        const contextType = (backupSearchTerm && backupSearchTerm.includes('texture')) ? 'SURFACE' : 'CLOTHING';
+        
+        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType);
+        
         if (image) return res.status(200).json({ success: true, image });
         return res.status(200).json({ success: false, message: "No visual found" });
     }
 
-    // 2. GERAÇÃO DE ESTAMPA (AI Criativo)
+    // 2. GERAÇÃO DE ESTAMPA
     if (action === 'GENERATE_PATTERN') {
         try {
             const image = await generatePattern(apiKey, prompt, colors);
@@ -53,7 +55,7 @@ export default async function handler(req, res) {
         }
     }
 
-    // 3. ANÁLISE DE SUPERFÍCIE (Patterns & Pantones)
+    // 3. ANÁLISE DE SUPERFÍCIE (Patterns)
     if (action === 'DESCRIBE_PATTERN') {
         try {
             const analysis = await analyzeSurfaceDesign(apiKey, mainImageBase64, mainMimeType, cleanJson);

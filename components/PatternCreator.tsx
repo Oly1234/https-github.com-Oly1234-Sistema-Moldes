@@ -81,17 +81,22 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
-const PantoneCard: React.FC<{ color: PantoneColor }> = ({ color }) => (
-    <div className="flex flex-col bg-white shadow-md rounded-sm overflow-hidden aspect-[3/4] border border-gray-200 hover:scale-105 transition-transform cursor-pointer group">
-        <div className="flex-1" style={{ backgroundColor: color.hex }}></div>
-        <div className="p-2 h-16 flex flex-col justify-between bg-white">
-            <div>
-                <span className="block text-[10px] font-bold text-gray-900 leading-tight uppercase">{color.name}</span>
-                <span className="block text-[9px] text-gray-500 font-mono">{color.code}</span>
+// CARTÃO PANTONE ATUALIZADO
+const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => (
+    <div className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group h-full">
+        <div className="h-20 w-full relative" style={{ backgroundColor: color.hex }}>
+             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <div className="bg-white/90 rounded text-[8px] font-mono px-1 py-0.5">{color.hex}</div>
+             </div>
+        </div>
+        <div className="p-3 flex flex-col justify-between flex-1">
+            <div className="mb-2">
+                <span className="block text-[10px] font-extrabold text-gray-900 leading-tight uppercase tracking-tight">{color.name}</span>
+                <span className="block text-[9px] text-gray-500 font-mono mt-0.5">{color.code || 'TCX PENDING'}</span>
             </div>
-            {color.trendStatus && (
-                <span className="text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1 py-0.5 rounded w-fit uppercase">
-                    {color.trendStatus}
+            {color.role && (
+                <span className="self-start text-[8px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 uppercase tracking-wider">
+                    {color.role}
                 </span>
             )}
         </div>
@@ -218,7 +223,7 @@ export const PatternCreator: React.FC = () => {
 
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                 {/* COLUNA 1: LABORATÓRIO (DEPARTAMENTO DE CRIAÇÃO) */}
-                <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10">
+                <div className="w-full md:w-[380px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 custom-scrollbar">
                     <div className="p-6 space-y-8">
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -246,7 +251,7 @@ export const PatternCreator: React.FC = () => {
                             {referenceImage && !technicalSpecs && (
                                 <button onClick={analyzeReference} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
                                     {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Search size={16}/>} 
-                                    {isAnalyzing ? 'Analisando Pantone...' : 'Analisar DNA & Cores'}
+                                    {isAnalyzing ? 'Analisando DNA...' : 'Analisar DNA & Cores'}
                                 </button>
                             )}
                         </div>
@@ -254,10 +259,10 @@ export const PatternCreator: React.FC = () => {
                             <div className="animate-fade-in space-y-6">
                                 <div>
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Palette size={14}/> Pantone® Studio
+                                        <Palette size={14}/> Pantone® Color IQ
                                     </h3>
                                     {detectedColors.length > 0 ? (
-                                        <div className="grid grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-2 gap-3">
                                             {detectedColors.map((c, i) => <PantoneCard key={i} color={c} />)}
                                         </div>
                                     ) : (
