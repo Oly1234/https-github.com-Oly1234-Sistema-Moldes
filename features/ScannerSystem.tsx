@@ -14,20 +14,25 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); 
     const [size, setSize] = useState(180);
     const [isMinimized, setIsMinimized] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
+    
     const dragOffset = useRef({ x: 0, y: 0 });
-    const modalRef = useRef<HTMLDivElement>(null);
+    const isDragging = useRef(false);
 
-    // Handlers otimizados para evitar "stuck state"
-    const handleStart = (clientX: number, clientY: number) => {
-        setIsDragging(true);
-        dragOffset.current = { x: clientX - position.x, y: clientY - position.y };
+    const handlePointerDown = (e: React.PointerEvent) => {
+        // Captura o ponteiro para garantir que o movimento seja rastreado mesmo se sair do elemento
+        e.currentTarget.setPointerCapture(e.pointerId);
+        isDragging.current = true;
+        dragOffset.current = { 
+            x: e.clientX - position.x, 
+            y: e.clientY - position.y 
+        };
     };
 
-    const handleMove = (clientX: number, clientY: number) => {
-        if (!isDragging) return;
-        let newX = clientX - dragOffset.current.x;
-        let newY = clientY - dragOffset.current.y;
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+        
+        const newX = e.clientX - dragOffset.current.x;
+        const newY = e.clientY - dragOffset.current.y;
         
         // Limites da tela
         const maxX = window.innerWidth - size;
@@ -39,29 +44,10 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
         });
     };
 
-    const handleEnd = () => {
-        setIsDragging(false);
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDragging.current = false;
+        e.currentTarget.releasePointerCapture(e.pointerId);
     };
-
-    // Attach global listeners to window to ensure we catch 'mouseup' even outside the div
-    useEffect(() => {
-        if (isDragging) {
-            const onMouseMove = (e: MouseEvent) => { e.preventDefault(); handleMove(e.clientX, e.clientY); };
-            const onTouchMove = (e: TouchEvent) => { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); };
-            
-            window.addEventListener('mousemove', onMouseMove, { passive: false });
-            window.addEventListener('touchmove', onTouchMove, { passive: false });
-            window.addEventListener('mouseup', handleEnd);
-            window.addEventListener('touchend', handleEnd);
-            
-            return () => {
-                window.removeEventListener('mousemove', onMouseMove);
-                window.removeEventListener('touchmove', onTouchMove);
-                window.removeEventListener('mouseup', handleEnd);
-                window.removeEventListener('touchend', handleEnd);
-            };
-        }
-    }, [isDragging, size]);
 
     if (isMinimized) {
         return (
@@ -76,22 +62,28 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
 
     return (
         <div 
-            ref={modalRef}
-            className={`fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow ${isDragging ? 'cursor-grabbing shadow-xl scale-105' : 'shadow-md'}`}
+            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow shadow-md"
             style={{ 
                 left: position.x, 
                 top: position.y, 
-                width: size, 
-                touchAction: 'none' // CRUCIAL: Previne scroll da página no mobile
+                width: size,
+                // touch-action: none previne scroll da página APENAS ao interagir com este elemento
+                touchAction: 'none' 
             }}
         >
             <div 
                 className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none"
-                onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
-                onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                // Segurança extra caso perca o foco
+                onPointerCancel={handlePointerUp}
             >
                 <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Ref</span>
-                <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                <div 
+                    className="flex items-center gap-1" 
+                    onPointerDown={(e) => e.stopPropagation()} // Previne drag ao clicar nos botões
+                >
                     <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
                     <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
                 </div>
@@ -295,7 +287,10 @@ export const ScannerSystem: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col relative" ref={scrollRef}>
+    <div 
+        className="h-full flex flex-col relative overflow-y-auto overflow-x-hidden touch-pan-y" 
+        ref={scrollRef}
+    >
         {state === AppState.SUCCESS && uploadedImage && ( <FloatingComparisonModal image={uploadedImage} /> )}
         {state !== AppState.ANALYZING && state !== AppState.ERROR && (
             <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all shadow-sm">
