@@ -3,7 +3,7 @@
 // ESPECIALIDADE: Design de Estampas, Pantones & Marketplaces Digitais
 
 export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType, cleanJson) => {
-    // ANALISADOR TÊXTIL AVANÇADO (ENGENHEIRO TÊXTIL SÊNIOR)
+    // ANALISADOR TÊXTIL AVANÇADO
     const MASTER_VISION_PROMPT = `
     ACT AS: Senior Textile Engineer & Surface Designer.
     TASK: Technical Deconstruction of the Uploaded Pattern/Texture.
@@ -55,8 +55,9 @@ export const getSurfaceMarketplaces = (analysis) => {
         type,
         linkType: "SEARCH_QUERY",
         url: `${urlBase}${encodeURIComponent(baseQuery + " " + querySuffix)}`,
-        // Backup termo único para cada marketplace
-        backupSearchTerm: `${source} ${baseQuery} seamless pattern texture`, 
+        // Backup Termo ÚNICO: Inclui o NOME DA FONTE (ex: Patternbank) explicitamente
+        // Isso força o Bing a buscar imagens associadas àquele marketplace específico, evitando duplicatas
+        backupSearchTerm: `"${source}" ${baseQuery} seamless pattern texture swatch`, 
         similarityScore: 90 + boost,
         imageUrl: null 
     });

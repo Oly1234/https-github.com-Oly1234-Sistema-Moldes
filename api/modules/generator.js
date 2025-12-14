@@ -1,19 +1,21 @@
 
 // api/modules/generator.js
-// ESPECIALIDADE: Geração de Imagens (Text-to-Image / Image-to-Image)
+// ESPECIALIDADE: Geração de Imagens (Text-to-Image)
 
 export const generatePattern = async (apiKey, prompt, colors) => {
-    // Instrução aprimorada para focar em DESIGN DE SUPERFÍCIE (Surface Design)
+    // Instrução técnica para forçar o modelo a agir como uma impressora têxtil digital
     const colorInstruction = colors && colors.length > 0 ? `COLOR PALETTE: ${colors.map(c => c.name).join(', ')}.` : '';
     
     const finalPrompt = `
-    Create a professional Seamless Textile Pattern. 
-    Subject: ${prompt}. 
+    Generate a SEAMLESS TEXTILE PATTERN.
+    SUBJECT: ${prompt}.
     ${colorInstruction}
     
-    STYLE: Digital Surface Design, Flat Lay, 2D Texture Swatch. 
-    DETAILS: High fidelity, repeating seamless background, no shadows, no perspective, edge-to-edge pattern. 
-    OUTPUT: A single square image tileable on all sides.
+    STRICT VISUAL RULES:
+    1. VIEW: Top-down, flat lay, 2D texture swatch.
+    2. COMPOSITION: Edge-to-edge repeating pattern. No borders, no frames.
+    3. STYLE: Professional fabric print design (vector or watercolor style).
+    4. NO: No perspective, no furniture, no models, no mockups. Just the raw pattern file.
     `;
 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
@@ -27,7 +29,6 @@ export const generatePattern = async (apiKey, prompt, colors) => {
                 generation_config: { 
                     response_mime_type: "image/jpeg",
                     aspect_ratio: "1:1",
-                    // Solicita apenas 1 candidato para ser rápido
                     candidate_count: 1
                  }
             }) 
@@ -35,17 +36,20 @@ export const generatePattern = async (apiKey, prompt, colors) => {
         
         if (!response.ok) {
             const errText = await response.text();
-            throw new Error(`Google API Error: ${response.status} - ${errText}`);
+            throw new Error(`API Error: ${response.status}`);
         }
 
         const data = await response.json();
+        
+        // Verificação robusta: O modelo pode retornar texto se não conseguir gerar imagem (Safety filters, etc)
         const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
         
         if (imagePart) {
              return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         } else {
-             console.error("No image data in response", data);
-             throw new Error("O modelo gerou texto em vez de imagem. Tente simplificar o prompt.");
+             // Fallback de erro descritivo
+             console.error("Generator output format issue:", data);
+             throw new Error("A IA não conseguiu gerar uma imagem para este prompt. Tente simplificar a descrição.");
         }
     } catch (e) {
         console.error("Generator Module Error:", e);

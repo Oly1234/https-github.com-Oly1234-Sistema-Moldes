@@ -45,15 +45,15 @@ export const getClothingStores = (analysis) => {
     const mainQuery = analysis.searchQuery || `${analysis.patternName} sewing pattern`;
     const shortName = analysis.patternName;
 
-    // Função de criação de link com termo de backup ÚNICO para cada loja
+    // Função de criação de link com termo de backup ÚNICO e ESPECÍFICO por Marca
     const createRealLink = (source, type, urlBase, termQuery, score) => ({
         source, 
         patternName: shortName, 
         type, 
         linkType: "SEARCH_QUERY",
         url: `${urlBase}${encodeURIComponent(termQuery)}`,
-        // Backup Term inclui o NOME DA LOJA para forçar imagens diferentes no Bing
-        backupSearchTerm: `${source} ${termQuery} sewing pattern cover`, 
+        // Backup Term inclui explicitamente a MARCA no início para diversificar os resultados visuais no Bing
+        backupSearchTerm: `"${source}" ${shortName} sewing pattern envelope`, 
         similarityScore: score, 
         imageUrl: null 
     });
