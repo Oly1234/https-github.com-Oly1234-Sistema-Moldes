@@ -3,34 +3,38 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração de Estampas)
 
 export const generatePattern = async (apiKey, prompt, colors) => {
-    // 1. Configuração do Modelo de Imagem (Nano Banana / Gemini Flash Image)
-    // Este modelo é específico para gerar pixels, diferente do Flash de texto.
+    // 1. Modelo Nano Banana (Imagem)
     const MODEL_NAME = 'gemini-2.5-flash-image';
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    // 2. Construção do Prompt Visual
-    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'vibrant harmonious colors';
+    // 2. Construção do Prompt Visual (Simplificado e Direto)
+    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious colors';
     
-    // O prompt deve ser descritivo e direto para o modelo de imagem
+    // Prompt focado puramente na textura visual
     const finalPrompt = `
-    Seamless textile pattern design, top-down flat view.
-    Motif: ${prompt}.
-    Palette: ${colorList}.
-    Style: High-quality professional surface design, repeat pattern.
-    Texture: Fabric texture visible.
-    NO text, NO watermarks, NO realistic human faces.
+    Create a seamless texture pattern.
+    Subject: ${prompt}.
+    Colors: ${colorList}.
+    Style: Professional textile design swatch.
+    View: Top-down, flat, crop.
     `;
 
     try {
+        // CORREÇÃO ERRO 400:
+        // 1. Removemos response_mime_type (não suportado para este modelo)
+        // 2. Usamos a estrutura correta de generationConfig para imagem
         const payload = {
             contents: [{ 
                 parts: [
                     { text: finalPrompt }
                 ] 
             }],
-            generation_config: { 
-                response_mime_type: "image/jpeg", // Solicita explicitamente imagem
-                aspect_ratio: "1:1"
+            generationConfig: {
+                // Configuração específica para modelos de imagem do Gemini
+                imageConfig: {
+                    aspectRatio: "1:1",
+                    imageSize: "1K" // Opcional, mas garante qualidade
+                }
             }
         };
 
@@ -42,35 +46,34 @@ export const generatePattern = async (apiKey, prompt, colors) => {
         
         if (!response.ok) {
             const errText = await response.text();
-            console.error("Generator API Error:", errText);
-            throw new Error(`Erro na API de Imagem (${response.status})`);
+            console.error("Generator API Error Details:", errText);
+            throw new Error(`Erro na API (${response.status}): Verifique se sua chave suporta o modelo Nano Banana.`);
         }
 
         const data = await response.json();
         
-        // 3. Extração da Imagem (Inline Data)
-        // O modelo Nano Banana retorna a imagem dentro de inline_data
+        // 3. Extração da Imagem
         const parts = data.candidates?.[0]?.content?.parts;
-        const imagePart = parts?.find(p => p.inline_data);
         
+        // Procura por inline_data (Imagem)
+        const imagePart = parts?.find(p => p.inline_data);
         if (imagePart) {
              return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         } 
         
-        // Verificação de Bloqueio de Segurança
+        // Verifica recusa
         const finishReason = data.candidates?.[0]?.finish_reason;
         if (finishReason === 'SAFETY') {
-            throw new Error("A IA bloqueou a imagem por segurança. Tente termos mais neutros (ex: 'floral', 'geométrico').");
+            throw new Error("Bloqueio de Segurança. Tente um prompt mais simples (ex: 'floral abstrato').");
         }
 
-        // Fallback: Se o modelo responder com texto (às vezes acontece se ele não entender o pedido de imagem)
+        // Se retornou texto, é erro de interpretação
         const textPart = parts?.find(p => p.text)?.text;
         if (textPart) {
-            console.warn("AI returned text:", textPart);
-            throw new Error("A IA não gerou imagem. Tente simplificar o pedido.");
+            throw new Error("A IA gerou texto. Tente novamente.");
         }
 
-        throw new Error("O servidor processou mas não retornou dados visuais.");
+        throw new Error("O servidor não retornou imagem.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);
