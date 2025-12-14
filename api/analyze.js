@@ -38,17 +38,20 @@ export default async function handler(req, res) {
     const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     // ==========================================================================================
-    // ROTA 0: SCRAPER ROBUSTO (GET_LINK_PREVIEW) - MODO "PYTHON" SIMULADO
+    // ROTA 0: SCRAPER ROBUSTO "PYTHON-LIKE" (GET_LINK_PREVIEW)
     // ==========================================================================================
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
         if (targetUrl.includes('google.com/search')) return res.status(200).json({ success: false });
 
         try {
+            // Headers de Navegador Real para evitar bloqueios 403
             const commonHeaders = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
                 'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
                 'Sec-Fetch-Site': 'none',
@@ -56,62 +59,69 @@ export default async function handler(req, res) {
             };
             
             const siteRes = await fetch(targetUrl, { headers: commonHeaders });
-            if (!siteRes.ok) throw new Error('Site bloqueou ou 404');
+            if (!siteRes.ok) throw new Error(`Site bloqueou (${siteRes.status})`);
             const html = await siteRes.text();
             
             let imageUrl = null;
             
-            // Lógica de Prioridade de Extração (Scraping Real)
-            
-            // 1. JSON-LD (Muitos sites de e-commerce modernos usam isso para a imagem principal)
+            // --- ESTRATÉGIA DE EXTRAÇÃO DE IMAGEM ---
+
+            // 1. JSON-LD (E-commerce Structure) - Geralmente a melhor qualidade
             const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i);
             if (jsonLdMatch) {
                 try {
                     const json = JSON.parse(jsonLdMatch[1]);
-                    // Tenta encontrar 'image' em Product, Article ou raiz
                     const extractImg = (obj) => {
                          if (obj.image) return Array.isArray(obj.image) ? obj.image[0] : obj.image;
+                         if (obj.thumbnailUrl) return obj.thumbnailUrl;
                          return null;
                     };
                     let found = extractImg(json);
                     if (!found && Array.isArray(json)) found = json.map(extractImg).find(i => i);
-                    
-                    if (found) {
-                        imageUrl = (typeof found === 'object' && found.url) ? found.url : found;
-                    }
+                    if (found) imageUrl = (typeof found === 'object' && found.url) ? found.url : found;
                 } catch (e) {}
             }
 
-            // 2. Open Graph (Padrão Ouro para Redes Sociais)
+            // 2. Open Graph / Twitter Cards (Metadados Sociais)
             if (!imageUrl) {
                 const metaRegex = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']\s*\/?>/i;
                 const match = html.match(metaRegex);
                 if (match) imageUrl = match[1];
             }
 
-            // 3. Fallback para sites específicos (Scraping Específico)
+            // 3. Seletores Específicos por Site (Scraping Visual)
             if (!imageUrl) {
-                // Shutterstock
+                // Shutterstock (Busca ou Produto)
                 if (targetUrl.includes('shutterstock')) {
-                     // Tenta pegar a imagem grande de preview
-                     const ssMatch = html.match(/src=["'](https:\/\/image\.shutterstock\.com\/[^"']+)["']/i);
-                     if (ssMatch) imageUrl = ssMatch[1];
+                     // Tenta pegar a primeira imagem da galeria de busca
+                     const galleryMatch = html.match(/src=["'](https:\/\/image\.shutterstock\.com\/image-[^"']+)["']/i);
+                     if (galleryMatch) imageUrl = galleryMatch[1];
+                     // Tenta imagem de preview maior
+                     if (!imageUrl) {
+                        const previewMatch = html.match(/<img[^>]+data-src=["']([^"']+)["'][^>]*class=["'].*?jss.*?["']/i); 
+                        if (previewMatch) imageUrl = previewMatch[1];
+                     }
                 }
                 // Patternbank
                 if (targetUrl.includes('patternbank')) {
                      const pbMatch = html.match(/data-src=["']([^"']+)["']|src=["']([^"']+)["']/i); 
                      if (pbMatch) imageUrl = pbMatch[1] || pbMatch[2];
                 }
-                 // Etsy
+                // Etsy
                 if (targetUrl.includes('etsy')) {
                      const etsyMatch = html.match(/data-src-zoom-image=["']([^"']+)["']|data-src-full=["']([^"']+)["']/i);
                      if (etsyMatch) imageUrl = etsyMatch[1] || etsyMatch[2];
+                }
+                // Spoonflower
+                if (targetUrl.includes('spoonflower')) {
+                    const sfMatch = html.match(/src=["'](https:\/\/s3\.amazonaws\.com\/spoonflower[^"']+)["']/i);
+                    if (sfMatch) imageUrl = sfMatch[1];
                 }
             }
 
             if (!imageUrl) return res.status(200).json({ success: false });
             
-            // Corrigir protocolos e limpar
+            // Sanitização da URL
             if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
             imageUrl = imageUrl.replace(/&amp;/g, '&');
             
@@ -123,21 +133,34 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 1: GERAÇÃO DE ESTAMPA (AGORA RETORNA ERRO SE FALHAR PARA FRONTEND USAR FALLBACK)
+    // ROTA 1: GERAÇÃO DE ESTAMPA (GEMINI IMAGEN)
     // ==========================================================================================
     if (action === 'GENERATE_PATTERN') {
         if (!apiKey) return res.status(401).json({ success: false, error: "Missing API Key" });
 
         try {
-            // Tenta usar o Gemini para gerar (pode falhar dependendo da chave, o Frontend lida com isso)
+            // Tenta usar o modelo de imagem do Google primeiro (Melhor qualidade)
             const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
             
-            // Instrução Estrita de Cores
             const colorInstruction = colors && colors.length > 0 
-                ? `STRICT COLORS: ${colors.map(c => c.name).join(', ')}`
+                ? `STRICT COLOR PALETTE (Use mainly these): ${colors.map(c => c.name).join(', ')}.`
                 : '';
 
-            const finalPrompt = `Create a seamless pattern: ${prompt}. ${colorInstruction}`;
+            // PROMPT DE DESIGNER SÊNIOR
+            const finalPrompt = `
+            ACT AS: World-Class Textile Designer.
+            TASK: Create a High-End Seamless Pattern based on this description:
+            "${prompt}"
+            
+            TECHNICAL SPECS:
+            - TECHNIQUE: ${prompt.includes('watercolor') ? 'Wet-on-wet watercolor technique, fluid edges, painterly feel.' : 'Clean vector lines, precise geometry, crisp edges.'}
+            - COMPOSITION: Balanced repeat, no visible grid lines, professional flow.
+            - QUALITY: 8K resolution, detailed texture, commercial grade fabric print.
+            - LOGIC: Ensure floral/geometric elements overlap naturally. Maintain consistent line weight.
+            ${colorInstruction}
+            
+            OUTPUT: A single seamless tile. Flat lay. No perspective.
+            `;
             
             const payload = {
                 contents: [{ parts: [{ text: finalPrompt }] }],
@@ -154,16 +177,17 @@ export default async function handler(req, res) {
             const data = await googleResponse.json();
             const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
             
-            if (!imagePart) return res.status(200).json({ success: false }); // Frontend usará Pollinations
+            if (!imagePart) return res.status(200).json({ success: false }); // Falha silenciosa para fallback
             
             return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
         } catch (e) {
-            return res.status(200).json({ success: false }); // Retorna falso para Frontend usar Fallback
+            // Se o Gemini falhar, retorna false para o frontend usar o Pollinations
+            return res.status(200).json({ success: false }); 
         }
     }
 
     // ==========================================================================================
-    // ROTA 2: ANÁLISE + BUSCA REAL (STOCK MATCHING)
+    // ROTA 2: PATTERN STUDIO - ANÁLISE TÉCNICA PROFUNDA
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
          if (!apiKey) return res.status(500).json({ error: "No Key" });
@@ -172,34 +196,38 @@ export default async function handler(req, res) {
             const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
             
             const MASTER_VISION_PROMPT = `
-            ATUE COMO: CURADOR TÊXTIL SÊNIOR.
+            ACT AS: Senior Textile Designer & Print Engineer.
             
-            TAREFA 1: Analise a imagem. Descreva o "Visual DNA" em Inglês (Prompt rico para geração).
-            TAREFA 2: Extraia Paleta de Cores.
-            TAREFA 3: Gere 30 (TRINTA) URLs de Busca para bancos de imagens REAIS.
+            TASK 1: DECONSTRUCT THE ARTISTIC TECHNIQUE (Visual DNA).
+            Analyze the image and describe it for a generative AI. Be extremely technical:
+            - LINE QUALITY: Is it monoline, variable width, ink bleed, or vector crisp?
+            - BRUSHWORK: Is it dry brush, wet-on-wet watercolor, gouache opacity, or digital airbrush?
+            - MOTIF LOGIC: How do elements interact? (Overlapping, tossing, ogee grid, foulard).
+            - STYLE: Identify the specific art movement (e.g., Liberty London, Bauhaus, Arts & Crafts, Tropical Maximalism).
             
-            OBJETIVO:
-            Queremos que o usuário encontre estampas IGUAIS ou MUITO SIMILARES para comprar.
+            TASK 2: Extract 5 Dominant Pantone Colors (Name + Hex).
             
-            FONTES OBRIGATÓRIAS (Inclua diversidade):
-            - Shutterstock, Patternbank, Adobe Stock, Spoonflower, Creative Market, Vecteezy.
+            TASK 3: Generate 30 (THIRTY) High-Quality Search URLs.
+            Crucial: Create SMART SEARCH QUERIES. Do not look for specific IDs. Look for the STYLE.
             
-            REGRAS DE URL (CRÍTICO):
-            - Crie URLs de Busca (Search Queries) combinando palavras-chave visuais.
-            - Exemplo: "https://www.shutterstock.com/search/red+watercolor+hibiscus+seamless"
+            SOURCES: Shutterstock, Patternbank, Adobe Stock, Spoonflower, Creative Market, Vecteezy.
+            
+            Example: If image is "Watercolor Floral", create:
+            - "https://www.shutterstock.com/search/watercolor+floral+seamless+pattern+hand+painted"
+            - "https://www.patternbank.com/search?q=painted+tropical+flowers"
 
             JSON OUTPUT:
             { 
-              "prompt": "Detailed visual description...",
+              "prompt": "Professional textile design, [Technique Details], [Motif Logic], [Style], seamless repeat...",
               "colors": [{ "name": "...", "code": "...", "hex": "..." }],
               "stockMatches": [
-                 ... GERE 30 ITENS ...
+                 ... GENERATE 30 ITEMS ...
                  { 
-                   "source": "Nome do Site", 
-                   "patternName": "Nome Descritivo", 
+                   "source": "Site Name", 
+                   "patternName": "Descriptive Name (e.g. Lush Watercolor Tropical)", 
                    "type": "ROYALTY-FREE", 
                    "linkType": "SEARCH_QUERY", 
-                   "url": "https://site.com/search?q=keywords",
+                   "url": "https://site.com/search?q=...",
                    "similarityScore": 95 
                  }
               ]
@@ -233,30 +261,24 @@ export default async function handler(req, res) {
         if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
 
         const GLOBAL_SEARCH_PROMPT = `
-        VOCÊ É: VINGI AI, Especialista em Engenharia Reversa de Moda.
-        MISSÃO: Analisar a roupa e encontrar MOLDES DE COSTURA (Sewing Patterns) compatíveis.
+        VOCÊ É: VINGI AI, O Maior Modelista Técnico do Mundo.
+        MISSÃO: Analisar a foto da roupa e encontrar MOLDES DE COSTURA (Sewing Patterns).
 
-        PASSO 1: Analise o DNA Técnico da peça.
-        PASSO 2: Busque moldes em acervos globais.
-
-        FONTES: 
-        - Vikisews, Burda Style, The Fold Line, Mood Fabrics (Free), Marlene Mukai (Brasil), Etsy.
-
-        REGRAS DE LINK:
-        - PREFERÊNCIA ABSOLUTA por URLs de BUSCA ("SEARCH_QUERY").
+        PASSO 1: Extraia o DNA Técnico (Silhueta, Decote, Manga).
+        PASSO 2: BUSCA MASSIVA (Gere 30-40 resultados).
         
-        QUANTIDADE:
-        - Gere TOTAL de 30 a 40 sugestões (Exact + Close). O usuário quer muitas opções.
+        IMPORTANTE: Construa LINKS DE BUSCA (SEARCH QUERY) inteligentes em Inglês.
+        Ex: "https://www.etsy.com/search?q=puff+sleeve+wrap+dress+sewing+pattern"
 
-        ESTRUTURA JSON DE RETORNO:
+        ESTRUTURA JSON:
         {
-          "patternName": "Nome em PT-BR",
+          "patternName": "Nome Técnico em PT-BR",
           "category": "Categoria",
           "technicalDna": { "silhouette": "...", "neckline": "...", "sleeve": "...", "fabricStructure": "..." },
           "matches": { 
-             "exact": [ ... min 15 itens ... ], 
-             "close": [ ... min 15 itens ... ], 
-             "adventurous": [ ... ] 
+             "exact": [ ... min 10 itens ... ], 
+             "close": [ ... min 10 itens ... ], 
+             "adventurous": [ ... min 10 itens ... ] 
           },
           "curatedCollections": [ ... ]
         }
@@ -273,6 +295,18 @@ export default async function handler(req, res) {
         const dataMain = await googleResponse.json();
         const text = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
         const jsonResult = JSON.parse(cleanJson(text));
+        
+        if (!jsonResult.matches.exact.length && !jsonResult.matches.close.length) {
+            jsonResult.matches.exact.push({
+                source: "Google Shopping",
+                patternName: "Busca Automática",
+                type: "BUSCA",
+                linkType: "SEARCH_QUERY",
+                url: `https://www.google.com/search?q=${encodeURIComponent(jsonResult.patternName + " molde costura pattern")}`,
+                similarityScore: 80
+            });
+        }
+        
         return res.status(200).json(jsonResult);
     }
     

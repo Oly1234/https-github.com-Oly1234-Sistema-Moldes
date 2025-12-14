@@ -26,15 +26,19 @@ const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
     });
 };
 
-// --- NOVA GERAÇÃO DE FALLBACK DE ALTA QUALIDADE ---
-// Se o Gemini falhar, usamos o Pollinations (Stable Diffusion) para gerar a imagem baseada no texto.
-// Isso elimina os "círculos e quadrados".
+// --- FALLBACK DE ALTA QUALIDADE (DESIGNER MODE) ---
+// Usa prompts técnicos para garantir que o resultado do Pollinations seja profissional
 const generateHighQualityFallback = (prompt: string, colors: PantoneColor[]): string => {
-    const seed = Math.floor(Math.random() * 10000);
-    const colorString = colors.map(c => c.name).join(' and ');
-    // Melhorando o prompt para garantir repetição (seamless)
-    const enhancedPrompt = `seamless texture pattern, ${prompt}, ${colorString} color palette, fabric printing design, high resolution, flat vector style, no watermark`;
+    const seed = Math.floor(Math.random() * 999999);
+    const colorString = colors.map(c => c.name).join(', ');
+    
+    // Injeção de palavras-chave técnicas baseadas na análise da IA
+    const technicalDirectives = "professional textile design, 8k resolution, vector quality, seamless repeat pattern, clean lines, balanced composition, no artifacts, fabric print ready";
+    
+    const enhancedPrompt = `${technicalDirectives}, ${prompt}, palette: [${colorString}]`;
     const encoded = encodeURIComponent(enhancedPrompt);
+    
+    // Usa modelo 'flux' ou 'turbo' para melhor coerência
     return `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}&model=flux`;
 };
 
@@ -46,7 +50,7 @@ export const PatternCreator: React.FC = () => {
     
     // Resultados de Stock Real (vindos do Backend)
     const [stockMatches, setStockMatches] = useState<ExternalPatternMatch[]>([]);
-    const [visibleStockCount, setVisibleStockCount] = useState(10); // Começa com 10
+    const [visibleStockCount, setVisibleStockCount] = useState(10); 
     
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -95,11 +99,9 @@ export const PatternCreator: React.FC = () => {
                 setPrompt(data.prompt);
                 const colors = data.colors || [];
                 setDetectedColors(colors);
-                
-                // Recebe até 30 matches do backend
                 setStockMatches(data.stockMatches || []);
                 
-                // Dispara geração da estampa
+                // Dispara geração da estampa (Gemini First)
                 if (data.prompt) {
                     generatePatternFromData(data.prompt, colors);
                 }
@@ -117,6 +119,8 @@ export const PatternCreator: React.FC = () => {
     const generatePatternFromData = async (promptText: string, colorsData: PantoneColor[]) => {
         setIsGenerating(true);
         try {
+             // 1. TENTATIVA PRIMÁRIA: GEMINI (Via Backend)
+             // O backend está configurado para retornar { success: false } se o Gemini falhar.
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -129,18 +133,19 @@ export const PatternCreator: React.FC = () => {
             
             const data = await response.json();
             
-            // Se o backend retornar sucesso e imagem, use-a
             if (response.ok && data.success && data.image) { 
+                console.log("Geração Gemini: Sucesso");
                 setGeneratedPattern(data.image); 
             } else {
-                // SE FALHAR (ou backend não tiver imagem), USA O GERADOR EXTERNO COM O PROMPT
-                // Isso resolve o problema de "círculos e quadrados"
-                console.log("Usando Gerador Externo de Alta Qualidade...");
+                // 2. FALLBACK: POLLINATIONS (Client-Side)
+                // Se o Gemini falhar, usamos o gerador externo com prompt técnico aprimorado
+                console.warn("Geração Gemini: Falha ou Indisponível. Usando Fallback Técnico.");
                 const hqPattern = generateHighQualityFallback(promptText, colorsData);
                 setGeneratedPattern(hqPattern);
             }
         } catch (error) {
-            // Em caso de erro de rede, também usa o gerador externo
+            // Erro de rede cai no fallback também
+            console.error("Erro de Rede. Usando Fallback.");
             const hqPattern = generateHighQualityFallback(promptText, colorsData);
             setGeneratedPattern(hqPattern);
         } finally {
@@ -155,7 +160,7 @@ export const PatternCreator: React.FC = () => {
     const handleDownload = () => {
         if (!generatedPattern) return;
         const link = document.createElement('a');
-        link.download = `vingi-pattern-${Date.now()}.jpg`;
+        link.download = `vingi-pattern-pro-${Date.now()}.jpg`;
         link.href = generatedPattern;
         link.click();
     };
@@ -208,7 +213,7 @@ export const PatternCreator: React.FC = () => {
                             className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-vingi-800 disabled:opacity-50 transition-all"
                         >
                             {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Wand2 size={16}/>}
-                            {isAnalyzing ? 'ESCANEANDO DETALHES...' : 'EXTRAIR DNA DA ESTAMPA'}
+                            {isAnalyzing ? 'DECODIFICAR TÉCNICA...' : 'EXTRAIR DNA DA ESTAMPA'}
                         </button>
                     )}
 
@@ -235,11 +240,11 @@ export const PatternCreator: React.FC = () => {
                     )}
 
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">2. Prompt Técnico</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">2. Prompt Técnico (Designer)</label>
                         <textarea 
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
-                            placeholder="Aguardando análise..."
+                            placeholder="Aguardando análise técnica..."
                             className="w-full h-24 p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-vingi-500 resize-none font-mono"
                         />
                     </div>
