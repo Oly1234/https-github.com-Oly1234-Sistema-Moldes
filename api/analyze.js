@@ -4,6 +4,7 @@ import { createTextileDesign } from './modules/departments/atelier.js';
 import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
+import { generatePattern } from './modules/generator.js'; // Importando o novo generator corrigido
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, layoutType, restorationNotes } = req.body;
     
     // API KEY MANAGER (Prioridade: ENV Var > VITE Var)
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
@@ -36,7 +37,6 @@ export default async function handler(req, res) {
 
     // 1. UTILITÁRIO GERAL (Imagem de Preview dos Links)
     if (action === 'GET_LINK_PREVIEW') {
-        // Scraper Rápido (Sem IA pesada)
         const contextType = (backupSearchTerm && backupSearchTerm.includes('pattern')) ? 'SURFACE' : 'CLOTHING';
         const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType, linkType);
         return res.status(200).json({ success: true, image });
@@ -44,8 +44,9 @@ export default async function handler(req, res) {
 
     // 2. ABA CRIADOR (Atelier + Forense de Superfície)
     if (action === 'GENERATE_PATTERN') {
-        // Dept: Atelier (Geração de Imagem)
-        const image = await createTextileDesign(apiKey, prompt, colors);
+        // Dept: Atelier (Geração de Imagem com Restauração)
+        // Agora usamos o generatePattern importado do generator.js que corrige o erro 400
+        const image = await generatePattern(apiKey, prompt, colors, layoutType, restorationNotes);
         return res.status(200).json({ success: true, image });
     }
 
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
             success: true, 
             colors: colorData.colors,
             prompt: visualData.visualDescription,
-            technicalSpecs: visualData.technicalSpecs,
+            technicalSpecs: visualData.technicalSpecs, // Inclui layout e restorationNotes
             stockMatches: matches
         });
     }
@@ -67,7 +68,6 @@ export default async function handler(req, res) {
     // 3. ABA SCANNER (Forense de Roupa + Mercado de Moldes)
     if (action === 'SCAN_CLOTHING' || !action) { 
         // Dept: Forense (Modo Desmembramento de Roupa)
-        // Isso retorna visualDescription, technicalSpecs E searchKeywords (lista rica)
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'GARMENT');
         
         // Dept: Mercado (Usa os termos ricos para criar links variados)
@@ -75,13 +75,13 @@ export default async function handler(req, res) {
         
         // Agrupamento para UI
         const matchesGrouped = {
-            exact: matches.filter(m => m.similarityScore >= 93), // Termos principais
-            close: matches.filter(m => m.similarityScore >= 92 && m.similarityScore < 93), // Termos de estilo
-            adventurous: matches.filter(m => m.similarityScore < 92) // Termos gerais
+            exact: matches.filter(m => m.similarityScore >= 93),
+            close: matches.filter(m => m.similarityScore >= 92 && m.similarityScore < 93),
+            adventurous: matches.filter(m => m.similarityScore < 92)
         };
 
         return res.status(200).json({
-            patternName: visualData.visualDescription, // Ex: "Bias Cut Slip Dress"
+            patternName: visualData.visualDescription,
             technicalDna: visualData.technicalSpecs,
             matches: matchesGrouped,
             curatedCollections: [],

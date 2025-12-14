@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2 } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -87,7 +87,7 @@ const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
     </a>
 );
 
-// CARTÃO PANTONE INTERATIVO & TRENDY (ATUALIZADO PARA EXIBIR DADOS DO DEPARTAMENTO DE COR)
+// CARTÃO PANTONE INTERATIVO & TRENDY
 const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
     const handleSearch = () => {
         const query = `Pantone ${color.code} ${color.name} cotton swatch`;
@@ -133,7 +133,7 @@ const SpecBadge: React.FC<{ icon: any, label: string, value: string }> = ({ icon
         </div>
         <div>
             <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
-            <span className="block text-xs font-bold text-gray-800 capitalize">{value}</span>
+            <span className="block text-xs font-bold text-gray-800 capitalize line-clamp-1">{value || "N/A"}</span>
         </div>
     </div>
 );
@@ -213,13 +213,16 @@ export const PatternCreator: React.FC = () => {
         setIsGenerating(true);
         setGenError(null);
         try {
+             // Passamos o Layout Detectado e as Instruções de Restauração para a IA
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     action: 'GENERATE_PATTERN', 
                     prompt: prompt,
-                    colors: detectedColors
+                    colors: detectedColors,
+                    layoutType: technicalSpecs?.layout || 'Seamless', // Ex: Barrada vs Corrida
+                    restorationNotes: technicalSpecs?.restorationInstructions || 'Improve Quality'
                 })
             });
             const data = await response.json();
@@ -265,11 +268,9 @@ export const PatternCreator: React.FC = () => {
             </header>
 
             {/* Layout Flex para Mobile (Column) e Desktop (Row) */}
-            {/* FIX MOBILE SCROLL: overflow-y-auto no wrapper principal para mobile, md:overflow-hidden para desktop */}
             <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden overflow-y-auto">
                 
                 {/* SIDEBAR: INPUTS & ANÁLISE */}
-                {/* Mobile: h-auto (flow), Desktop: h-full (scroll independent) */}
                 <div className="w-full md:w-[400px] bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col h-auto md:h-full md:overflow-y-auto shrink-0 z-10 custom-scrollbar shadow-sm">
                     <div className="p-6 space-y-8">
                         <div>
@@ -304,6 +305,17 @@ export const PatternCreator: React.FC = () => {
                         </div>
                         {technicalSpecs && (
                             <div className="animate-fade-in space-y-6">
+                                {/* Dados Forenses de Layout Detectados */}
+                                {technicalSpecs.layout && (
+                                     <div className="bg-purple-50 border border-purple-100 p-3 rounded-lg">
+                                        <h4 className="text-[10px] font-bold text-purple-800 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                            <Ruler size={12}/> Layout Detectado
+                                        </h4>
+                                        <p className="text-sm font-bold text-gray-800 capitalize">{technicalSpecs.layout}</p>
+                                        <p className="text-[10px] text-gray-500 leading-tight mt-1">IA aplicará correções específicas para este formato.</p>
+                                     </div>
+                                )}
+
                                 {technicalSpecs.motifs && (
                                     <div className="grid grid-cols-2 gap-2">
                                         <SpecBadge icon={Leaf} label="Motivos" value={technicalSpecs.motifs[0] || 'Floral'} />
@@ -327,11 +339,11 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                                 <div className="pt-4 border-t border-gray-100">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Sparkles size={14}/> Atelier Digital (Gemini 2.5)
+                                        <Sparkles size={14}/> Atelier Digital (Restauro)
                                     </h3>
                                     <button onClick={generatePatternFromData} disabled={isGenerating} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:brightness-110 transition-all">
                                         {isGenerating ? <Loader2 className="animate-spin"/> : <Wand2 size={18}/>}
-                                        {generatedPattern ? 'Gerar Novamente' : 'Criar Estampa'}
+                                        {generatedPattern ? 'Refazer Restauração' : 'Restaurar & Gerar HQ'}
                                     </button>
                                     {genError && (
                                         <div className="mt-3 p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2 border border-red-100">
@@ -345,15 +357,14 @@ export const PatternCreator: React.FC = () => {
                 </div>
 
                 {/* ÁREA PRINCIPAL: RESULTADOS */}
-                {/* Mobile: h-auto (flow), Desktop: h-full (scroll independent) */}
                 <div className="flex-1 flex flex-col h-auto md:h-full md:overflow-y-auto bg-[#f1f5f9]">
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                         {!generatedPattern && !isGenerating ? (
                             <div className="text-center opacity-40 max-w-md">
                                 <Layers size={64} className="mx-auto mb-4 text-gray-300"/>
-                                <h3 className="text-xl font-bold text-gray-800">Estúdio de Criação</h3>
-                                <p className="text-gray-500 mt-2">Use o botão "Criar Estampa" para acionar o Atelier Digital (IA).</p>
+                                <h3 className="text-xl font-bold text-gray-800">Estúdio de Restauração</h3>
+                                <p className="text-gray-500 mt-2">Clique em "Restaurar & Gerar HQ" para que a IA limpe traços, corrija erros e gere um arquivo vetorial em alta resolução.</p>
                             </div>
                         ) : isGenerating ? (
                              <div className="flex flex-col items-center justify-center">
@@ -362,7 +373,7 @@ export const PatternCreator: React.FC = () => {
                                     <Sparkles size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-600 animate-pulse"/>
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-700 mt-6">Atelier Trabalhando...</h3>
-                                <p className="text-sm text-gray-400">Desenhando padrão seamless (Model: Nano Banana).</p>
+                                <p className="text-sm text-gray-400">Aplicando correções de traço e layout ({technicalSpecs?.layout || 'Standard'}).</p>
                              </div>
                         ) : (
                             <div className="w-full max-w-4xl animate-fade-in flex flex-col md:flex-row gap-8 items-center">
@@ -373,11 +384,11 @@ export const PatternCreator: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex-1 space-y-4">
-                                    <h3 className="text-2xl font-bold text-gray-800">Resultado Gerado</h3>
-                                    <p className="text-gray-500 text-sm">Esta estampa é única, seamless (repetição infinita) e livre de royalties. Pronta para sublimação ou impressão digital.</p>
+                                    <h3 className="text-2xl font-bold text-gray-800">Resultado Restaurado</h3>
+                                    <p className="text-gray-500 text-sm">Esta estampa foi recriada digitalmente com base na sua referência. Traços limpos, repetição corrigida e erros removidos.</p>
                                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Prompt Utilizado</h4>
-                                         <p className="text-xs text-gray-600 font-mono italic">"{prompt}"</p>
+                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Prompt de Restauro</h4>
+                                         <p className="text-xs text-gray-600 font-mono italic">"{prompt} - Fix: {technicalSpecs?.restorationInstructions}"</p>
                                     </div>
                                 </div>
                             </div>
@@ -420,7 +431,7 @@ export const PatternCreator: React.FC = () => {
                                     </div>
                                 )}
 
-                                {/* SEÇÃO DE LINKS CONTEXTUAIS EXTERNOS (IGUAL À ABA MOLDES) */}
+                                {/* SEÇÃO DE LINKS CONTEXTUAIS EXTERNOS */}
                                 <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                                     <h4 className="font-bold mb-4 flex items-center gap-2 text-sm text-gray-500 uppercase tracking-widest"><Globe size={14}/> Busca Visual Global</h4>
                                     <div className="flex gap-2 flex-wrap">

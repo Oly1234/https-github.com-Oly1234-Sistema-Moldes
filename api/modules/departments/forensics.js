@@ -6,31 +6,33 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // ABA DE CRIADOR: Foco na Arte/Superfície
-        // Lógica atualizada para gerar KEYWORDS ricas (História da Arte + Técnica)
+        // ABA DE CRIADOR: Foco na Arte/Superfície & Restauração
         SYSTEM_PROMPT = `
-        ACT AS: Art Historian & Surface Designer.
-        TASK: Analyze the ARTWORK style to find EXACT MATCHES in stock libraries.
+        ACT AS: Senior Textile Restorer & Surface Designer.
+        TASK: Analyze the artwork to enable a High-Definition Recreation.
         
-        ANALYSIS:
-        1. Identify the Art Movement (e.g., Art Deco, Memphis, Toile de Jouy, Chinoiserie).
-        2. Identify the Technique (e.g., Watercolor, Vector Flat, Halftone, Ikat).
-        3. Identify the Motif (e.g., Monstera Leaf, Paisley, Houndstooth).
+        ANALYSIS REQUIRED:
+        1. LAYOUT TYPE: Is it "Seamless/All-Over" (Corrida), "Border/Engineered" (Barrada), "Geometric", or "Placement"?
+        2. ART STYLE: Detailed technique (e.g. "Watercolor on wet paper", "Vector flat outline", "Halftone screen").
+        3. FLAWS TO FIX: Identify low quality aspects to improve (e.g. "Blurry edges", "Pixel noise", "Loose dots", "Bad tracing").
         
         OUTPUT JSON:
         {
-            "visualDescription": "Specific Art Term" (e.g. "William Morris Strawberry Thief style print"),
+            "visualDescription": "Highly detailed visual description of the motif and flow",
+            "printLayout": "Seamless All-Over" (or "Border Print", "Geometric Grid", etc.),
             "searchKeywords": [
-                "Primary art history term (e.g. 'Arts and Crafts movement floral pattern')",
-                "Secondary technique term (e.g. 'Detailed botanical illustration seamless')",
-                "Commercial stock term (e.g. 'Vintage floral wallpaper swatch')",
-                "Vibe term (e.g. 'Dark academia aesthetic print')"
+                "Primary art term",
+                "Technique term",
+                "Market term",
+                "Vibe term"
             ],
             "technicalSpecs": { 
                 "technique": "Digital/Traditional", 
                 "motifs": ["Primary Motif"], 
                 "complexity": "High/Low",
-                "vibe": "Mood"
+                "vibe": "Mood",
+                "layout": "String (e.g. 'Barrada/Border' or 'Corrida/Seamless')",
+                "restorationInstructions": "String (e.g. 'Clean up loose pixels, sharpen lines, vectorize')"
             }
         }
         `;
@@ -80,8 +82,9 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         console.error("Forensics Dept Error:", e);
         return {
             visualDescription: "Fashion Item",
-            searchKeywords: ["Sewing pattern", "Style pattern", "Fashion design", "Garment"],
-            technicalSpecs: { silhouette: "Unknown", neckline: "Unknown", details: "None", fabric: "Any" }
+            printLayout: "Standard",
+            searchKeywords: ["Pattern", "Texture"],
+            technicalSpecs: { silhouette: "Unknown", layout: "Standard", restorationInstructions: "Enhance quality" }
         };
     }
 };
