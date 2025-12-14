@@ -1,169 +1,132 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ExternalLink, ArrowRightCircle, ImageOff } from 'lucide-react';
+import { ExternalLink, ArrowRightCircle, Search, ShoppingBag } from 'lucide-react';
 import { ExternalPatternMatch } from '../types';
 
-// --- HELPERS ---
-const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-const getBackupIcon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+// --- HELPERS VISUAIS ---
+const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+// Proxy visual para garantir que imagens extraídas carreguem (evita bloqueio de hotlink no frontend)
 const getProxyUrl = (url: string) => `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=400&h=400&fit=cover&a=top&output=webp`;
 
-// Cache Local (Persistente)
-const getCachedImage = (url: string) => {
-    try {
-        const key = `vingi_img_cache_${btoa(url).substring(0, 32)}`;
-        const cached = localStorage.getItem(key);
-        if (cached) {
-            const { img, timestamp } = JSON.parse(cached);
-            if (Date.now() - timestamp < 86400000) return img;
-        }
-    } catch (e) { return null; }
-    return null;
-};
-
-const setCachedImage = (url: string, img: string) => {
-    try {
-        const key = `vingi_img_cache_${btoa(url).substring(0, 32)}`;
-        localStorage.setItem(key, JSON.stringify({ img, timestamp: Date.now() }));
-    } catch (e) {}
-};
-
-export const generateSafeUrl = (match: ExternalPatternMatch): string => {
-    let url = match?.url || '';
-    const source = match?.source || 'Web';
-    const patternName = match?.patternName || 'Sewing Pattern';
-    
-    const cleanSearchTerm = encodeURIComponent(patternName.replace(/ pattern| sewing| molde| vestido| dress| pdf| download/gi, '').trim());
-    const fullSearchTerm = encodeURIComponent(patternName + ' sewing pattern');
-
-    if (match.linkType === 'SEARCH_QUERY' || !url.includes('/')) {
-        if (!url.includes('=')) {
-             if (source.toLowerCase().includes('etsy')) return `https://www.etsy.com/search?q=${fullSearchTerm}`;
-             if (source.toLowerCase().includes('burda')) return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
-             if (source.toLowerCase().includes('vikisews')) return `https://vikisews.com/search/?q=${cleanSearchTerm}`;
-             if (source.toLowerCase().includes('shutterstock')) return `https://www.shutterstock.com/search/${cleanSearchTerm}`;
-             if (source.toLowerCase().includes('patternbank')) return `https://patternbank.com/search?q=${cleanSearchTerm}`;
-             return `https://www.google.com/search?q=${fullSearchTerm}`;
-        }
-    }
-    return url;
-};
+// Cache Simples em Memória para evitar re-requests na mesma sessão
+const imgCache = new Map<string, string>();
 
 export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ match }) => {
     if (!match) return null;
 
-    const safeUrl = generateSafeUrl(match);
+    const safeUrl = match.url;
     const initialImage = (match.imageUrl && match.imageUrl.length > 10) ? match.imageUrl : null;
     
     const [displayImage, setDisplayImage] = useState<string | null>(initialImage);
-    const [usingProxy, setUsingProxy] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
     
     let domain = '';
     try { if (safeUrl) domain = new URL(safeUrl).hostname; } catch (e) { domain = 'google.com'; }
-    
     const primaryIcon = getBrandIcon(domain);
-    const backupIcon = getBackupIcon(domain);
 
-    // --- LAZY LOADING OBSERVER ---
+    // Observer para carregar a imagem apenas quando o card aparecer na tela
     useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setIsVisible(true);
-                    observer.disconnect(); // Stop observing once visible
-                }
-            },
-            { rootMargin: '50px' } // Preload a bit before showing
-        );
-
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) { setIsVisible(true); observer.disconnect(); }
+        }, { rootMargin: '100px' });
         if (cardRef.current) observer.observe(cardRef.current);
         return () => observer.disconnect();
     }, []);
 
-    // --- FETCH LOGIC ---
+    // Scraping Trigger
     useEffect(() => {
-        if (!isVisible) return; // Só executa se estiver visível
-        if (initialImage && !usingProxy) { setDisplayImage(initialImage); return; }
-        if (!safeUrl || safeUrl.includes('google.com/search')) return;
-
-        // Check Cache
-        const cached = getCachedImage(safeUrl);
-        if (cached) {
-            setDisplayImage(getProxyUrl(cached));
-            setUsingProxy(true);
+        if (!isVisible || initialImage || !safeUrl) return;
+        
+        if (imgCache.has(safeUrl)) {
+            setDisplayImage(getProxyUrl(imgCache.get(safeUrl)!));
             return;
         }
 
-        let isMounted = true;
-        
-        // Pequeno delay para distribuir carga
-        const timer = setTimeout(() => {
-            fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: safeUrl })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (isMounted && data.success && data.image) {
-                    const finalImg = data.image;
-                    setCachedImage(safeUrl, finalImg);
-                    setDisplayImage(getProxyUrl(finalImg));
-                    setUsingProxy(true);
+        setLoading(true);
+        let active = true;
+
+        const fetchScrapedImage = async () => {
+            try {
+                // Chama nosso "Python-in-Node" scraper
+                const res = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: safeUrl })
+                });
+                const data = await res.json();
+                
+                if (active) {
+                    if (data.success && data.image) {
+                        imgCache.set(safeUrl, data.image);
+                        setDisplayImage(getProxyUrl(data.image));
+                    } else {
+                        // Se falhar o scraping, fica com o ícone padrão (já definido no fallback do img tag)
+                    }
                 }
-            })
-            .catch(() => {});
-        }, Math.random() * 500); // Delay menor pois o observer já controla o fluxo
+            } catch (e) {
+                console.warn("Scraping fail:", e);
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
 
-        return () => { isMounted = false; clearTimeout(timer); };
-    }, [safeUrl, initialImage, isVisible]);
-
-    const handleError = () => {
-        // Fallback chain: Primary Icon -> Backup Icon -> Generic Placeholder
-        if (displayImage !== primaryIcon && displayImage !== backupIcon) {
-            setDisplayImage(primaryIcon);
-        } else if (displayImage === primaryIcon) {
-            setDisplayImage(backupIcon);
-        }
-    };
-
-    const finalImage = displayImage || primaryIcon;
-    const isBrandIcon = finalImage === primaryIcon || finalImage === backupIcon;
-    const isPremium = match.type === 'PAGO' || match.type === 'PREMIUM' || match.type === 'ROYALTY-FREE';
+        // Pequeno delay aleatório para evitar bombardear o backend
+        const timeout = setTimeout(fetchScrapedImage, Math.random() * 800);
+        return () => { active = false; clearTimeout(timeout); };
+    }, [isVisible, safeUrl, initialImage]);
 
     return (
-        <div ref={cardRef} onClick={() => safeUrl && window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full animate-fade-in relative min-h-[250px]">
-            <div className={`overflow-hidden relative border-b border-gray-100 flex items-center justify-center ${isBrandIcon ? 'h-24 bg-gray-50 p-4' : 'h-48 bg-white'}`}>
-                {isVisible ? (
-                    <img 
-                        src={finalImage} 
-                        alt={match.source || 'Source'} 
-                        onError={handleError}
-                        className={`transition-all duration-700 ${isBrandIcon ? 'w-16 h-16 object-contain mix-blend-multiply opacity-60 grayscale' : 'w-full h-full object-cover group-hover:scale-105'}`}
-                    />
-                ) : (
-                    <div className="w-full h-full bg-gray-50 animate-pulse" />
+        <div ref={cardRef} onClick={() => safeUrl && window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full animate-fade-in relative min-h-[260px]">
+            <div className="overflow-hidden relative border-b border-gray-100 flex items-center justify-center h-48 bg-gray-50">
+                {/* Loader Overlay */}
+                {loading && (
+                    <div className="absolute inset-0 bg-gray-100/50 flex items-center justify-center z-10 backdrop-blur-[1px]">
+                        <div className="w-4 h-4 border-2 border-vingi-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
                 )}
                 
+                {/* Imagem Principal ou Fallback para Ícone */}
+                <img 
+                    src={displayImage || primaryIcon} 
+                    alt={match.source} 
+                    onError={(e) => {
+                        // Se a imagem extraída falhar ao carregar, volta para o ícone
+                        e.currentTarget.src = primaryIcon;
+                        e.currentTarget.classList.add('p-12', 'opacity-30', 'grayscale');
+                        e.currentTarget.classList.remove('object-cover');
+                        e.currentTarget.classList.add('object-contain');
+                    }}
+                    className={`transition-all duration-700 w-full h-full ${displayImage ? 'object-cover group-hover:scale-105' : 'object-contain p-12 opacity-30 grayscale mix-blend-multiply'}`}
+                />
+                
+                {/* Badge de Busca */}
+                <div className="absolute top-2 left-2 z-20">
+                     {match.linkType === 'SEARCH_QUERY' ? (
+                         <span className="bg-blue-600/90 text-white text-[9px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm backdrop-blur-sm"><Search size={8}/> BUSCA</span>
+                     ) : (
+                         <span className="bg-green-600/90 text-white text-[9px] font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm backdrop-blur-sm"><ShoppingBag size={8}/> PRODUTO</span>
+                     )}
+                </div>
+
                 <div className="absolute top-2 right-2 z-20">
-                    <ExternalLink size={14} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0 bg-white/80 p-0.5 rounded shadow-sm"/>
+                    <ExternalLink size={14} className="text-gray-500 bg-white/90 p-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"/>
                 </div>
             </div>
 
             <div className="p-4 flex flex-col flex-1">
                 <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[70%]">{match.source || 'WEB'}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${isPremium ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-                        {match.type || 'N/A'}
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[70%]">{match.source}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-gray-100 bg-gray-50 text-gray-500 font-bold">
+                        {match.type}
                     </span>
                 </div>
                 <h3 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight mb-2 flex-1 group-hover:text-vingi-600 transition-colors">
-                    {match.patternName || 'Design Identificado'}
+                    {match.patternName.replace('Busca: ', '')}
                 </h3>
                 <div className="pt-2 border-t border-gray-50 flex items-center justify-between text-xs text-vingi-500 font-medium">
-                    <span>Ver Original</span>
+                    <span>Ver no site oficial</span>
                     <ArrowRightCircle size={14} className="group-hover:translate-x-1 transition-transform"/>
                 </div>
             </div>

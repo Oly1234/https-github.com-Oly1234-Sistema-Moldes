@@ -1,110 +1,6 @@
 
 import { PatternAnalysisResult } from "../types";
 
-// --- FALLBACK INTELLIGENCE (SIMULAÇÃO LOCAL RICA) ---
-// Isso garante que o preview mostre EXATAMENTE o que a IA faria, mesmo se o servidor estiver offline.
-const MOCK_GLOBAL_RESULT: PatternAnalysisResult = {
-    patternName: "Vestido Midi Envelope (Wrap Dress)",
-    category: "Vestidos",
-    generationLogic: "Análise baseada na silhueta em A e decote transpassado.",
-    sizingAnalysis: {
-        estimatedModelHeight: "1.75m",
-        detectedSize: "M",
-        reasoning: "Proporção ombro-quadril equilibrada.",
-        measurementsUsed: { bust: "90cm", waist: "72cm", hip: "98cm", length: "110cm" }
-    },
-    lineArt: { frontViewPath: "", backViewPath: "", details: [] },
-    technicalDna: {
-        silhouette: "Evasê (A-Line)",
-        neckline: "Decote V Transpassado",
-        sleeve: "Manga Bufante (Puff Sleeve)",
-        fabricStructure: "Viscose, Linho ou Crepe",
-        designDetails: ["Cintura marcada", "Babado na barra", "Faixa de amarração"]
-    },
-    fabricSuggestion: "Viscose fluida ou Linho misto",
-    elasticity: "Nenhuma",
-    skillLevel: "Intermediário",
-    patternPieces: [],
-    smartSearchTerms: ["wrap dress sewing pattern", "vestido envelope molde", "vikisews oona"],
-    matches: {
-        exact: [
-            {
-                source: "Vikisews (Rússia)",
-                patternName: "Oona Dress Pattern",
-                similarityScore: 98,
-                type: "PAGO",
-                linkType: "DIRECT",
-                url: "https://vikisews.com/vykrojki/platja-i-sarafany/plate-oona/",
-                description: "Modelagem russa impecável. O caimento do busto é idêntico à foto, com pences anatômicas perfeitas.",
-                comparisonToPhoto: "A estrutura da manga e o volume da saia são 100% compatíveis."
-            },
-            {
-                source: "Marlene Mukai (Brasil)",
-                patternName: "Molde Vestido Transpassado",
-                similarityScore: 95,
-                type: "GRATUITO",
-                linkType: "SEARCH_QUERY",
-                url: "https://marlenemukai.com.br/?s=vestido+transpassado",
-                description: "Opção gratuita e acessível de uma das maiores modelistas do Brasil. Ideal para biotipos latinos.",
-                comparisonToPhoto: "Muito similar, requer apenas ajuste na altura da cintura."
-            }
-        ],
-        close: [
-            {
-                source: "Mood Fabrics (EUA)",
-                patternName: "The Piper Dress (Free)",
-                similarityScore: 88,
-                type: "GRATUITO",
-                linkType: "DIRECT",
-                url: "https://www.moodfabrics.com/blog/the-piper-dress-free-sewing-pattern/",
-                description: "Molde gratuito de alta qualidade do blog da Mood. Estilo mais solto e casual.",
-                comparisonToPhoto: "A manga é um pouco mais curta, mas a estrutura do corpo é igual."
-            },
-            {
-                source: "The Fold Line (UK)",
-                patternName: "Closet Core Elodie Wrap Dress",
-                similarityScore: 85,
-                type: "INDIE",
-                linkType: "DIRECT",
-                url: "https://thefoldline.com/product/elodie-wrap-dress/",
-                description: "O queridinho da comunidade indie. Instruções fantásticas e múltiplas variações de manga.",
-                comparisonToPhoto: "Vibe idêntica, mas com bolsos (o que é ótimo)."
-            }
-        ],
-        adventurous: [
-            {
-                source: "Burda Style (Alemanha)",
-                patternName: "Wrap Dress #102",
-                similarityScore: 75,
-                type: "VINTAGE",
-                linkType: "SEARCH_QUERY",
-                url: "https://www.burdastyle.com/catalogsearch/result/?q=wrap+dress",
-                description: "Estilo clássico europeu. Mais estruturado e formal que a referência.",
-                comparisonToPhoto: "Corte mais reto, menos fluido."
-            }
-        ]
-    },
-    curatedCollections: [
-        {
-            sourceName: "Pinterest Board",
-            title: "Inspiração: Vestidos Florais",
-            itemCount: "500+ ideias",
-            searchUrl: "https://br.pinterest.com/search/pins/?q=floral%20wrap%20dress%20outfit",
-            description: "Looks similares para compor styling.",
-            icon: "MODERN"
-        },
-        {
-            sourceName: "Etsy Search",
-            title: "Moldes Indie & Vintage",
-            itemCount: "Resultados Globais",
-            searchUrl: "https://www.etsy.com/search?q=wrap+dress+sewing+pattern",
-            description: "Busca ampla em criadores independentes.",
-            icon: "SHOPPING"
-        }
-    ],
-    recommendedResources: []
-};
-
 export const analyzeClothingImage = async (
   mainImageBase64: string, 
   mainMimeType: string,
@@ -113,8 +9,7 @@ export const analyzeClothingImage = async (
   excludePatterns: string[] = []
 ): Promise<PatternAnalysisResult> => {
   
-  // AUMENTADO TIMEOUT PARA 3 MINUTOS (180s)
-  // Geração massiva de texto/json pelo Gemini pode levar > 60s
+  // Timeout de 3 minutos para garantir busca real em sites lentos
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 180000); 
 
@@ -135,19 +30,19 @@ export const analyzeClothingImage = async (
 
     clearTimeout(timeoutId);
 
-    // Se a API não existir (404) ou der erro (500), usamos o MOCK
     if (!response.ok) {
-        const errText = await response.text();
-        console.warn(`Backend indisponível (${response.status}): ${errText}. Usando Modo Simulação.`);
-        return MOCK_GLOBAL_RESULT;
+        throw new Error(`Servidor Indisponível (${response.status})`);
     }
 
     const result = await response.json();
     
-    // Validação mínima dos dados
-    if (result.error || !result.patternName || !result.matches) {
-         console.warn("Backend retornou erro de dados ou JSON incompleto. Usando Fallback.");
-         return MOCK_GLOBAL_RESULT;
+    if (result.error) {
+         throw new Error(result.error);
+    }
+
+    // Validação estrita: Se não tiver nome ou matches, é erro. Nada de simulação.
+    if (!result.patternName) {
+        throw new Error("Não foi possível identificar o padrão na imagem.");
     }
 
     return result as PatternAnalysisResult;
@@ -156,12 +51,9 @@ export const analyzeClothingImage = async (
     clearTimeout(timeoutId);
     
     if (error.name === 'AbortError') {
-        console.error("TIMEOUT: A análise demorou mais que 3 minutos.");
-    } else {
-        console.error("Erro na conexão:", error);
+        throw new Error("A busca real demorou muito. Tente uma imagem menor.");
     }
-    
-    // EM CASO DE ERRO CRÍTICO, FALLBACK PARA MOCK PARA NÃO TRAVAR O USUÁRIO
-    return MOCK_GLOBAL_RESULT;
+    // Repassa o erro real para a UI lidar (Botão Tentar Novamente)
+    throw error;
   }
 };
