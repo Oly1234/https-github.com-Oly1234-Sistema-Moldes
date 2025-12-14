@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs, userHints } = req.body;
     
     // API KEY MANAGER (Prioridade: ENV Var > VITE Var)
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
@@ -56,7 +56,10 @@ export default async function handler(req, res) {
     if (action === 'DESCRIBE_PATTERN') {
         // Dept: Colorimetria + Forense (Modo Textura) + Mercado (Modo Textura)
         const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson);
-        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE');
+        
+        // Passa as userHints para a análise forense
+        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE', userHints);
+        
         const matches = generateMarketLinks(visualData, 'TEXTURE');
 
         return res.status(200).json({ 

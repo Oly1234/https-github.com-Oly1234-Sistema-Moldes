@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2 } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2, Settings2, Check } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -149,28 +149,36 @@ const SpecBadge: React.FC<{ icon: any, label: string, value: string }> = ({ icon
 );
 
 export const PatternCreator: React.FC = () => {
+    // --- STATES ---
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
+    const [pendingFile, setPendingFile] = useState<string | null>(null); // Temp file for modal
+    const [showSetupModal, setShowSetupModal] = useState(false); // Controls wizard visibility
+
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
-    const [history, setHistory] = useState<GeneratedAsset[]>([]); // ACERVO DA SESSÃO
+    const [history, setHistory] = useState<GeneratedAsset[]>([]); 
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
     
-    // Configurações de Engenharia Têxtil
+    // Configurações de Engenharia Têxtil (Inputs do Modal)
     const [layoutType, setLayoutType] = useState<'Corrida' | 'Barrada' | 'Localizada'>('Corrida');
     const [selvedgePos, setSelvedgePos] = useState<'Inferior' | 'Superior' | 'Esquerda' | 'Direita'>('Inferior');
     const [widthCm, setWidthCm] = useState<number>(140);
     const [heightCm, setHeightCm] = useState<number>(100);
+    const [userInstruction, setUserInstruction] = useState<string>(''); // Texto do usuário
 
-    // Resultados de Busca & Paginação
+    // Resultados
     const [fabricMatches, setFabricMatches] = useState<ExternalPatternMatch[]>([]);
     const [visibleMatchesCount, setVisibleMatchesCount] = useState(10); 
-    
     const [technicalSpecs, setTechnicalSpecs] = useState<any>(null);
     const [genError, setGenError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // --- HANDLERS ---
+
+    // 1. Intercepta o upload e abre o modal
     const handleReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -178,7 +186,10 @@ export const PatternCreator: React.FC = () => {
             reader.onload = (ev) => {
                 const res = ev.target?.result as string;
                 if (res) {
-                    setReferenceImage(res);
+                    setPendingFile(res); // Salva temporariamente
+                    setShowSetupModal(true); // Abre o wizard
+                    
+                    // Reset de estados anteriores
                     setGeneratedPattern(null);
                     setDetectedColors([]);
                     setFabricMatches([]);
@@ -186,45 +197,68 @@ export const PatternCreator: React.FC = () => {
                     setTechnicalSpecs(null);
                     setPrompt('');
                     setGenError(null);
+                    // Reset dos inputs para defaults (opcional)
+                    setUserInstruction('');
                 }
             };
             reader.readAsDataURL(file);
         }
     };
 
-    const analyzeReference = async () => {
-        if (!referenceImage) return;
+    // 2. Chamado pelo botão "Confirmar" do modal
+    const confirmSetupAndAnalyze = async () => {
+        setShowSetupModal(false);
+        if (pendingFile) {
+            setReferenceImage(pendingFile);
+            setPendingFile(null);
+            // Inicia análise passando a imagem E as instruções do usuário
+            await analyzeReference(pendingFile); 
+        }
+    };
+
+    // 3. Função de Análise (Agora recebe imagem opcional para chamar direto)
+    const analyzeReference = async (imgToAnalyze?: string) => {
+        const img = imgToAnalyze || referenceImage;
+        if (!img) return;
+        
         setIsAnalyzing(true);
         setGenError(null);
         try {
-            const compressedBase64 = await compressImage(referenceImage);
+            const compressedBase64 = await compressImage(img);
             const parts = compressedBase64.split(',');
             const data = parts[1];
             const mimeType = 'image/jpeg'; 
+            
+            // Envia userHints para o backend
             const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'DESCRIBE_PATTERN',
                     mainImageBase64: data,
-                    mainMimeType: mimeType
+                    mainMimeType: mimeType,
+                    userHints: userInstruction // Passa a instrução do usuário
                 })
             });
+            
             if (!response.ok) throw new Error("API Error");
             const resData = await response.json();
+            
             if (resData.success) {
-                setPrompt(resData.prompt || '');
+                // Se o usuário digitou algo, concatenamos com a análise da IA
+                let finalPrompt = resData.prompt || '';
+                if (userInstruction) {
+                    finalPrompt = `${userInstruction}. Visual style based on: ${finalPrompt}`;
+                }
+                setPrompt(finalPrompt);
+
                 setDetectedColors(Array.isArray(resData.colors) ? resData.colors : []);
                 setFabricMatches(Array.isArray(resData.stockMatches) ? resData.stockMatches : []);
                 setTechnicalSpecs(resData.technicalSpecs || null);
                 
-                // Auto-detectar layout se a IA sugerir
-                if (resData.technicalSpecs?.layout) {
-                     const apiLayout = resData.technicalSpecs.layout.toLowerCase();
-                     if (apiLayout.includes('barrada') || apiLayout.includes('border')) setLayoutType('Barrada');
-                     else if (apiLayout.includes('localizada') || apiLayout.includes('placement')) setLayoutType('Localizada');
-                     else setLayoutType('Corrida');
-                }
+                // Só sobrescreve o layout se o usuário NÃO tiver escolhido manualmente no modal (ou seja, se manteve o default e não digitou nada)
+                // Na verdade, a escolha do modal é soberana. O technicalSpecs.layout é apenas sugestão da IA.
+                // Mas podemos exibir um alerta se divergir. Por enquanto, respeitamos o state `layoutType` definido no modal.
             }
         } catch (error) {
             setPrompt("Could not analyze texture.");
@@ -238,8 +272,6 @@ export const PatternCreator: React.FC = () => {
         setIsGenerating(true);
         setGenError(null);
         try {
-             // Passamos o Layout Detectado e as Instruções de Restauração para a IA
-             // Agora incluímos os dados de Engenharia Têxtil definidos pelo usuário
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -247,13 +279,11 @@ export const PatternCreator: React.FC = () => {
                     action: 'GENERATE_PATTERN', 
                     prompt: prompt,
                     colors: detectedColors,
-                    // Dados Técnicos Completos
                     textileSpecs: {
                         layout: layoutType,
                         selvedge: selvedgePos,
                         width: widthCm,
                         height: heightCm,
-                        // Usamos as instruções de estilo, não chamamos de "restauração" para o usuário
                         styleGuide: technicalSpecs?.restorationInstructions || 'High quality vector style'
                     }
                 })
@@ -261,8 +291,6 @@ export const PatternCreator: React.FC = () => {
             const data = await response.json();
             if (data.success && data.image) { 
                 setGeneratedPattern(data.image); 
-                
-                // ADICIONAR AO HISTÓRICO
                 const newAsset: GeneratedAsset = {
                     id: Date.now().toString(),
                     imageUrl: data.image,
@@ -299,21 +327,88 @@ export const PatternCreator: React.FC = () => {
         setGenError(null);
     };
 
-    // DEDUPLICAÇÃO DE RESULTADOS
     const uniqueMatches = fabricMatches.filter((match, index, self) =>
-        index === self.findIndex((m) => (
-            m.url === match.url
-        ))
+        index === self.findIndex((m) => (m.url === match.url))
     );
-
     const visibleData = uniqueMatches.slice(0, visibleMatchesCount);
-    
-    // Helper para links
     const textureQuery = prompt ? `${prompt} seamless pattern` : 'texture pattern';
 
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden relative">
             {referenceImage && <FloatingComparisonModal image={referenceImage} />}
+            
+            {/* --- MODAL DE SETUP (WIZARD) --- */}
+            {showSetupModal && (
+                <div className="fixed inset-0 z-[100] bg-vingi-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+                        <div className="bg-gray-50 border-b border-gray-100 p-4 flex justify-between items-center">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Settings2 size={18} className="text-vingi-600"/> Configuração de Estampa</h3>
+                            <button onClick={() => setShowSetupModal(false)} className="text-gray-400 hover:text-red-500"><Settings2 size={18} className="rotate-45"/></button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            
+                            {/* 1. Preview Rápido */}
+                            <div className="flex items-center gap-4 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                {pendingFile && <img src={pendingFile} className="w-12 h-12 object-cover rounded-lg bg-white" />}
+                                <div className="flex-1">
+                                    <h4 className="text-xs font-bold text-blue-800 uppercase">Referência Selecionada</h4>
+                                    <p className="text-[10px] text-blue-600">A IA analisará esta imagem como base.</p>
+                                </div>
+                            </div>
+
+                            {/* 2. Dimensões */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Largura (cm)</label>
+                                    <div className="flex items-center bg-white border border-gray-300 rounded-lg px-3 focus-within:border-vingi-500 transition-colors">
+                                        <input type="number" value={widthCm} onChange={(e) => setWidthCm(Number(e.target.value))} className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent"/>
+                                        <span className="text-xs text-gray-400 font-bold">CM</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Altura (cm)</label>
+                                    <div className="flex items-center bg-white border border-gray-300 rounded-lg px-3 focus-within:border-vingi-500 transition-colors">
+                                        <input type="number" value={heightCm} onChange={(e) => setHeightCm(Number(e.target.value))} className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent"/>
+                                        <span className="text-xs text-gray-400 font-bold">CM</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. Layout */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Estrutura do Layout</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button onClick={() => setLayoutType('Corrida')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                        <Grid3X3 size={16}/> CORRIDA
+                                    </button>
+                                    <button onClick={() => setLayoutType('Barrada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                        <ArrowDownToLine size={16}/> BARRADA
+                                    </button>
+                                    <button onClick={() => setLayoutType('Localizada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                        <Target size={16}/> LOCAL
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 4. Texto Opcional */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Instruções para a IA (Opcional)</label>
+                                <textarea 
+                                    value={userInstruction}
+                                    onChange={(e) => setUserInstruction(e.target.value)}
+                                    placeholder="Ex: Mudar fundo para preto, adicionar textura de linho, aumentar contraste..."
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:bg-white focus:border-vingi-500 transition-all min-h-[80px]"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1 text-right">Deixe vazio para usar apenas a imagem.</p>
+                            </div>
+                            
+                            <button onClick={confirmSetupAndAnalyze} className="w-full py-4 bg-vingi-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-vingi-700 transition-transform active:scale-95">
+                                <Check size={18} /> CONFIRMAR & ANALISAR
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0 z-20 shadow-sm">
                 <Palette className="text-vingi-600 mr-2" size={20} />
@@ -350,9 +445,9 @@ export const PatternCreator: React.FC = () => {
                                 )}
                             </div>
                             {referenceImage && !technicalSpecs && (
-                                <button onClick={analyzeReference} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
+                                <button onClick={() => analyzeReference()} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
                                     {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Search size={16}/>} 
-                                    {isAnalyzing ? 'Processando...' : 'Iniciar Análise Técnica'}
+                                    {isAnalyzing ? 'Processando...' : 'Reiniciar Análise'}
                                 </button>
                             )}
                         </div>
@@ -360,23 +455,26 @@ export const PatternCreator: React.FC = () => {
                             <div className="animate-fade-in space-y-6">
                                 {/* PAINEL DE ENGENHARIA TÊXTIL */}
                                 <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <Ruler size={14}/> 2. Engenharia Têxtil
-                                    </h3>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                            <Ruler size={14}/> 2. Engenharia Têxtil
+                                        </h3>
+                                        <button onClick={() => setShowSetupModal(true)} className="text-[10px] text-vingi-600 font-bold hover:underline">Editar Setup</button>
+                                    </div>
                                     
                                     {/* Dimensões */}
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Largura (cm)</label>
-                                            <div className="flex items-center bg-white border border-gray-200 rounded-lg px-2">
-                                                <input type="number" value={widthCm} onChange={(e) => setWidthCm(Number(e.target.value))} className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent"/>
+                                            <div className="flex items-center bg-white border border-gray-200 rounded-lg px-2 opacity-70 cursor-not-allowed">
+                                                <input type="number" value={widthCm} readOnly className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent cursor-not-allowed"/>
                                                 <span className="text-[10px] text-gray-400 font-bold">CM</span>
                                             </div>
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Altura (cm)</label>
-                                            <div className="flex items-center bg-white border border-gray-200 rounded-lg px-2">
-                                                <input type="number" value={heightCm} onChange={(e) => setHeightCm(Number(e.target.value))} className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent"/>
+                                            <div className="flex items-center bg-white border border-gray-200 rounded-lg px-2 opacity-70 cursor-not-allowed">
+                                                <input type="number" value={heightCm} readOnly className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent cursor-not-allowed"/>
                                                 <span className="text-[10px] text-gray-400 font-bold">CM</span>
                                             </div>
                                         </div>
@@ -387,9 +485,9 @@ export const PatternCreator: React.FC = () => {
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo de Repetição</label>
                                             <div className="flex bg-white rounded-lg border border-gray-200 p-1">
-                                                <button onClick={() => setLayoutType('Corrida')} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>CORRIDA</button>
-                                                <button onClick={() => setLayoutType('Barrada')} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>BARRADA</button>
-                                                <button onClick={() => setLayoutType('Localizada')} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>LOCAL</button>
+                                                <button disabled className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-300'}`}>CORRIDA</button>
+                                                <button disabled className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-300'}`}>BARRADA</button>
+                                                <button disabled className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-300'}`}>LOCAL</button>
                                             </div>
                                         </div>
 

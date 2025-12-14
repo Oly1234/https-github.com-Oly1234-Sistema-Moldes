@@ -2,14 +2,18 @@
 // DEPARTAMENTO: FORENSE VISUAL (The Lens)
 // Responsabilidade: Desmembrar a imagem em dados técnicos puros e keywords de cauda longa.
 
-export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson, context = 'TEXTURE') => {
+export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson, context = 'TEXTURE', userHints = '') => {
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
         // ABA DE CRIADOR: Foco na Arte/Superfície & Criação
+        // Incorpora instruções do usuário se existirem
+        const userContext = userHints ? `IMPORTANT - USER OVERRIDE/INSTRUCTION: "${userHints}". CONSIDER THIS IN THE STYLE GUIDE.` : '';
+
         SYSTEM_PROMPT = `
         ACT AS: Senior Surface Designer & Textile Engineer (Portuguese Speaker).
         TASK: Analyze the artwork to enable a High-Definition Recreation (New Design Generation).
+        ${userContext}
         
         ANALYSIS REQUIRED (RETURN VALUES IN PORTUGUESE PT-BR):
         1. LAYOUT TYPE: Is it "Corrida" (Seamless), "Barrada" (Border), "Localizada" (Placement)?
