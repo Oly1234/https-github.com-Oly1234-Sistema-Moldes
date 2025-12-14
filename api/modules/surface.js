@@ -4,14 +4,14 @@
 // RESPONSÁVEL: Diretor de Arte Vingi
 
 export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType, cleanJson) => {
-    // PROMPT FOCADO EM "GOOGLE LENS" DE TEXTURA
-    // Instrução explícita para ignorar o objeto (ex: vestido) e descrever apenas a arte (ex: floral).
+    // PROMPT FOCADO EM "GOOGLE LENS" DE TEXTURA E COR TÉCNICA
     const ART_DIRECTOR_PROMPT = `
-    Analyze the PRINT/PATTERN/TEXTURE of this image. IGNORE the object/garment shape.
+    Analyze the PRINT/PATTERN/TEXTURE of this image. IGNORE the object shape.
     
     Output JSON:
     1. "printDescription": Visual description of the ARTWORK ONLY (e.g. "Watercolor tropical floral print seamless").
-    2. "colors": Array of 4-5 dominant colors with hex and Pantone name.
+    2. "colors": Array of 4-5 dominant colors. IMPORTANT: YOU MUST PROVIDE THE 'code' (Pantone TCX).
+       Format: { "name": "Color Name", "hex": "#RRGGBB", "code": "19-4052 TCX" }
     3. "technicalSpecs": { "motifs": ["Flower", "Stripe"], "technique": "Watercolor/Vector", "vibe": "Boho/Modern" }.
     4. "marketQuery": A query to find this TEXTURE FILE on stock sites (e.g. "Seamless watercolor floral pattern swatch").
     `;
@@ -32,6 +32,14 @@ export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType
     
     // Fallback de segurança
     if (!analysis.prompt) analysis.prompt = analysis.printDescription || "Seamless pattern";
+    
+    // Garante que os códigos tenham o sufixo TCX se a IA esquecer
+    if (analysis.colors) {
+        analysis.colors = analysis.colors.map(c => ({
+            ...c,
+            code: c.code ? c.code : (c.hex ? 'MATCHING...' : 'N/A')
+        }));
+    }
     
     return analysis;
 };
