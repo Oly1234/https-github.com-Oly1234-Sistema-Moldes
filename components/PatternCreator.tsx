@@ -4,9 +4,13 @@ import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, L
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
-// Função de compressão
-const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
-    return new Promise((resolve) => {
+// Função de compressão robusta
+const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        if (!base64Str) {
+            reject(new Error("Imagem inválida (vazia)"));
+            return;
+        }
         const img = new Image();
         img.src = base64Str;
         img.onload = () => {
@@ -20,26 +24,37 @@ const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
-            ctx?.drawImage(img, 0, 0, width, height);
+            if (!ctx) {
+                reject(new Error("Contexto de Canvas indisponível"));
+                return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
+        img.onerror = (e) => reject(new Error("Falha ao carregar imagem para compressão"));
     });
 };
 
 // --- FALLBACK DE ALTA QUALIDADE (DESIGNER MODE) ---
-// Usa prompts técnicos para garantir que o resultado do Pollinations seja profissional
+// Simula a geração do Gemini usando Pollinations/Flux se o backend falhar
 const generateHighQualityFallback = (prompt: string, colors: PantoneColor[]): string => {
     const seed = Math.floor(Math.random() * 999999);
-    const colorString = colors.map(c => c.name).join(', ');
     
-    // Injeção de palavras-chave técnicas baseadas na análise da IA
-    const technicalDirectives = "professional textile design, 8k resolution, vector quality, seamless repeat pattern, clean lines, balanced composition, no artifacts, fabric print ready";
+    // Extrai nomes de cores seguros
+    const colorString = colors.map(c => c.name || 'Multicolor').join(', ');
     
-    const enhancedPrompt = `${technicalDirectives}, ${prompt}, palette: [${colorString}]`;
-    const encoded = encodeURIComponent(enhancedPrompt);
+    // Engenharia de Prompt para garantir resultado profissional
+    // A IA do backend gera um prompt técnico. Aqui garantimos que o visualizador receba isso.
+    const technicalDirectives = "textile pattern design, seamless repeat, 8k resolution, flat lay print, vector style, high fashion fabric";
     
-    // Usa modelo 'flux' ou 'turbo' para melhor coerência
-    return `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}&model=flux`;
+    // Combina prompt da IA + Diretrizes Visuais
+    const fullPrompt = `${technicalDirectives}, ${prompt}, color palette: [${colorString}]`;
+    
+    // Sanitização para URL
+    const encoded = encodeURIComponent(fullPrompt.substring(0, 800)); // Limite seguro de caracteres
+    
+    // Usa modelo FLUX (Melhor qualidade atual para texturas)
+    return `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}&model=flux&enhance=true`;
 };
 
 export const PatternCreator: React.FC = () => {
@@ -62,12 +77,16 @@ export const PatternCreator: React.FC = () => {
         if (file) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                setReferenceImage(ev.target?.result as string);
-                setGeneratedPattern(null);
-                setDetectedColors([]);
-                setStockMatches([]);
-                setPrompt('');
-                setVisibleStockCount(10);
+                const res = ev.target?.result as string;
+                if (res) {
+                    setReferenceImage(res);
+                    // Reset dos estados
+                    setGeneratedPattern(null);
+                    setDetectedColors([]);
+                    setStockMatches([]);
+                    setPrompt('');
+                    setVisibleStockCount(10);
+                }
             };
             reader.readAsDataURL(file);
         }
@@ -78,6 +97,8 @@ export const PatternCreator: React.FC = () => {
         setIsAnalyzing(true);
         try {
             const compressedBase64 = await compressImage(referenceImage);
+            if (!compressedBase64.includes(',')) throw new Error("Formato de imagem inválido");
+
             const base64Data = compressedBase64.split(',')[1];
             const mimeType = compressedBase64.split(';')[0].split(':')[1];
 
@@ -97,20 +118,20 @@ export const PatternCreator: React.FC = () => {
             
             if (data.success) {
                 setPrompt(data.prompt);
-                const colors = data.colors || [];
+                const colors = Array.isArray(data.colors) ? data.colors : [];
                 setDetectedColors(colors);
-                setStockMatches(data.stockMatches || []);
+                setStockMatches(Array.isArray(data.stockMatches) ? data.stockMatches : []);
                 
                 // Dispara geração da estampa (Gemini First)
                 if (data.prompt) {
                     generatePatternFromData(data.prompt, colors);
                 }
             } else {
-                throw new Error("Dados inválidos");
+                throw new Error("Dados inválidos da API");
             }
         } catch (error) {
-            console.log("Erro na análise:", error);
-            setPrompt("Could not analyze image pattern.");
+            console.error("Erro na análise:", error);
+            setPrompt("Pattern analysis failed. Please try a clearer image.");
         } finally {
             setIsAnalyzing(false);
         }
@@ -119,8 +140,8 @@ export const PatternCreator: React.FC = () => {
     const generatePatternFromData = async (promptText: string, colorsData: PantoneColor[]) => {
         setIsGenerating(true);
         try {
+             console.log("Iniciando Geração de Estampa...");
              // 1. TENTATIVA PRIMÁRIA: GEMINI (Via Backend)
-             // O backend está configurado para retornar { success: false } se o Gemini falhar.
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -134,18 +155,20 @@ export const PatternCreator: React.FC = () => {
             const data = await response.json();
             
             if (response.ok && data.success && data.image) { 
-                console.log("Geração Gemini: Sucesso");
+                console.log("Geração Gemini: SUCESSO");
                 setGeneratedPattern(data.image); 
             } else {
-                // 2. FALLBACK: POLLINATIONS (Client-Side)
-                // Se o Gemini falhar, usamos o gerador externo com prompt técnico aprimorado
-                console.warn("Geração Gemini: Falha ou Indisponível. Usando Fallback Técnico.");
+                // 2. FALLBACK: POLLINATIONS (FLUX MODEL)
+                console.warn("Geração Gemini: Falha/Indisponível. Ativando Fallback Flux...");
                 const hqPattern = generateHighQualityFallback(promptText, colorsData);
+                // Preload da imagem de fallback para garantir que carregue
+                const img = new Image();
+                img.src = hqPattern;
+                img.onload = () => setGeneratedPattern(hqPattern);
                 setGeneratedPattern(hqPattern);
             }
         } catch (error) {
-            // Erro de rede cai no fallback também
-            console.error("Erro de Rede. Usando Fallback.");
+            console.error("Erro Crítico de Geração. Ativando Fallback de Segurança.");
             const hqPattern = generateHighQualityFallback(promptText, colorsData);
             setGeneratedPattern(hqPattern);
         } finally {
@@ -167,6 +190,19 @@ export const PatternCreator: React.FC = () => {
 
     const handleLoadMore = () => {
         setVisibleStockCount(prev => prev + 10);
+    };
+
+    // Helper para renderizar código de cor com segurança total
+    const renderColorCode = (color: any) => {
+        if (!color) return 'N/A';
+        // Se já for string, tenta processar
+        if (typeof color.code === 'string') {
+            return color.code.includes(' ') ? color.code.split(' ')[1] : color.code;
+        }
+        // Se for número ou outro objeto, converte para string segura
+        if (color.code) return String(color.code).substring(0, 10);
+        
+        return 'N/A';
     };
 
     return (
@@ -232,9 +268,9 @@ export const PatternCreator: React.FC = () => {
                                         >
                                             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000)', backgroundSize: '4px 4px', backgroundPosition: '0 0, 2px 2px' }} />
                                         </div>
-                                        {/* FIX CRÍTICO: Validação segura para evitar crash em códigos mal formatados */}
+                                        {/* FIX: Uso da função segura de renderização */}
                                         <span className="text-[9px] font-mono text-gray-500 truncate">
-                                            {color.code ? (color.code.includes(' ') ? color.code.split(' ')[1] : color.code) : 'N/A'}
+                                            {renderColorCode(color)}
                                         </span>
                                     </div>
                                 ))}

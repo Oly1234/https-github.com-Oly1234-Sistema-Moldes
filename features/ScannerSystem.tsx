@@ -228,13 +228,13 @@ export const ScannerSystem: React.FC = () => {
     if (state === AppState.IDLE && !uploadedImage) { cameraInputRef.current?.click(); }
   };
 
+  // Safe Accessors
   const exactMatches = result?.matches?.exact || [];
   const closeMatches = result?.matches?.close || [];
   const vibeMatches = result?.matches?.adventurous || [];
   
   const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches]
-        .filter(m => m && typeof m === 'object' && m.patternName)
-        .sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0));
+        .filter(m => m && typeof m === 'object' && m.patternName); // Extra safety check
 
   const getFilteredMatches = () => {
       switch(activeTab) {
