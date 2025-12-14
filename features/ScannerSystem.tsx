@@ -19,7 +19,6 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     const isDragging = useRef(false);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        // Captura o ponteiro para garantir que o movimento seja rastreado mesmo se sair do elemento
         e.currentTarget.setPointerCapture(e.pointerId);
         isDragging.current = true;
         dragOffset.current = { 
@@ -34,7 +33,6 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
         const newX = e.clientX - dragOffset.current.x;
         const newY = e.clientY - dragOffset.current.y;
         
-        // Limites da tela
         const maxX = window.innerWidth - size;
         const maxY = window.innerHeight - 50; 
         
@@ -67,7 +65,6 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
                 left: position.x, 
                 top: position.y, 
                 width: size,
-                // touch-action: none previne scroll da página APENAS ao interagir com este elemento
                 touchAction: 'none' 
             }}
         >
@@ -76,13 +73,12 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-                // Segurança extra caso perca o foco
                 onPointerCancel={handlePointerUp}
             >
                 <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Ref</span>
                 <div 
                     className="flex items-center gap-1" 
-                    onPointerDown={(e) => e.stopPropagation()} // Previne drag ao clicar nos botões
+                    onPointerDown={(e) => e.stopPropagation()} 
                 >
                     <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
                     <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
@@ -145,7 +141,9 @@ export const ScannerSystem: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  const [visibleCount, setVisibleCount] = useState(10);
+  
+  // AUMENTADO DE 10 PARA 25 PARA EXIBIR MAIS VARIEDADE INICIALMENTE
+  const [visibleCount, setVisibleCount] = useState(25);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -157,7 +155,7 @@ export const ScannerSystem: React.FC = () => {
     let interval: any;
     if (state === AppState.ANALYZING) {
         setLoadingStep(0);
-        interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length); }, 1500); // Acelerado
+        interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length); }, 1500); 
     }
     return () => clearInterval(interval);
   }, [state]);
@@ -198,7 +196,7 @@ export const ScannerSystem: React.FC = () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING);
     setErrorMsg(null);
-    setVisibleCount(10); 
+    setVisibleCount(25); 
     
     setTimeout(async () => {
         try {
@@ -220,7 +218,7 @@ export const ScannerSystem: React.FC = () => {
             setErrorMsg(err.message || "Erro desconhecido na análise.");
             setState(AppState.ERROR);
         }
-    }, 100); // Delay reduzido para iniciar mais rápido
+    }, 100); 
   };
   
   const resetApp = () => {
@@ -229,7 +227,7 @@ export const ScannerSystem: React.FC = () => {
     setUploadedImage(null);
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
-    setVisibleCount(10);
+    setVisibleCount(25);
     setErrorMsg(null);
   };
 
@@ -414,15 +412,14 @@ export const ScannerSystem: React.FC = () => {
                     <div className="flex items-center justify-between overflow-x-auto pb-2 sticky top-16 bg-[#f8fafc]/90 backdrop-blur z-20 py-2">
                         <h3 className="text-lg font-bold text-gray-800 mr-4 whitespace-nowrap">Resultados ({filteredData.length})</h3>
                         <div className="flex gap-2">
-                            <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => { setActiveTab('ALL'); setVisibleCount(10); }} icon={Layers} />
-                            <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => { setActiveTab('EXACT'); setVisibleCount(10); }} icon={CheckCircle2} />
-                            <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => { setActiveTab('CLOSE'); setVisibleCount(10); }} icon={Sparkles} />
+                            <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => { setActiveTab('ALL'); setVisibleCount(25); }} icon={Layers} />
+                            <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => { setActiveTab('EXACT'); setVisibleCount(25); }} icon={CheckCircle2} />
+                            <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => { setActiveTab('CLOSE'); setVisibleCount(25); }} icon={Sparkles} />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {visibleData.map((match, i) => (
-                            // Passamos uploadedImage para cada card para a curadoria IA
                             match ? <PatternVisualCard key={i} match={match} userReferenceImage={uploadedImage} /> : null
                         ))}
                     </div>

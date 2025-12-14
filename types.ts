@@ -3,9 +3,9 @@ export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
   sleeve: string;
-  length: string;      // Novo
-  fit: string;         // Novo
-  fabric: string;      // Novo
+  length: string;      
+  fit: string;         
+  fabric: string;      
   designDetails: string[];
 }
 
@@ -99,8 +99,9 @@ export interface ScanHistoryItem {
 
 export interface PantoneColor {
   name: string;
-  code: string; 
+  code: string;  // TCX Code (e.g. 18-1750 TCX)
   hex: string;
+  trendStatus?: string; // e.g. "COY 2023"
 }
 
 export enum AppState {

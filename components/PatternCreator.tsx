@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, Layers, ShoppingBag, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -22,6 +22,24 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
         img.onerror = () => reject(new Error("Load error"));
     });
 };
+
+// Componente Cartão Pantone
+const PantoneCard: React.FC<{ color: PantoneColor }> = ({ color }) => (
+    <div className="flex flex-col bg-white shadow-md rounded-sm overflow-hidden aspect-[3/4] border border-gray-200 hover:scale-105 transition-transform cursor-pointer group">
+        <div className="flex-1" style={{ backgroundColor: color.hex }}></div>
+        <div className="p-2 h-16 flex flex-col justify-between bg-white">
+            <div>
+                <span className="block text-[10px] font-bold text-gray-900 leading-tight uppercase">{color.name}</span>
+                <span className="block text-[9px] text-gray-500 font-mono">{color.code}</span>
+            </div>
+            {color.trendStatus && (
+                <span className="text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1 py-0.5 rounded w-fit uppercase">
+                    {color.trendStatus}
+                </span>
+            )}
+        </div>
+    </div>
+);
 
 export const PatternCreator: React.FC = () => {
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -65,14 +83,10 @@ export const PatternCreator: React.FC = () => {
         try {
             const compressedBase64 = await compressImage(referenceImage);
             const parts = compressedBase64.split(',');
-            const meta = parts[0];
             const data = parts[1];
             
-            let mimeType = 'image/jpeg';
-            if (meta && meta.includes(':') && meta.includes(';')) {
-                const mimePart = meta.split(':')[1];
-                if (mimePart) mimeType = mimePart.split(';')[0];
-            }
+            // Assume JPEG pós-compressão
+            const mimeType = 'image/jpeg'; 
 
             const response = await fetch('/api/analyze', {
                 method: 'POST',
@@ -92,9 +106,6 @@ export const PatternCreator: React.FC = () => {
                 setDetectedColors(Array.isArray(resData.colors) ? resData.colors : []);
                 setFabricMatches(Array.isArray(resData.stockMatches) ? resData.stockMatches : []);
                 setTechnicalSpecs(resData.technicalSpecs || null);
-                
-                // Auto-generate if prompt exists
-                if (resData.prompt) generatePatternFromData(resData.prompt, resData.colors || []);
             }
         } catch (error) {
             console.error("Analysis failed:", error);
@@ -104,7 +115,8 @@ export const PatternCreator: React.FC = () => {
         }
     };
 
-    const generatePatternFromData = async (promptText: string, colorsData: PantoneColor[]) => {
+    const generatePatternFromData = async () => {
+        if (!prompt) return;
         setIsGenerating(true);
         setGenError(null);
         try {
@@ -113,15 +125,15 @@ export const PatternCreator: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     action: 'GENERATE_PATTERN', 
-                    prompt: promptText,
-                    colors: colorsData
+                    prompt: prompt,
+                    colors: detectedColors
                 })
             });
             const data = await response.json();
             if (data.success && data.image) { 
                 setGeneratedPattern(data.image); 
             } else {
-                setGenError("Não foi possível gerar a estampa. " + (data.error || "Tente novamente."));
+                setGenError(data.error || "Erro na geração.");
             }
         } catch (error: any) {
             console.error("Gen Error", error);
@@ -140,149 +152,171 @@ export const PatternCreator: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#f8fafc] overflow-hidden">
+        <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden">
+            <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0 z-20 shadow-sm">
+                <Palette className="text-vingi-600 mr-2" size={20} />
+                <h2 className="text-lg font-bold text-gray-800">Pattern Studio <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 ml-2">BETA</span></h2>
+            </header>
+
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                 
-                {/* ESQUERDA: LABORATÓRIO */}
-                <div className="w-full md:w-[380px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 shadow-xl">
-                    <div className="p-5 border-b border-gray-100 bg-gray-50/50 sticky top-0 backdrop-blur z-20">
-                        <h2 className="text-lg font-bold text-vingi-900 flex items-center gap-2">
-                            <Palette className="text-vingi-600" size={20} /> Design Lab
-                            <span className="text-[10px] bg-vingi-900 text-white px-2 py-0.5 rounded-full font-mono">DIGITAL</span>
-                        </h2>
-                    </div>
-                    
-                    <div className="p-5 space-y-6">
-                        {/* 1. UPLOAD */}
-                        <div onClick={() => fileInputRef.current?.click()} className={`relative h-40 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${referenceImage ? 'border-vingi-500 bg-white' : 'border-gray-300 hover:border-vingi-400 hover:bg-gray-50'}`}>
-                            <input type="file" ref={fileInputRef} onChange={handleReferenceUpload} accept="image/*" className="hidden" />
-                            {referenceImage ? <img src={referenceImage} className="w-full h-full object-cover rounded-xl" /> : <UploadCloud className="text-gray-400" size={32}/>}
-                            {!referenceImage && <span className="text-xs font-bold text-gray-400 mt-2">Carregar Amostra</span>}
+                {/* COLUNA 1: LABORATÓRIO E ANÁLISE (Entrada & Dados) */}
+                <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10">
+                    <div className="p-6 space-y-8">
+                        
+                        {/* 1. UPLOAD SECTION */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <ImageIcon size={14}/> 1. Amostra de Referência
+                            </h3>
+                            <div onClick={() => fileInputRef.current?.click()} className={`relative h-48 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all group ${referenceImage ? 'border-vingi-500 bg-white' : 'border-gray-300 hover:border-vingi-400 hover:bg-gray-50'}`}>
+                                <input type="file" ref={fileInputRef} onChange={handleReferenceUpload} accept="image/*" className="hidden" />
+                                {referenceImage ? (
+                                    <>
+                                        <img src={referenceImage} className="w-full h-full object-cover rounded-lg p-1 opacity-80 group-hover:opacity-100 transition-opacity" />
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 rounded-lg transition-opacity">
+                                            <span className="bg-white px-3 py-1 rounded-full text-xs font-bold shadow-md">Trocar Imagem</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center p-6">
+                                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                                            <UploadCloud className="text-gray-400" size={24}/>
+                                        </div>
+                                        <span className="text-sm font-bold text-gray-600">Carregar Textura</span>
+                                        <p className="text-[10px] text-gray-400 mt-1">JPG, PNG (Max 5MB)</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {referenceImage && !technicalSpecs && (
+                                <button onClick={analyzeReference} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
+                                    {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Search size={16}/>} 
+                                    {isAnalyzing ? 'Analisando Pantone...' : 'Analisar DNA & Cores'}
+                                </button>
+                            )}
                         </div>
 
-                        {referenceImage && (
-                            <button onClick={analyzeReference} disabled={isAnalyzing} className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg">
-                                {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Grid3X3 size={16}/>} 
-                                {isAnalyzing ? 'Engenharia Têxtil...' : 'Decompor Estampa'}
-                            </button>
-                        )}
-
-                        {/* 2. DADOS TÉCNICOS DETALHADOS */}
+                        {/* 2. RESULTADOS TÉCNICOS (Só aparece após análise) */}
                         {technicalSpecs && (
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
-                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1"><Target size={12}/> DNA de Superfície</h3>
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
-                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Grid3X3 size={8}/> Repetição</span>
-                                        <span className="font-bold text-gray-700">{technicalSpecs.repeat || 'N/A'}</span>
-                                    </div>
-                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
-                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Maximize2 size={8}/> Escala</span>
-                                        <span className="font-bold text-gray-700">{technicalSpecs.scale || 'N/A'}</span>
-                                    </div>
-                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
-                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Box size={8}/> Densidade</span>
-                                        <span className="font-bold text-gray-700">{technicalSpecs.density || 'N/A'}</span>
-                                    </div>
-                                    <div className="bg-white p-2 rounded border border-gray-100 flex flex-col">
-                                        <span className="text-gray-400 text-[9px] flex items-center gap-1"><Feather size={8}/> Técnica</span>
-                                        <span className="font-bold text-gray-700">{technicalSpecs.technique || 'N/A'}</span>
-                                    </div>
+                            <div className="animate-fade-in space-y-6">
+                                {/* PANTONE LAB */}
+                                <div>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <Palette size={14}/> Pantone® Studio
+                                    </h3>
+                                    {detectedColors.length > 0 ? (
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {detectedColors.map((c, i) => <PantoneCard key={i} color={c} />)}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-400 italic">Nenhuma cor dominante detectada.</p>
+                                    )}
                                 </div>
-                                {technicalSpecs.elements && (
-                                    <div className="pt-2 border-t border-gray-100">
-                                        <span className="text-[9px] text-gray-400 block mb-1">Motivos Chave</span>
-                                        <div className="flex flex-wrap gap-1">
+
+                                {/* DNA TÊXTIL */}
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-3"><Target size={12}/> Especificações Técnicas</h3>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div className="bg-white p-2 rounded border border-gray-100">
+                                            <span className="text-gray-400 text-[9px] block">Repetição</span>
+                                            <span className="font-bold text-gray-700">{technicalSpecs.repeat || 'N/A'}</span>
+                                        </div>
+                                        <div className="bg-white p-2 rounded border border-gray-100">
+                                            <span className="text-gray-400 text-[9px] block">Técnica</span>
+                                            <span className="font-bold text-gray-700">{technicalSpecs.technique || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                    {technicalSpecs.elements && (
+                                        <div className="pt-2 mt-2 border-t border-gray-100 flex flex-wrap gap-1">
                                             {technicalSpecs.elements.map((el: string, i: number) => (
                                                 <span key={i} className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[10px] text-gray-600">{el}</span>
                                             ))}
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* 3. CORES */}
-                        {detectedColors.length > 0 && (
-                            <div className="space-y-2">
-                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Paleta Detectada</h3>
-                                <div className="grid grid-cols-5 gap-2">
-                                    {detectedColors.map((c, i) => (
-                                        <div key={i} className="aspect-square rounded-lg shadow-sm border border-gray-200 relative group cursor-help" style={{backgroundColor: c.hex}}>
-                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">{c.name}</span>
-                                        </div>
-                                    ))}
+                                    )}
                                 </div>
-                            </div>
-                        )}
 
-                        {/* 4. AÇÃO GERAR */}
-                        {prompt && (
-                            <div className="pt-4 border-t border-gray-100">
-                                <button onClick={() => prompt && generatePatternFromData(prompt, detectedColors)} disabled={isGenerating} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:brightness-110 transition-all">
-                                    {isGenerating ? <Loader2 className="animate-spin"/> : <Sparkles/>} Recriar Digitalmente
-                                </button>
-                                {genError && (
-                                    <div className="mt-2 text-xs text-red-500 flex items-center gap-1">
-                                        <AlertCircle size={12}/> {genError}
-                                    </div>
-                                )}
+                                {/* AÇÃO DE GERAÇÃO (Sempre disponível após análise) */}
+                                <div className="pt-4 border-t border-gray-100">
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <Sparkles size={14}/> IA Generativa
+                                    </h3>
+                                    <button onClick={generatePatternFromData} disabled={isGenerating} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+                                        {isGenerating ? <Loader2 className="animate-spin"/> : <Wand2 size={18}/>}
+                                        {generatedPattern ? 'Gerar Novamente' : 'Criar Estampa Exclusiva'}
+                                    </button>
+                                    {genError && (
+                                        <div className="mt-3 p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2 border border-red-100">
+                                            <AlertCircle size={14} className="shrink-0"/> {genError}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* DIREITA: RESULTADOS */}
-                <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#e2e8f0]">
+                {/* COLUNA 2: RESULTADOS VISUAIS (Geração + Busca) */}
+                <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f1f5f9]">
                     
-                    {/* PARTE SUPERIOR: GERAÇÃO DIGITAL */}
-                    <div className="p-6 md:p-10 flex flex-col items-center justify-center min-h-[50vh]">
-                        {isGenerating && !generatedPattern ? (
-                             <div className="flex flex-col items-center justify-center opacity-70">
-                                <div className="relative">
-                                    <Loader2 size={64} className="text-vingi-500 animate-spin"/>
-                                    <Sparkles size={24} className="absolute top-0 right-0 text-purple-500 animate-pulse"/>
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-600 mt-4">Criando Estampa Exclusiva...</h3>
-                                <p className="text-sm text-gray-400">Processando textura seamless com IA</p>
-                             </div>
-                        ) : !generatedPattern ? (
-                            <div className="text-center opacity-40">
-                                <ImageIcon size={64} className="mx-auto mb-4 text-gray-400"/>
-                                <h3 className="text-2xl font-bold text-gray-600">Área de Criação</h3>
-                                <p className="text-gray-500">Recriação digital seamless de alta fidelidade.</p>
+                    {/* ÁREA SUPERIOR: PREVIEW DA GERAÇÃO */}
+                    <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
+                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+                        
+                        {!generatedPattern && !isGenerating ? (
+                            <div className="text-center opacity-40 max-w-md">
+                                <Layers size={64} className="mx-auto mb-4 text-gray-300"/>
+                                <h3 className="text-xl font-bold text-gray-800">Estúdio de Criação</h3>
+                                <p className="text-gray-500 mt-2">Use o botão "Criar Estampa Exclusiva" no menu lateral para gerar uma textura seamless baseada na sua referência.</p>
                             </div>
+                        ) : isGenerating ? (
+                             <div className="flex flex-col items-center justify-center">
+                                <div className="relative">
+                                    <div className="w-24 h-24 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin"></div>
+                                    <Sparkles size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-600 animate-pulse"/>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-700 mt-6">Tecendo Pixels...</h3>
+                                <p className="text-sm text-gray-400">A IA está criando uma padronagem seamless original.</p>
+                             </div>
                         ) : (
-                            <div className="w-full max-w-4xl flex flex-col md:flex-row gap-6 animate-fade-in">
-                                <div className="flex-1">
-                                    <div className="relative aspect-square bg-white rounded-2xl shadow-2xl overflow-hidden border-4 border-white group">
-                                        <img src={generatedPattern} className="w-full h-full object-cover"/>
-                                        <button onClick={handleDownload} className="absolute bottom-4 right-4 bg-white text-black px-5 py-2.5 rounded-full font-bold shadow-lg flex items-center gap-2 hover:scale-105 transition-transform opacity-0 group-hover:opacity-100"><Download size={16}/> Baixar 8K</button>
-                                        <div className="absolute top-4 left-4 bg-black/50 backdrop-blur text-white text-[10px] font-bold px-3 py-1 rounded-full border border-white/20">GENERATED</div>
+                            <div className="w-full max-w-4xl animate-fade-in flex flex-col md:flex-row gap-8 items-center">
+                                <div className="relative aspect-square w-full md:w-96 bg-white rounded-xl shadow-2xl overflow-hidden border-8 border-white group">
+                                    <img src={generatedPattern!} className="w-full h-full object-cover"/>
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button onClick={handleDownload} className="bg-white text-gray-900 px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 hover:scale-105 transition-transform"><Download size={18}/> Baixar Arquivo</button>
                                     </div>
                                 </div>
-                                <div className="w-full md:w-64 flex flex-col gap-4">
-                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 h-full">
-                                         <h4 className="font-bold text-gray-500 uppercase text-xs mb-3 flex items-center gap-2"><Layers size={14}/> Teste de Repetição</h4>
-                                         <div className="w-full h-48 rounded-lg shadow-inner border border-gray-100" style={{backgroundImage: `url(${generatedPattern})`, backgroundSize: '80px'}}/>
-                                         <p className="text-[10px] text-gray-400 mt-2 text-center">Preview em escala 20%</p>
-                                     </div>
+                                <div className="flex-1 space-y-4">
+                                    <h3 className="text-2xl font-bold text-gray-800">Resultado Gerado</h3>
+                                    <p className="text-gray-500 text-sm">Esta estampa é única, seamless (repetição infinita) e livre de royalties. Pronta para sublimação ou impressão digital.</p>
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Prompt Utilizado</h4>
+                                         <p className="text-xs text-gray-600 font-mono italic">"{prompt}"</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* PARTE INFERIOR: MARKETPLACES DIGITAIS */}
-                    <div className="bg-white border-t border-gray-200 p-6 min-h-[40vh]">
-                        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                            <Globe className="text-vingi-600"/> Marketplaces de Estampas Digitais
-                            <span className="text-xs font-normal text-gray-400 ml-2">({fabricMatches.length} resultados)</span>
-                        </h3>
+                    {/* ÁREA INFERIOR: PESQUISA DE MERCADO */}
+                    <div className="p-6 md:p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                <Globe className="text-vingi-600"/> Marketplaces Globais
+                            </h3>
+                            {fabricMatches.length > 0 && <span className="text-xs bg-white border border-gray-200 px-3 py-1 rounded-full text-gray-500 font-bold">{fabricMatches.length} Encontrados</span>}
+                        </div>
                         
                         {fabricMatches.length === 0 ? (
-                             <div className="text-center py-10 opacity-50 border-2 border-dashed border-gray-200 rounded-xl">
-                                 <p className="text-sm text-gray-400">Faça o upload de uma amostra para buscar vetores e estampas licenciáveis em Patternbank, Creative Market, Etsy, etc.</p>
-                             </div>
+                             technicalSpecs ? (
+                                <div className="flex items-center justify-center h-32 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                    <p className="text-gray-400 text-sm">Nenhuma correspondência exata encontrada nos marketplaces.</p>
+                                </div>
+                             ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 opacity-30 pointer-events-none">
+                                    {[1,2,3,4,5].map(i => <div key={i} className="h-64 bg-gray-200 rounded-xl animate-pulse"></div>)}
+                                </div>
+                             )
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                 {fabricMatches.map((match, i) => (
@@ -291,7 +325,6 @@ export const PatternCreator: React.FC = () => {
                             </div>
                         )}
                     </div>
-
                 </div>
             </div>
         </div>

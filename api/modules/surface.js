@@ -4,18 +4,30 @@
 
 export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType, cleanJson) => {
     const MASTER_VISION_PROMPT = `
-    ACT AS: Surface Designer.
-    TASK: Analyze the pattern style.
+    ACT AS: Pantone Color Specialist & Surface Designer.
+    TASK: Analyze the pattern style and extract colors.
     
     ANALYZE:
     1. MOTIF: Floral, Geometric, Animal, Abstract.
     2. STYLE: Watercolor, Vector, Vintage, Modern.
-    3. COLORS: Dominant colors.
+    3. COLORS: Identify dominant colors.
+    
+    COLOR MAPPING RULES:
+    - For each color, find the closest PANTONE FASHION, HOME + INTERIORS (TCX) code.
+    - Check if it is a "Color of the Year" (COY) from 2020-2025.
+    - Provide a "trendStatus" (e.g., "COY 2024", "Classic", "Trending").
 
     OUTPUT JSON:
     { 
         "prompt": "Generation prompt for this pattern.", 
-        "colors": [{"name": "Color", "hex": "#000"}], 
+        "colors": [
+            {
+                "name": "Viva Magenta", 
+                "hex": "#BE3455", 
+                "code": "18-1750 TCX", 
+                "trendStatus": "COY 2023" 
+            }
+        ], 
         "technicalSpecs": { "technique": "Vector/Watercolor", "elements": ["Flower"] },
         "searchQuery": "Simple query (e.g. 'Blue floral seamless pattern')"
     }
@@ -44,7 +56,6 @@ export const getSurfaceMarketplaces = (analysis) => {
         type,
         linkType: "SEARCH_QUERY",
         url: `${urlBase}${encodeURIComponent(baseQuery)}`,
-        // Backup Term força imagens diferentes: Spoonflower mostra tecido, Creative Market mostra arte digital
         backupSearchTerm: `"${storeName}" ${baseQuery} ${visualStyle}`, 
         similarityScore: 90 + boost,
         imageUrl: null 
@@ -52,15 +63,22 @@ export const getSurfaceMarketplaces = (analysis) => {
 
     const matches = [];
 
-    // Foco em Arte Digital Limpa
+    // 1. PREMIUM & STUDIO
     matches.push(createMarketLink("Patternbank", "PREMIUM", "https://patternbank.com/designs?search=", "textile design print close-up", 2));
+    matches.push(createMarketLink("Spoonflower", "FABRIC", "https://www.spoonflower.com/en/shop?on=fabric&q=", "printed fabric swatch zoom", 2));
+    matches.push(createMarketLink("Designious", "VECTOR", "https://www.designious.com/?s=", "vector pack seamless", 1));
+
+    // 2. STOCK & VETORES
     matches.push(createMarketLink("Creative Market", "INDIE", "https://creativemarket.com/search?q=", "digital paper background texture", 1));
-    matches.push(createMarketLink("Shutterstock", "STOCK", "https://www.shutterstock.com/search/", "seamless pattern vector flat", 0));
-    
-    // Foco em Tecido Real / Textura
-    matches.push(createMarketLink("Spoonflower", "FABRIC", "https://www.spoonflower.com/en/shop?on=fabric&q=", "printed fabric swatch zoom", 1));
-    matches.push(createMarketLink("Etsy Digital", "MKT", "https://www.etsy.com/search?q=", "digital paper pack", 1));
+    matches.push(createMarketLink("Rawpixel", "ART", "https://www.rawpixel.com/search/", "public domain pattern art", 1));
+    matches.push(createMarketLink("Freepik", "STOCK", "https://www.freepik.com/search?format=search&query=", "seamless vector pattern flat", 0));
     matches.push(createMarketLink("Adobe Stock", "PRO", "https://stock.adobe.com/search?k=", "background texture wallpaper", 0));
+    matches.push(createMarketLink("Shutterstock", "STOCK", "https://www.shutterstock.com/search/", "seamless pattern vector", 0));
+    
+    // 3. HISTÓRICO & REFERÊNCIA
+    matches.push(createMarketLink("V&A Museum", "HISTORY", "https://collections.vam.ac.uk/search/?q=", "historical textile fragment", 2));
+    matches.push(createMarketLink("Textile Hive", "ARCHIVE", "https://www.textilehive.com/search?q=", "vintage textile swatch", 1));
+    matches.push(createMarketLink("Etsy Digital", "MKT", "https://www.etsy.com/search?q=", "digital paper pack", 1));
 
     return matches;
 };

@@ -22,7 +22,6 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
     // SUB-ROTINA: Busca no Bing (Diversificada)
     const fetchCandidatesFromBing = async (term) => {
         if (!term) return [];
-        // Termo limpo mas mantendo a "assinatura" da loja (ex: "model", "envelope")
         const query = term.replace(/sewing pattern/gi, 'pattern').trim();
         const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
         const html = await fetchHtml(searchUrl);
@@ -39,36 +38,35 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         return candidates;
     };
 
-    // SUB-ROTINA: Juiz Visual (IA) - Relaxado para "Vibe Match"
+    // SUB-ROTINA: Juiz Visual (IA)
     const selectBestMatchAI = async (candidates, userRefImage, diversityOffset) => {
         if (!candidates || candidates.length === 0) return null;
+        
+        // Se não tiver chave ou imagem, usa lógica determinística
         if (!userRefImage || !apiKey) {
-            // LÓGICA DE DIVERSIDADE DETERMINÍSTICA (SEM IA)
-            // Se não tiver imagem de referência, usa o offset para garantir
-            // que lojas diferentes peguem resultados diferentes (0, 1, ou 2)
             const safeIndex = diversityOffset % Math.min(candidates.length, 3);
             return candidates[safeIndex].url;
         }
 
         try {
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            const candidatesText = candidates.map((c, i) => `ID ${i}: ${c.title}`).join('\n');
+            const candidatesText = candidates.map((c, i) => `ID ${i}: ${c.title} (URL: ...)`).join('\n');
             
-            // Prompt relaxado: "Diferenciar bastante desde que lembre bem"
+            // PROMPT REFINADO: Comparação Visual Direta
             const JUDGE_PROMPT = `
-            TASK: Select the best image.
-            CONTEXT: The user wants to buy a product similar to the reference.
+            ACT AS: Visual Curator.
+            TASK: Compare the User Reference Image with the Candidate Images descriptions/context.
+            GOAL: Pick the Candidate ID that visualy resembles the Reference Image the most.
             
-            RULES:
-            1. LOOK FOR: High quality product photos (Models for clothes, Swatches for fabric).
-            2. AVOID: Generic logos, blurry text, pixelated icons.
-            3. VIBE MATCH: It doesn't need to be identical. If the reference is a floral dress, pick any nice floral dress pattern.
-            4. DIVERSITY: Prefer an image that looks distinct and specific to the search term "${backupSearchTerm}".
+            CRITERIA:
+            1. SIMILARITY: Must match the motif (e.g., if reference is floral, pick floral).
+            2. QUALITY: Avoid low-res logos or icons. Prefer full product/pattern shots.
+            3. CONTEXT: If the candidate title describes exactly what is seen in the reference, pick it.
             
             CANDIDATES:
             ${candidatesText}
             
-            OUTPUT JSON: { "bestId": 0 }
+            OUTPUT JSON ONLY: { "bestId": 0 }
             `;
 
             const payload = {
@@ -86,33 +84,31 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
             const decision = JSON.parse(cleanJson(text));
             
-            // Se a IA retornar erro ou ID inválido, usa o offset de diversidade
             let bestIndex = decision.bestId !== undefined ? decision.bestId : 0;
             if (!candidates[bestIndex]) bestIndex = 0;
             
             return candidates[bestIndex].url;
 
         } catch (e) {
-            // Fallback com diversidade
             const safeIndex = diversityOffset % Math.min(candidates.length, 3);
             return candidates[safeIndex].url;
         }
     };
 
-    // --- LÓGICA PRINCIPAL ---
+    // --- LÓGICA PRINCIPAL DO SCRAPER ---
     let imageUrl = null;
     
-    // 1. TENTATIVA DIRETA (Seletores específicos)
+    // 1. TENTATIVA DIRETA
     const html = await fetchHtml(targetUrl);
     if (html) {
-        // Seletores otimizados para principais lojas
         const storeSelectors = [
             { domain: 'patternbank', regex: /<img[^>]+class="[^"]*design-image[^"]*"[^>]+src="([^"]+)"/i },
             { domain: 'spoonflower', regex: /<img[^>]+class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i },
+            { domain: 'rawpixel', regex: /<img[^>]+data-src="([^"]+)"[^>]+class="[^"]*image[^"]*"/i },
+            { domain: 'freepik', regex: /<img[^>]+src="([^"]+)"[^>]+class="[^"]*loaded[^"]*"/i },
             { domain: 'simplicity', regex: /<img[^>]+class="card-image[^"]*"[^>]+src="([^"]+)"/i },
             { domain: 'burdastyle', regex: /<img[^>]+class="product-image-photo[^"]*"[^>]+src="([^"]+)"/i },
             { domain: 'etsy', regex: /v2-listing-card__img[\s\S]*?src="([^"]+)"/i },
-            // Genérico E-commerce (pega a primeira imagem de produto do grid)
             { domain: '', regex: /<img[^>]+src="([^"]+)"[^>]+class="[^"]*(product|item|card|grid)[^"]*"[^>]*>/i }
         ];
 
@@ -122,40 +118,36 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             if (match && match[1]) imageUrl = match[1];
         }
         
-        // Seletor Genérico se falhar o específico
         if (!imageUrl) {
              const genericMatch = html.match(storeSelectors[storeSelectors.length-1].regex);
              if (genericMatch && genericMatch[1] && !genericMatch[1].includes('logo')) imageUrl = genericMatch[1];
         }
     }
 
-    // 2. FALLBACK PARA BING (Com Diversidade Forçada)
+    // 2. FALLBACK COM CURADORIA VISUAL
     if ((!imageUrl || imageUrl.includes('logo') || imageUrl.length < 20) && backupSearchTerm) {
         const candidates = await fetchCandidatesFromBing(backupSearchTerm);
         if (candidates.length > 0) {
-            // Cálculo do Offset de Diversidade baseado no domínio
-            // Ex: "simplicity.com".length = 14 -> offset 2
-            // Ex: "etsy.com".length = 8 -> offset 2
-            // Ex: "burda".length = 5 -> offset 2
-            // Usamos o CharCode do primeiro caractere para variar mais
-            let domainHash = 0;
-            try { domainHash = new URL(targetUrl).hostname.charCodeAt(0); } catch(e) { domainHash = 1; }
-            const diversityOffset = domainHash % 3;
-
+            // Se tiver a imagem de referência do usuário, usa a IA para escolher a melhor
+            // Isso garante que cada link tenha uma imagem dedicada e próxima da referência
             if (userReferenceImage && apiKey) {
-                imageUrl = await selectBestMatchAI(candidates, userReferenceImage, diversityOffset);
+                // Passamos diversityOffset = 0 pois queremos a MELHOR escolha visual, 
+                // a diversidade já vem do termo de busca único de cada loja
+                imageUrl = await selectBestMatchAI(candidates, userReferenceImage, 0);
             } else {
-                // Sem IA: Usa a matemática para escolher imagens diferentes para lojas diferentes
+                let domainHash = 0;
+                try { domainHash = new URL(targetUrl).hostname.charCodeAt(0); } catch(e) { domainHash = 1; }
+                const diversityOffset = domainHash % 3;
                 imageUrl = candidates[diversityOffset % candidates.length].url;
             }
         }
     }
 
-    // Limpeza Final
     if (imageUrl) {
         imageUrl = imageUrl.replace(/&amp;/g, '&');
         if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
         if (imageUrl.includes('etsystatic')) imageUrl = imageUrl.replace('340x270', '794xN');
+        if (imageUrl.includes('cdn.shopify.com') && imageUrl.includes('_small')) imageUrl = imageUrl.replace('_small', '_600x600');
     }
     
     return imageUrl;
