@@ -1,18 +1,15 @@
 
-import { analyzeClothingDna, getClothingStores } from './modules/clothing.js';
-import { analyzeSurfaceDesign, getSurfaceMarketplaces } from './modules/surface.js';
-import { generatePattern } from './modules/generator.js';
+import { analyzeColorTrend } from './modules/departments/color.js';
+import { createTextileDesign } from './modules/departments/atelier.js';
+import { analyzeVisualDNA } from './modules/departments/forensics.js';
+import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 
 export default async function handler(req, res) {
-  // Headers CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
@@ -28,66 +25,72 @@ export default async function handler(req, res) {
 
   try {
     const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage } = req.body;
+    
+    // API KEY MANAGER
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
-
     if (!apiKey) return res.status(500).json({ error: "Missing API Key" });
 
-    // 1. LINK PREVIEW & CURADORIA (Bing / Scraper / Curator)
+    // --- ROTEAMENTO DE DEPARTAMENTOS ---
+
+    // 1. DEPARTAMENTO DE SCRAPER (Link Preview)
     if (action === 'GET_LINK_PREVIEW') {
-        // Detecta o contexto baseado no termo de busca (heurística simples) ou passado pelo front
-        const contextType = (backupSearchTerm && backupSearchTerm.includes('texture')) ? 'SURFACE' : 'CLOTHING';
-        
+        const contextType = (backupSearchTerm && backupSearchTerm.includes('pattern')) ? 'SURFACE' : 'CLOTHING';
         const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType, linkType);
-        
-        if (image) return res.status(200).json({ success: true, image });
-        return res.status(200).json({ success: false, message: "No visual found" });
+        return res.status(200).json({ success: true, image });
     }
 
-    // 2. GERAÇÃO DE ESTAMPA
+    // 2. ATELIER DIGITAL (Geração de Imagem)
     if (action === 'GENERATE_PATTERN') {
-        try {
-            const image = await generatePattern(apiKey, prompt, colors);
-            return res.status(200).json({ success: true, image });
-        } catch (e) {
-            return res.status(200).json({ success: false, error: e.message });
-        }
+        const image = await createTextileDesign(apiKey, prompt, colors);
+        return res.status(200).json({ success: true, image });
     }
 
-    // 3. ANÁLISE DE SUPERFÍCIE (Patterns)
+    // 3. ANÁLISE DE SUPERFÍCIE (Pattern Creator Tab)
     if (action === 'DESCRIBE_PATTERN') {
-        try {
-            const analysis = await analyzeSurfaceDesign(apiKey, mainImageBase64, mainMimeType, cleanJson);
-            const matches = getSurfaceMarketplaces(analysis);
-            return res.status(200).json({ success: true, ...analysis, stockMatches: matches });
-        } catch (e) {
-            console.error(e);
-            return res.status(500).json({ error: "Analysis Failed" });
-        }
+        // Chama Dept de Cor
+        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson);
+        // Chama Dept Forense (Visual)
+        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE');
+        // Chama Dept de Mercado
+        const matches = generateMarketLinks(visualData, 'TEXTURE');
+
+        return res.status(200).json({ 
+            success: true, 
+            colors: colorData.colors,
+            prompt: visualData.visualDescription,
+            technicalSpecs: visualData.technicalSpecs,
+            stockMatches: matches
+        });
     }
 
-    // 4. ANÁLISE DE ROUPA (Moldes)
+    // 4. ANÁLISE DE ROUPA (Scanner Tab)
     if (action === 'SCAN_CLOTHING' || !action) { 
-        try {
-            const analysis = await analyzeClothingDna(apiKey, mainImageBase64, mainMimeType, cleanJson);
-            const matches = getClothingStores(analysis);
-            return res.status(200).json({
-                patternName: analysis.patternName,
-                technicalDna: analysis.technicalDna || {}, 
-                matches: matches,
-                curatedCollections: [],
-                recommendedResources: []
-            });
-        } catch (e) {
-            console.error(e);
-            return res.status(500).json({ error: "Clothing Analysis Failed" });
-        }
+        // Chama Dept Forense (Construção)
+        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'GARMENT');
+        // Chama Dept de Mercado
+        const matches = generateMarketLinks(visualData, 'GARMENT');
+        
+        // Formata para o frontend legado
+        const matchesGrouped = {
+            exact: matches.filter(m => m.similarityScore >= 93),
+            close: matches.filter(m => m.similarityScore >= 92 && m.similarityScore < 93),
+            adventurous: matches.filter(m => m.similarityScore < 92)
+        };
+
+        return res.status(200).json({
+            patternName: visualData.visualDescription, // Nome Técnico
+            technicalDna: visualData.technicalSpecs,
+            matches: matchesGrouped,
+            curatedCollections: [],
+            recommendedResources: []
+        });
     }
     
-    return res.status(200).json({ success: false });
+    return res.status(200).json({ success: false, error: "Ação desconhecida" });
 
   } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(503).json({ error: "Service Unavailable" });
+    console.error("Backend Orchestrator Error:", error);
+    res.status(503).json({ error: error.message || "Service Unavailable" });
   }
 }

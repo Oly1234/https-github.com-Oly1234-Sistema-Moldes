@@ -81,10 +81,10 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
-// CARTÃO PANTONE INTERATIVO & TRENDY
+// CARTÃO PANTONE INTERATIVO & TRENDY (ATUALIZADO PARA EXIBIR DADOS DO DEPARTAMENTO DE COR)
 const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
     const handleSearch = () => {
-        const query = `Pantone ${color.code} ${color.name} trend`;
+        const query = `Pantone ${color.code} ${color.name} cotton swatch`;
         window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`, '_blank');
     };
 
@@ -101,7 +101,7 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
             <div className="p-3 flex flex-col justify-between flex-1">
                 <div className="mb-2">
                     <span className="block text-[10px] font-extrabold text-gray-900 leading-tight uppercase tracking-tight">{color.name}</span>
-                    <span className="block text-[9px] text-gray-500 font-mono mt-0.5">{color.code || 'TCX PENDING'}</span>
+                    <span className="block text-[11px] text-gray-600 font-mono mt-0.5 font-bold">{color.code || 'TCX PENDING'}</span>
                 </div>
                 <div className="flex flex-col gap-1">
                     {color.role && (
@@ -109,9 +109,9 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
                             {color.role}
                         </span>
                     )}
-                    {color.trendContext && (
-                        <span className="self-start text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1.5 py-0.5 rounded border border-vingi-100 flex items-center gap-1 leading-tight">
-                            <TrendingUp size={8} className="shrink-0"/> {color.trendContext}
+                    {color.trendStatus && (
+                        <span className="self-start text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1.5 py-0.5 rounded border border-vingi-100 flex items-center gap-1 leading-tight animate-pulse">
+                            <TrendingUp size={8} className="shrink-0"/> {color.trendStatus}
                         </span>
                     )}
                 </div>
@@ -252,7 +252,7 @@ export const PatternCreator: React.FC = () => {
 
             <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0 z-20 shadow-sm">
                 <Palette className="text-vingi-600 mr-2" size={20} />
-                <h2 className="text-lg font-bold text-gray-800">Pattern Studio <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 ml-2">BETA</span></h2>
+                <h2 className="text-lg font-bold text-gray-800">Pattern Studio <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 ml-2">DEPTS. ATIVOS</span></h2>
             </header>
 
             {/* Layout Flex para Mobile (Column) e Desktop (Row) */}
@@ -287,7 +287,7 @@ export const PatternCreator: React.FC = () => {
                             {referenceImage && !technicalSpecs && (
                                 <button onClick={analyzeReference} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
                                     {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Search size={16}/>} 
-                                    {isAnalyzing ? 'Analisando DNA...' : 'Analisar DNA & Cores'}
+                                    {isAnalyzing ? 'Consultar Departamentos' : 'Iniciar Análise Técnica'}
                                 </button>
                             )}
                         </div>
@@ -304,7 +304,7 @@ export const PatternCreator: React.FC = () => {
 
                                 <div>
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Palette size={14}/> Pantone® Trend IQ
+                                        <Palette size={14}/> Dept. Colorimetria
                                     </h3>
                                     {detectedColors.length > 0 ? (
                                         <div className="grid grid-cols-2 gap-3">
@@ -316,11 +316,11 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                                 <div className="pt-4 border-t border-gray-100">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Sparkles size={14}/> IA Generativa
+                                        <Sparkles size={14}/> Atelier Digital (Gemini 2.5)
                                     </h3>
                                     <button onClick={generatePatternFromData} disabled={isGenerating} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:brightness-110 transition-all">
                                         {isGenerating ? <Loader2 className="animate-spin"/> : <Wand2 size={18}/>}
-                                        {generatedPattern ? 'Gerar Novamente' : 'Criar Estampa Exclusiva'}
+                                        {generatedPattern ? 'Gerar Novamente' : 'Criar Estampa'}
                                     </button>
                                     {genError && (
                                         <div className="mt-3 p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2 border border-red-100">
@@ -341,7 +341,7 @@ export const PatternCreator: React.FC = () => {
                             <div className="text-center opacity-40 max-w-md">
                                 <Layers size={64} className="mx-auto mb-4 text-gray-300"/>
                                 <h3 className="text-xl font-bold text-gray-800">Estúdio de Criação</h3>
-                                <p className="text-gray-500 mt-2">Use o botão "Criar Estampa Exclusiva" para gerar uma textura seamless baseada na sua referência.</p>
+                                <p className="text-gray-500 mt-2">Use o botão "Criar Estampa" para acionar o Atelier Digital (IA).</p>
                             </div>
                         ) : isGenerating ? (
                              <div className="flex flex-col items-center justify-center">
@@ -349,8 +349,8 @@ export const PatternCreator: React.FC = () => {
                                     <div className="w-24 h-24 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin"></div>
                                     <Sparkles size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-600 animate-pulse"/>
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-700 mt-6">Tecendo Pixels...</h3>
-                                <p className="text-sm text-gray-400">A IA está criando uma padronagem seamless original.</p>
+                                <h3 className="text-lg font-bold text-gray-700 mt-6">Atelier Trabalhando...</h3>
+                                <p className="text-sm text-gray-400">Desenhando padrão seamless (Model: Nano Banana).</p>
                              </div>
                         ) : (
                             <div className="w-full max-w-4xl animate-fade-in flex flex-col md:flex-row gap-8 items-center">
@@ -375,7 +375,7 @@ export const PatternCreator: React.FC = () => {
                     <div className="p-6 md:p-8 pb-32">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                <Globe className="text-vingi-600"/> Marketplaces Globais
+                                <Globe className="text-vingi-600"/> Dept. Mercado Global
                             </h3>
                             {uniqueMatches.length > 0 && <span className="text-xs bg-white border border-gray-200 px-3 py-1 rounded-full text-gray-500 font-bold">{uniqueMatches.length} Encontrados</span>}
                         </div>
