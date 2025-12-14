@@ -4,32 +4,40 @@ import { ExternalLink, ArrowRightCircle } from 'lucide-react';
 import { ExternalPatternMatch } from '../types';
 
 // --- HELPERS INTERNOS DO CARD ---
-// Tenta Google Favicons primeiro, se falhar, o onError vai tentar fallback ou imagem padrão
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 const getBackupIcon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
-
-// Proxy de Imagem Gratuito e Rápido (wsrv.nl)
 const getProxyUrl = (url: string) => `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=400&h=400&fit=cover&a=top&output=webp`;
 
 export const generateSafeUrl = (match: ExternalPatternMatch): string => {
-    const url = match?.url || '';
+    let url = match?.url || '';
     const source = match?.source || 'Web';
     const patternName = match?.patternName || 'Sewing Pattern';
-
+    
+    // Limpeza de termos para busca
     const cleanSearchTerm = encodeURIComponent(patternName.replace(/ pattern| sewing| molde| vestido| dress| pdf| download/gi, '').trim());
     const fullSearchTerm = encodeURIComponent(patternName + ' sewing pattern');
 
-    const lowerUrl = url.toLowerCase();
-    const lowerSource = source.toLowerCase();
+    // Detecção de URLs quebradas ou alucinadas (IDs aleatórios sem estrutura correta)
+    // Se a IA gerou um link direto que parece suspeito, convertemos para busca.
+    const isDirectLink = !url.includes('search') && !url.includes('?q=') && !url.includes('?s=');
+    const isKnownDomain = url.includes('etsy.com') || url.includes('burdastyle') || url.includes('vikisews');
 
-    if (lowerSource.includes('etsy') || lowerUrl.includes('etsy.com')) {
-        if (lowerUrl.includes('/search')) return url;
-        return `https://www.etsy.com/search?q=${fullSearchTerm}&explicit=1&ship_to=BR`;
+    // Se é Etsy mas não tem /listing/ ou /search, provavelmente está errado -> Força busca
+    if (url.includes('etsy.com') && !url.includes('/listing/') && !url.includes('/search')) {
+        return `https://www.etsy.com/search?q=${fullSearchTerm}&explicit=1`;
     }
-    if (lowerSource.includes('burda') || lowerUrl.includes('burdastyle')) {
-         if (lowerUrl.includes('catalogsearch')) return url;
-        return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
+
+    // Se é um link direto "genérico" que não sabemos se funciona, preferimos a busca
+    if (match.linkType === 'SEARCH_QUERY') {
+        // Confirma se a URL de busca está bem formada, senão recria
+        if (!url.includes('=')) {
+             if (source.toLowerCase().includes('etsy')) return `https://www.etsy.com/search?q=${fullSearchTerm}`;
+             if (source.toLowerCase().includes('burda')) return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
+             if (source.toLowerCase().includes('vikisews')) return `https://vikisews.com/search/?q=${cleanSearchTerm}`;
+             return `https://www.google.com/search?q=${fullSearchTerm}`;
+        }
     }
+
     return url;
 };
 
@@ -56,36 +64,37 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
             return;
         }
 
-        if (!safeUrl || safeUrl.includes('/search') || safeUrl.includes('google.com')) return;
+        // Não tenta preview de páginas de busca genéricas (Google), apenas lojas
+        if (!safeUrl || safeUrl.includes('google.com/search')) return;
 
         let isMounted = true;
-        fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: safeUrl })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (isMounted && data.success && data.image) {
-                setDisplayImage(getProxyUrl(data.image));
-                setUsingProxy(true);
-            }
-        })
-        .catch(() => {});
+        
+        // Pequeno delay para não sobrecarregar em listas grandes (30+ itens)
+        const timer = setTimeout(() => {
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: safeUrl })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (isMounted && data.success && data.image) {
+                    setDisplayImage(getProxyUrl(data.image));
+                    setUsingProxy(true);
+                }
+            })
+            .catch(() => {});
+        }, Math.random() * 2000); // Random delay 0-2s para distribuir carga
 
-        return () => { isMounted = false; };
+        return () => { isMounted = false; clearTimeout(timer); };
     }, [safeUrl, initialImage]);
 
     const handleError = () => {
-        // Se a imagem atual (seja produto ou favicon primário) falhar
         if (displayImage !== primaryIcon && displayImage !== backupIcon) {
-            // Tenta o ícone primário (Google)
             setDisplayImage(primaryIcon);
         } else if (displayImage === primaryIcon) {
-            // Se o Google falhou, tenta backup (DuckDuckGo)
             setDisplayImage(backupIcon);
         }
-        // Se ambos falharem, o browser mostra ícone quebrado (aceitável)
     };
 
     const finalImage = displayImage || primaryIcon;
