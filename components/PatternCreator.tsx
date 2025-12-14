@@ -1,8 +1,18 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2 } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
+
+// --- TYPES LOCAL ---
+interface GeneratedAsset {
+    id: string;
+    imageUrl: string;
+    prompt: string;
+    layout: string;
+    timestamp: number;
+    specs: { width: number; height: number };
+}
 
 // Modal Flutuante para Comparação
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
@@ -106,12 +116,12 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
             </div>
             <div className="p-3 flex flex-col justify-between flex-1">
                 <div className="mb-2">
-                    <span className="block text-[10px] font-extrabold text-gray-900 leading-tight uppercase tracking-tight">{color.name}</span>
+                    <span className="block text-[10px] font-extrabold text-gray-900 leading-tight uppercase tracking-tight line-clamp-1" title={color.name}>{color.name}</span>
                     <span className="block text-[11px] text-gray-600 font-mono mt-0.5 font-bold">{color.code || 'TCX PENDING'}</span>
                 </div>
                 <div className="flex flex-col gap-1">
                     {color.role && (
-                        <span className="self-start text-[8px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 uppercase tracking-wider">
+                        <span className="self-start text-[8px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 uppercase tracking-wider truncate max-w-full">
                             {color.role}
                         </span>
                     )}
@@ -141,9 +151,16 @@ const SpecBadge: React.FC<{ icon: any, label: string, value: string }> = ({ icon
 export const PatternCreator: React.FC = () => {
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
+    const [history, setHistory] = useState<GeneratedAsset[]>([]); // ACERVO DA SESSÃO
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
     
+    // Configurações de Engenharia Têxtil
+    const [layoutType, setLayoutType] = useState<'Corrida' | 'Barrada' | 'Localizada'>('Corrida');
+    const [selvedgePos, setSelvedgePos] = useState<'Inferior' | 'Superior' | 'Esquerda' | 'Direita'>('Inferior');
+    const [widthCm, setWidthCm] = useState<number>(140);
+    const [heightCm, setHeightCm] = useState<number>(100);
+
     // Resultados de Busca & Paginação
     const [fabricMatches, setFabricMatches] = useState<ExternalPatternMatch[]>([]);
     const [visibleMatchesCount, setVisibleMatchesCount] = useState(10); 
@@ -200,6 +217,14 @@ export const PatternCreator: React.FC = () => {
                 setDetectedColors(Array.isArray(resData.colors) ? resData.colors : []);
                 setFabricMatches(Array.isArray(resData.stockMatches) ? resData.stockMatches : []);
                 setTechnicalSpecs(resData.technicalSpecs || null);
+                
+                // Auto-detectar layout se a IA sugerir
+                if (resData.technicalSpecs?.layout) {
+                     const apiLayout = resData.technicalSpecs.layout.toLowerCase();
+                     if (apiLayout.includes('barrada') || apiLayout.includes('border')) setLayoutType('Barrada');
+                     else if (apiLayout.includes('localizada') || apiLayout.includes('placement')) setLayoutType('Localizada');
+                     else setLayoutType('Corrida');
+                }
             }
         } catch (error) {
             setPrompt("Could not analyze texture.");
@@ -214,6 +239,7 @@ export const PatternCreator: React.FC = () => {
         setGenError(null);
         try {
              // Passamos o Layout Detectado e as Instruções de Restauração para a IA
+             // Agora incluímos os dados de Engenharia Têxtil definidos pelo usuário
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -221,13 +247,32 @@ export const PatternCreator: React.FC = () => {
                     action: 'GENERATE_PATTERN', 
                     prompt: prompt,
                     colors: detectedColors,
-                    layoutType: technicalSpecs?.layout || 'Seamless', // Ex: Barrada vs Corrida
-                    restorationNotes: technicalSpecs?.restorationInstructions || 'Improve Quality'
+                    // Dados Técnicos Completos
+                    textileSpecs: {
+                        layout: layoutType,
+                        selvedge: selvedgePos,
+                        width: widthCm,
+                        height: heightCm,
+                        // Usamos as instruções de estilo, não chamamos de "restauração" para o usuário
+                        styleGuide: technicalSpecs?.restorationInstructions || 'High quality vector style'
+                    }
                 })
             });
             const data = await response.json();
             if (data.success && data.image) { 
                 setGeneratedPattern(data.image); 
+                
+                // ADICIONAR AO HISTÓRICO
+                const newAsset: GeneratedAsset = {
+                    id: Date.now().toString(),
+                    imageUrl: data.image,
+                    prompt: prompt,
+                    layout: layoutType,
+                    timestamp: Date.now(),
+                    specs: { width: widthCm, height: heightCm }
+                };
+                setHistory(prev => [newAsset, ...prev]);
+
             } else {
                 setGenError(data.error || "Erro na geração. A IA pode estar sobrecarregada.");
             }
@@ -238,12 +283,20 @@ export const PatternCreator: React.FC = () => {
         }
     };
 
-    const handleDownload = () => {
-        if (!generatedPattern) return;
+    const handleDownload = (imgUrl: string = generatedPattern!) => {
+        if (!imgUrl) return;
         const link = document.createElement('a');
-        link.download = `vingi-texture-${Date.now()}.jpg`;
-        link.href = generatedPattern;
+        link.download = `vingi-${layoutType.toLowerCase()}-${Date.now()}.jpg`;
+        link.href = imgUrl;
         link.click();
+    };
+
+    const restoreFromHistory = (asset: GeneratedAsset) => {
+        setGeneratedPattern(asset.imageUrl);
+        setLayoutType(asset.layout as any);
+        setWidthCm(asset.specs.width);
+        setHeightCm(asset.specs.height);
+        setGenError(null);
     };
 
     // DEDUPLICAÇÃO DE RESULTADOS
@@ -299,33 +352,73 @@ export const PatternCreator: React.FC = () => {
                             {referenceImage && !technicalSpecs && (
                                 <button onClick={analyzeReference} disabled={isAnalyzing} className="mt-4 w-full py-3 bg-vingi-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-vingi-800 transition-colors shadow-lg animate-fade-in">
                                     {isAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Search size={16}/>} 
-                                    {isAnalyzing ? 'Consultar Departamentos' : 'Iniciar Análise Técnica'}
+                                    {isAnalyzing ? 'Processando...' : 'Iniciar Análise Técnica'}
                                 </button>
                             )}
                         </div>
                         {technicalSpecs && (
                             <div className="animate-fade-in space-y-6">
-                                {/* Dados Forenses de Layout Detectados */}
-                                {technicalSpecs.layout && (
-                                     <div className="bg-purple-50 border border-purple-100 p-3 rounded-lg">
-                                        <h4 className="text-[10px] font-bold text-purple-800 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            <Ruler size={12}/> Layout Detectado
-                                        </h4>
-                                        <p className="text-sm font-bold text-gray-800 capitalize">{technicalSpecs.layout}</p>
-                                        <p className="text-[10px] text-gray-500 leading-tight mt-1">IA aplicará correções específicas para este formato.</p>
-                                     </div>
-                                )}
+                                {/* PAINEL DE ENGENHARIA TÊXTIL */}
+                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <Ruler size={14}/> 2. Engenharia Têxtil
+                                    </h3>
+                                    
+                                    {/* Dimensões */}
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Largura (cm)</label>
+                                            <div className="flex items-center bg-white border border-gray-200 rounded-lg px-2">
+                                                <input type="number" value={widthCm} onChange={(e) => setWidthCm(Number(e.target.value))} className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent"/>
+                                                <span className="text-[10px] text-gray-400 font-bold">CM</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Altura (cm)</label>
+                                            <div className="flex items-center bg-white border border-gray-200 rounded-lg px-2">
+                                                <input type="number" value={heightCm} onChange={(e) => setHeightCm(Number(e.target.value))} className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent"/>
+                                                <span className="text-[10px] text-gray-400 font-bold">CM</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
+                                    {/* Layout Control */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tipo de Repetição</label>
+                                            <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+                                                <button onClick={() => setLayoutType('Corrida')} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>CORRIDA</button>
+                                                <button onClick={() => setLayoutType('Barrada')} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>BARRADA</button>
+                                                <button onClick={() => setLayoutType('Localizada')} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>LOCAL</button>
+                                            </div>
+                                        </div>
+
+                                        {layoutType === 'Barrada' && (
+                                            <div className="animate-fade-in">
+                                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Posição da Ourela (Barra)</label>
+                                                <div className="grid grid-cols-4 gap-2">
+                                                     <button onClick={() => setSelvedgePos('Inferior')} title="Barra Inferior" className={`py-2 rounded border flex justify-center ${selvedgePos === 'Inferior' ? 'border-vingi-500 bg-vingi-50 text-vingi-600' : 'border-gray-200 bg-white text-gray-400'}`}><ArrowDownToLine size={16}/></button>
+                                                     <button onClick={() => setSelvedgePos('Superior')} title="Barra Superior" className={`py-2 rounded border flex justify-center ${selvedgePos === 'Superior' ? 'border-vingi-500 bg-vingi-50 text-vingi-600' : 'border-gray-200 bg-white text-gray-400'}`}><ArrowDownToLine size={16} className="rotate-180"/></button>
+                                                     <button onClick={() => setSelvedgePos('Esquerda')} title="Ourela Esquerda" className={`py-2 rounded border flex justify-center ${selvedgePos === 'Esquerda' ? 'border-vingi-500 bg-vingi-50 text-vingi-600' : 'border-gray-200 bg-white text-gray-400'}`}><ArrowRightToLine size={16} className="rotate-180"/></button>
+                                                     <button onClick={() => setSelvedgePos('Direita')} title="Ourela Direita" className={`py-2 rounded border flex justify-center ${selvedgePos === 'Direita' ? 'border-vingi-500 bg-vingi-50 text-vingi-600' : 'border-gray-200 bg-white text-gray-400'}`}><ArrowRightToLine size={16}/></button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {/* DADOS FORENSES EM PORTUGUÊS */}
                                 {technicalSpecs.motifs && (
                                     <div className="grid grid-cols-2 gap-2">
                                         <SpecBadge icon={Leaf} label="Motivos" value={technicalSpecs.motifs[0] || 'Floral'} />
                                         <SpecBadge icon={Brush} label="Técnica" value={technicalSpecs.technique || 'Digital'} />
-                                        <SpecBadge icon={Layers} label="Textura" value={technicalSpecs.texture || 'Liso'} />
-                                        <SpecBadge icon={Droplets} label="Vibe" value={technicalSpecs.vibe || 'Modern'} />
+                                        <SpecBadge icon={Layers} label="Layout" value={technicalSpecs.layout || 'Padrão'} />
+                                        <SpecBadge icon={Droplets} label="Vibe" value={technicalSpecs.vibe || 'Moderna'} />
                                     </div>
                                 )}
 
-                                <div>
+                                {/* Resumo de Cores */}
+                                <div className="pt-2">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                         <Palette size={14}/> Dept. Colorimetria
                                     </h3>
@@ -337,13 +430,14 @@ export const PatternCreator: React.FC = () => {
                                         <p className="text-xs text-gray-400 italic">Nenhuma cor dominante detectada.</p>
                                     )}
                                 </div>
+
                                 <div className="pt-4 border-t border-gray-100">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Sparkles size={14}/> Atelier Digital (Restauro)
+                                        <Sparkles size={14}/> 3. Geração da Estampa
                                     </h3>
                                     <button onClick={generatePatternFromData} disabled={isGenerating} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:brightness-110 transition-all">
                                         {isGenerating ? <Loader2 className="animate-spin"/> : <Wand2 size={18}/>}
-                                        {generatedPattern ? 'Refazer Restauração' : 'Restaurar & Gerar HQ'}
+                                        {generatedPattern ? 'Regerar com Novos Parâmetros' : 'Criar Estampa Final'}
                                     </button>
                                     {genError && (
                                         <div className="mt-3 p-3 bg-red-50 text-red-600 text-xs rounded-lg flex items-center gap-2 border border-red-100">
@@ -362,9 +456,9 @@ export const PatternCreator: React.FC = () => {
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                         {!generatedPattern && !isGenerating ? (
                             <div className="text-center opacity-40 max-w-md">
-                                <Layers size={64} className="mx-auto mb-4 text-gray-300"/>
-                                <h3 className="text-xl font-bold text-gray-800">Estúdio de Restauração</h3>
-                                <p className="text-gray-500 mt-2">Clique em "Restaurar & Gerar HQ" para que a IA limpe traços, corrija erros e gere um arquivo vetorial em alta resolução.</p>
+                                <LayoutTemplate size={64} className="mx-auto mb-4 text-gray-300"/>
+                                <h3 className="text-xl font-bold text-gray-800">Estúdio de Criação</h3>
+                                <p className="text-gray-500 mt-2">Defina as dimensões e o tipo de layout no painel lateral para criar sua estampa técnica.</p>
                             </div>
                         ) : isGenerating ? (
                              <div className="flex flex-col items-center justify-center">
@@ -373,22 +467,27 @@ export const PatternCreator: React.FC = () => {
                                     <Sparkles size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-600 animate-pulse"/>
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-700 mt-6">Atelier Trabalhando...</h3>
-                                <p className="text-sm text-gray-400">Aplicando correções de traço e layout ({technicalSpecs?.layout || 'Standard'}).</p>
+                                <p className="text-sm text-gray-400">Calculando layout {layoutType} ({widthCm}x{heightCm}cm)...</p>
                              </div>
                         ) : (
                             <div className="w-full max-w-4xl animate-fade-in flex flex-col md:flex-row gap-8 items-center">
                                 <div className="relative aspect-square w-full md:w-96 bg-white rounded-xl shadow-2xl overflow-hidden border-8 border-white group">
                                     <img src={generatedPattern!} className="w-full h-full object-cover"/>
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <button onClick={handleDownload} className="bg-white text-gray-900 px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 hover:scale-105 transition-transform"><Download size={18}/> Baixar Arquivo</button>
+                                        <button onClick={() => handleDownload()} className="bg-white text-gray-900 px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 hover:scale-105 transition-transform"><Download size={18}/> Baixar Arquivo</button>
                                     </div>
                                 </div>
                                 <div className="flex-1 space-y-4">
-                                    <h3 className="text-2xl font-bold text-gray-800">Resultado Restaurado</h3>
-                                    <p className="text-gray-500 text-sm">Esta estampa foi recriada digitalmente com base na sua referência. Traços limpos, repetição corrigida e erros removidos.</p>
+                                    <h3 className="text-2xl font-bold text-gray-800">Resultado Técnico</h3>
+                                    <div className="flex gap-2">
+                                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded uppercase">{layoutType}</span>
+                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase">{widthCm}x{heightCm}cm</span>
+                                        {layoutType === 'Barrada' && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">Barra {selvedgePos}</span>}
+                                    </div>
+                                    <p className="text-gray-500 text-sm">Estampa gerada respeitando a área útil e direção da ourela solicitada. Pronta para plotagem ou sublimação.</p>
                                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Prompt de Restauro</h4>
-                                         <p className="text-xs text-gray-600 font-mono italic">"{prompt} - Fix: {technicalSpecs?.restorationInstructions}"</p>
+                                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Specs</h4>
+                                         <p className="text-xs text-gray-600 font-mono italic">"{prompt}"</p>
                                     </div>
                                 </div>
                             </div>
@@ -396,6 +495,38 @@ export const PatternCreator: React.FC = () => {
                     </div>
                     
                     <div className="p-6 md:p-8 pb-32">
+                        
+                        {/* NOVO: ACERVO DE CRIAÇÕES (HISTÓRICO DA SESSÃO) */}
+                        {history.length > 0 && (
+                            <div className="mb-10">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <History className="text-vingi-600"/> Acervo da Sessão
+                                    </h3>
+                                    <button onClick={() => setHistory([])} className="text-xs text-red-400 flex items-center gap-1 hover:text-red-600"><Trash2 size={12}/> Limpar</button>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                    {history.map((asset) => (
+                                        <div 
+                                            key={asset.id} 
+                                            onClick={() => restoreFromHistory(asset)}
+                                            className={`group relative aspect-square bg-white rounded-xl border-2 cursor-pointer overflow-hidden transition-all ${generatedPattern === asset.imageUrl ? 'border-vingi-500 ring-2 ring-vingi-100' : 'border-gray-100 hover:border-gray-300'}`}
+                                        >
+                                            <img src={asset.imageUrl} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end p-2">
+                                                <div className="bg-white/90 backdrop-blur text-gray-800 text-[9px] font-bold px-2 py-1 rounded w-full truncate">
+                                                    {asset.layout}
+                                                </div>
+                                            </div>
+                                            {generatedPattern === asset.imageUrl && (
+                                                <div className="absolute top-2 right-2 bg-vingi-500 text-white rounded-full p-1"><Sparkles size={10}/></div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                 <Globe className="text-vingi-600"/> Dept. Mercado Global

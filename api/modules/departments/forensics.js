@@ -6,61 +6,55 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // ABA DE CRIADOR: Foco na Arte/Superfície & Restauração
+        // ABA DE CRIADOR: Foco na Arte/Superfície & Criação
         SYSTEM_PROMPT = `
-        ACT AS: Senior Textile Restorer & Surface Designer.
-        TASK: Analyze the artwork to enable a High-Definition Recreation.
+        ACT AS: Senior Surface Designer & Textile Engineer (Portuguese Speaker).
+        TASK: Analyze the artwork to enable a High-Definition Recreation (New Design Generation).
         
-        ANALYSIS REQUIRED:
-        1. LAYOUT TYPE: Is it "Seamless/All-Over" (Corrida), "Border/Engineered" (Barrada), "Geometric", or "Placement"?
-        2. ART STYLE: Detailed technique (e.g. "Watercolor on wet paper", "Vector flat outline", "Halftone screen").
-        3. FLAWS TO FIX: Identify low quality aspects to improve (e.g. "Blurry edges", "Pixel noise", "Loose dots", "Bad tracing").
+        ANALYSIS REQUIRED (RETURN VALUES IN PORTUGUESE PT-BR):
+        1. LAYOUT TYPE: Is it "Corrida" (Seamless), "Barrada" (Border), "Localizada" (Placement)?
+        2. ART STYLE: Detailed technique (e.g. "Aquarela no papel molhado", "Vetor Flat", "Traço Manual").
+        3. STYLE GUIDE: Identify the artistic key elements to replicate (e.g. "Clean lines", "Vibrant gradient", "Vector precision").
         
         OUTPUT JSON:
         {
-            "visualDescription": "Highly detailed visual description of the motif and flow",
-            "printLayout": "Seamless All-Over" (or "Border Print", "Geometric Grid", etc.),
+            "visualDescription": "Descrição visual rica em Português (Ex: Floral romântico com fundo azul e rosas em degradê)",
+            "printLayout": "Corrida" (or "Barrada", "Geométrica"),
             "searchKeywords": [
-                "Primary art term",
-                "Technique term",
-                "Market term",
-                "Vibe term"
+                "Termo principal (EN)",
+                "Termo técnico (EN)",
+                "Termo visual (EN)"
             ],
             "technicalSpecs": { 
-                "technique": "Digital/Traditional", 
-                "motifs": ["Primary Motif"], 
-                "complexity": "High/Low",
-                "vibe": "Mood",
-                "layout": "String (e.g. 'Barrada/Border' or 'Corrida/Seamless')",
-                "restorationInstructions": "String (e.g. 'Clean up loose pixels, sharpen lines, vectorize')"
+                "technique": "Técnica (PT-BR)", 
+                "motifs": ["Motivo Principal (PT-BR)"], 
+                "complexity": "Alta/Baixa",
+                "vibe": "Mood (PT-BR)",
+                "layout": "String (e.g. 'Barrada' or 'Corrida')",
+                "restorationInstructions": "Style Guide for the AI Generator (In English) - Focus on quality (e.g. 'Vectorize, remove noise, sharp edges')"
             }
         }
         `;
     } else {
-        // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa (Desmembramento)
+        // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa
         SYSTEM_PROMPT = `
-        ACT AS: Master Pattern Cutter & Fashion Historian.
-        TASK: "Dismember" the garment into components to find SEWING PATTERNS.
+        ACT AS: Master Pattern Cutter (Portuguese Speaker).
+        TASK: Analyze the garment structure for sewing patterns.
         
-        ANALYSIS REQUIRED:
-        1. STRUCTURE: Seams, Darts, Silhouette.
-        2. SPECIFICITY: Don't just say "Dress". Say "Bias Cut Slip Dress with Cowl Neck".
-        3. KEYWORDS: Generate 4 distinct search angles (Technical, Vintage, Indie, Vibe).
-        
-        OUTPUT JSON:
+        OUTPUT JSON (Values in PT-BR, except keywords):
         {
-            "visualDescription": "Technical Name" (e.g. "Bias Cut Slip Dress"),
+            "visualDescription": "Nome Técnico da Peça (PT-BR)",
             "searchKeywords": [
-                "Technical Pattern Name (e.g. 'Cowl neck slip dress sewing pattern')",
-                "Vintage/Specific Term (e.g. '90s minimalist evening dress pattern')",
-                "Construction Term (e.g. 'Bias cut dress pdf pattern')",
-                "Vibe/Style Term (e.g. 'Silk satin nightgown pattern')"
+                "English Search Term 1",
+                "English Search Term 2",
+                "English Search Term 3",
+                "English Search Term 4"
             ],
             "technicalSpecs": { 
-                "silhouette": "Type", 
-                "neckline": "Type", 
-                "details": "Details",
-                "fabric": "Suggestion"
+                "silhouette": "Silhueta (PT-BR)", 
+                "neckline": "Decote (PT-BR)", 
+                "details": "Detalhes (PT-BR)",
+                "fabric": "Sugestão de Tecido (PT-BR)"
             }
         }
         `;
@@ -81,10 +75,10 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     } catch (e) {
         console.error("Forensics Dept Error:", e);
         return {
-            visualDescription: "Fashion Item",
-            printLayout: "Standard",
+            visualDescription: "Item de Moda",
+            printLayout: "Padrão",
             searchKeywords: ["Pattern", "Texture"],
-            technicalSpecs: { silhouette: "Unknown", layout: "Standard", restorationInstructions: "Enhance quality" }
+            technicalSpecs: { silhouette: "Desconhecido", layout: "Padrão", restorationInstructions: "High quality vector style" }
         };
     }
 };

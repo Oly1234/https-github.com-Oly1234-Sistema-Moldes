@@ -2,31 +2,59 @@
 // api/modules/generator.js
 // DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
 
-export const generatePattern = async (apiKey, prompt, colors, layoutType = "Seamless", restorationNotes = "Clean lines") => {
+export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     // 1. Definição do Modelo (Nano Banana para Imagem)
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    // 2. Construção do Prompt de Engenharia Reversa (Restauração)
-    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious original colors';
+    // 2. Desconstrução das Specs
+    // 'styleGuide' substitui 'restoration' para focar em criação
+    const { layout = "Corrida", selvedge = "Inferior", width = 140, height = 100, styleGuide = "Clean lines" } = textileSpecs || {};
     
-    // Prompt Otimizado: Ordena a IA a agir como um vetorizador profissional
-    // Instruímos explicitamente a corrigir os erros detectados pelo Forense
+    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious colors';
+
+    // LÓGICA DE LAYOUT TÊXTIL (Direção da Arte)
+    let layoutInstruction = "";
+    
+    if (layout === 'Barrada') {
+        layoutInstruction = `
+        LAYOUT: ENGINEERED BORDER PRINT (BARRADO).
+        - DIMENSIONS: Design must fit exactly within the ${width}x${height}cm canvas.
+        - GRAVITY: Motifs concentrated at the ${selvedge.toUpperCase()} edge.
+        - NEGATIVE SPACE: Fade to solid color towards the opposite edge.
+        `;
+    } else if (layout === 'Localizada') {
+        layoutInstruction = `
+        LAYOUT: PLACEMENT PRINT (LOCALIZADA).
+        - COMPOSITION: Single central element centered in ${width}x${height}cm.
+        - BACKGROUND: Clean or subtle texture.
+        `;
+    } else {
+        // Corrida (Default)
+        layoutInstruction = `
+        LAYOUT: SEAMLESS REPEAT (ALL-OVER).
+        - REPETITION: Design must be a perfect tile capable of covering ${width}x${height}cm via infinite repetition.
+        - EDGES: Match left-right and top-bottom perfectly.
+        `;
+    }
+
+    // Prompt Otimizado para evitar Safety Blocks e erros de formato
     const finalPrompt = `
-    TASK: Create a pristine, high-resolution textile pattern based on this description.
-    THEME: ${prompt}.
-    LAYOUT STRUCTURE: ${layoutType} (Critical: Respect this structure. If 'Border', place elements at bottom. If 'Seamless', ensure perfect tiling).
-    COLOR PALETTE: ${colorList}.
+    Create a professional textile pattern design file.
+    Subject: ${prompt}.
+    Colors: ${colorList}.
     
-    QUALITY CONTROL INSTRUCTIONS:
-    - FIX FLAWS: ${restorationNotes}.
-    - STYLE: Professional Vector Illustration, Clean Lines, No Artifacts, No Noise.
-    - OUTPUT: Flat lay design, straight view, ready for digital printing.
+    Technical Specs:
+    ${layoutInstruction}
+    
+    Quality Standards (Auto-Restoration):
+    - ${styleGuide}
+    - Style: Vector illustration style, flat lighting, high definition.
+    - Output: A single high-quality texture tile.
     `;
 
     try {
-        // PAYLOAD BLINDADO (Anti-Erro 400)
-        // Removemos imageSize e outros params que podem ser instáveis em algumas keys
+        // PAYLOAD BLINDADO (Minimalista para evitar rejeição)
         const payload = {
             contents: [{ 
                 parts: [
@@ -35,7 +63,7 @@ export const generatePattern = async (apiKey, prompt, colors, layoutType = "Seam
             }],
             generationConfig: {
                 imageConfig: {
-                    aspectRatio: "1:1" // Único parâmetro mandatório e seguro
+                    aspectRatio: "1:1" // Único parâmetro mandatório e estável
                 }
             }
         };
@@ -50,30 +78,33 @@ export const generatePattern = async (apiKey, prompt, colors, layoutType = "Seam
             const errText = await response.text();
             console.error("Generator API Error Details:", errText);
             
-            // Tratamento amigável de erro de permissão
             if (response.status === 400 || response.status === 403) {
-                throw new Error("Acesso ao modelo de imagem negado. Verifique se sua API Key tem permissão para 'gemini-2.5-flash-image' (Google AI Studio).");
+                throw new Error("Acesso negado ao modelo de imagem. Verifique API Key.");
             }
-            throw new Error(`Erro Atelier (${response.status}): ${errText}`);
+            throw new Error(`Erro Atelier (${response.status}): O servidor rejeitou a solicitação.`);
         }
 
         const data = await response.json();
         
-        // 3. Extração da Imagem
-        const parts = data.candidates?.[0]?.content?.parts;
-        const imagePart = parts?.find(p => p.inline_data);
-        
-        if (imagePart) {
-             return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
-        } 
-        
-        // Verifica recusa por segurança (Safety Settings)
-        const finishReason = data.candidates?.[0]?.finish_reason;
-        if (finishReason === 'SAFETY') {
-            throw new Error("A IA recusou gerar esta estampa por motivos de segurança. Tente um tema mais neutro.");
+        // Verificação de Segurança (Safety Filter)
+        const candidate = data.candidates?.[0];
+        if (candidate?.finishReason === 'SAFETY') {
+            throw new Error("A IA bloqueou a geração por segurança (Safety Filter). Tente simplificar o prompt ou remover termos sensíveis.");
+        }
+        if (candidate?.finishReason === 'RECITATION') {
+            throw new Error("Bloqueio de Copyright. O prompt solicitou algo muito similar a uma marca protegida.");
         }
 
-        throw new Error("O servidor respondeu, mas não retornou dados de imagem. Tente novamente.");
+        // 3. Extração da Imagem
+        const parts = candidate?.content?.parts;
+        const imagePart = parts?.find(p => p.inlineData);
+        
+        if (imagePart) {
+             return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        } 
+        
+        console.error("Payload recebido sem imagem:", JSON.stringify(data));
+        throw new Error("A IA processou o pedido mas não retornou a imagem. Tente novamente em instantes.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);

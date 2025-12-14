@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, layoutType, restorationNotes } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs } = req.body;
     
     // API KEY MANAGER (Prioridade: ENV Var > VITE Var)
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
@@ -45,8 +45,11 @@ export default async function handler(req, res) {
     // 2. ABA CRIADOR (Atelier + Forense de Superfície)
     if (action === 'GENERATE_PATTERN') {
         // Dept: Atelier (Geração de Imagem com Restauração)
-        // Agora usamos o generatePattern importado do generator.js que corrige o erro 400
-        const image = await generatePattern(apiKey, prompt, colors, layoutType, restorationNotes);
+        // Se textileSpecs foi enviado pelo frontend, usamos ele.
+        // Caso contrário, mantemos compatibilidade (fallback básico).
+        const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
+        
+        const image = await generatePattern(apiKey, prompt, colors, specs);
         return res.status(200).json({ success: true, image });
     }
 
@@ -60,7 +63,7 @@ export default async function handler(req, res) {
             success: true, 
             colors: colorData.colors,
             prompt: visualData.visualDescription,
-            technicalSpecs: visualData.technicalSpecs, // Inclui layout e restorationNotes
+            technicalSpecs: visualData.technicalSpecs, 
             stockMatches: matches
         });
     }
