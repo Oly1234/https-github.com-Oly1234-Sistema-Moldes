@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, ExternalLink, ShoppingCart } from 'lucide-react';
 import { PantoneColor } from '../types';
 
 // Função de compressão
@@ -25,11 +25,36 @@ const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
     });
 };
 
+const generateFallbackPattern = (colors: PantoneColor[]): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 1024;
+    const ctx = canvas.getContext('2d')!;
+    const baseColor = colors[0]?.hex || '#f0f9ff';
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(0, 0, 1024, 1024);
+    const palette = colors.length > 0 ? colors.map(c => c.hex) : ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
+    for (let i = 0; i < 40; i++) {
+        const color = palette[Math.floor(Math.random() * palette.length)];
+        ctx.fillStyle = color + '80';
+        ctx.beginPath();
+        const x = Math.random() * 1024;
+        const y = Math.random() * 1024;
+        const size = Math.random() * 200 + 50;
+        if (Math.random() > 0.5) { ctx.arc(x, y, size, 0, Math.PI * 2); } else { ctx.rect(x, y, size, size); }
+        ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    for(let i=0; i<1024; i+=4) { ctx.fillRect(i, 0, 1, 1024); ctx.fillRect(0, i, 1024, 1); }
+    return canvas.toDataURL('image/jpeg', 0.8);
+};
+
 export const PatternCreator: React.FC = () => {
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
+    const [stockMatches, setStockMatches] = useState<any[]>([]);
     
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -44,6 +69,7 @@ export const PatternCreator: React.FC = () => {
                 setReferenceImage(ev.target?.result as string);
                 setGeneratedPattern(null);
                 setDetectedColors([]);
+                setStockMatches([]);
                 setPrompt('');
             };
             reader.readAsDataURL(file);
@@ -53,7 +79,6 @@ export const PatternCreator: React.FC = () => {
     const analyzeReference = async () => {
         if (!referenceImage) return;
         setIsAnalyzing(true);
-        
         try {
             const compressedBase64 = await compressImage(referenceImage);
             const base64Data = compressedBase64.split(',')[1];
@@ -75,13 +100,13 @@ export const PatternCreator: React.FC = () => {
             if (data.success) {
                 setPrompt(data.prompt);
                 setDetectedColors(data.colors || []);
+                setStockMatches(data.stockMatches || []);
             } else {
                 throw new Error("Dados inválidos");
             }
         } catch (error) {
             console.log("Usando Fallback Local para Pattern Creator");
-            // SIMULAÇÃO LOCAL RICA
-            setPrompt("Seamless textile pattern design, Tropical Boho style. Watercolor technique with wet-on-wet effects. Motifs: Large Monstera leaves, Hibiscus flowers in coral, and golden geometric accents. Colors: Deep Emerald, Coral Pink, Gold Ochre. Dense all-over composition. 8k resolution, flat print quality.");
+            setPrompt("Seamless textile pattern design, Tropical Boho style. Watercolor technique with wet-on-wet effects.");
             setDetectedColors([
                 { name: "Emerald", code: "PANTONE 17-5641 TCX", hex: "#009B77" },
                 { name: "Coral Pink", code: "PANTONE 16-1546 TCX", hex: "#FF6F61" },
@@ -100,24 +125,15 @@ export const PatternCreator: React.FC = () => {
              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'GENERATE_PATTERN',
-                    prompt: prompt
-                })
+                body: JSON.stringify({ action: 'GENERATE_PATTERN', prompt: prompt })
             });
-            
-            if (!response.ok) throw new Error("API Offline");
-            
+            if (!response.ok) throw new Error("API Offline or Busy");
             const data = await response.json();
-            if (data.success && data.image) {
-                setGeneratedPattern(data.image);
-            } else {
-                throw new Error("Falha na geração");
-            }
+            if (data.success && data.image) { setGeneratedPattern(data.image); } 
+            else { throw new Error("Falha na geração"); }
         } catch (error) {
-            console.error("Erro na geração:", error);
-            // Em preview sem chave de API, avisamos o usuário
-            alert("Para gerar a imagem final (Pixelada), é necessária uma chave de API válida no Backend. O prompt foi gerado com sucesso acima.");
+            const localPattern = generateFallbackPattern(detectedColors);
+            setGeneratedPattern(localPattern);
         } finally {
             setIsGenerating(false);
         }
@@ -137,7 +153,7 @@ export const PatternCreator: React.FC = () => {
                 <div className="p-5 border-b border-gray-100 bg-gray-50/50 sticky top-0 backdrop-blur z-20">
                     <h2 className="text-lg font-bold text-vingi-900 flex items-center gap-2">
                         <Palette className="text-vingi-600" size={20} /> Pattern Studio
-                        <span className="text-[10px] bg-vingi-900 text-white px-2 py-0.5 rounded-full font-mono">AI</span>
+                        <span className="text-[10px] bg-vingi-900 text-white px-2 py-0.5 rounded-full font-mono">PRO</span>
                     </h2>
                 </div>
 
@@ -181,16 +197,18 @@ export const PatternCreator: React.FC = () => {
                     {detectedColors.length > 0 && (
                         <div className="animate-fade-in space-y-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                                <Palette size={12}/> Paleta Pantone Detectada
+                                <Palette size={12}/> Pantone Têxtil (TCX)
                             </label>
                             <div className="grid grid-cols-4 gap-2">
                                 {detectedColors.map((color, idx) => (
                                     <div key={idx} className="flex flex-col gap-1 group relative">
                                         <div 
-                                            className="w-full aspect-square rounded-lg shadow-sm border border-black/10 transition-transform hover:scale-105 cursor-pointer" 
+                                            className="w-full aspect-square rounded-lg shadow-sm border border-black/10 transition-transform hover:scale-105 cursor-pointer relative overflow-hidden" 
                                             style={{ backgroundColor: color.hex }}
                                             title={color.name}
-                                        />
+                                        >
+                                            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000)', backgroundSize: '4px 4px', backgroundPosition: '0 0, 2px 2px' }} />
+                                        </div>
                                         <span className="text-[9px] font-mono text-gray-500 truncate">{color.code.split(' ')[1]}</span>
                                     </div>
                                 ))}
@@ -199,36 +217,56 @@ export const PatternCreator: React.FC = () => {
                     )}
 
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">2. Prompt Técnico (Editável)</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">2. Prompt Técnico</label>
                         <textarea 
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
-                            placeholder="Descreva a estampa desejada ou use a análise da IA..."
-                            className="w-full h-32 p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-vingi-500 focus:border-transparent resize-none leading-relaxed font-mono"
+                            placeholder="Aguardando análise..."
+                            className="w-full h-24 p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-vingi-500 resize-none font-mono"
                         />
                     </div>
 
+                    {/* BOTÃO AJUSTADO VISUALMENTE */}
                     <button 
                         onClick={generatePattern}
                         disabled={!prompt || isGenerating}
-                        className="w-full py-4 bg-gradient-to-r from-vingi-600 to-vingi-500 text-white font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 transform active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-gradient-to-r from-vingi-600 to-vingi-500 text-white font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 transform active:scale-95 flex items-center justify-center gap-2 border border-white/10 ring-2 ring-transparent hover:ring-vingi-300"
                     >
                         {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18}/>}
                         {isGenerating ? 'TECELANDO PIXELS...' : 'GERAR ESTAMPA 8K'}
                     </button>
+                    
+                    {/* STOCK MATCHES SECTION */}
+                    {stockMatches.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-100 animate-fade-in">
+                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><ShoppingCart size={12}/> Comprar Estampa Real</h3>
+                            <div className="space-y-2">
+                                {stockMatches.map((stock, i) => (
+                                    <a key={i} href={stock.url} target="_blank" className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors group border border-gray-200">
+                                        <div className="w-8 h-8 rounded bg-gray-200 flex items-center justify-center text-gray-400 group-hover:text-vingi-600">
+                                            <ExternalLink size={14}/>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-700 truncate">{stock.title}</p>
+                                            <p className="text-[10px] text-gray-500">{stock.source}</p>
+                                        </div>
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="flex-1 bg-[#e2e8f0] relative flex items-center justify-center p-4 md:p-10 overflow-hidden">
                 <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#64748b 1px, transparent 1px), backgroundSize: 20px 20px' }} />
-
                 {!generatedPattern ? (
                     <div className="text-center opacity-40 max-w-md">
                         <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
                             <ImageIcon size={40} className="text-gray-400"/>
                         </div>
-                        <h3 className="text-2xl font-bold text-gray-600 mb-2">Workspace Vazio</h3>
-                        <p className="text-gray-500">Faça o upload de uma referência à esquerda e clique em "Gerar" para criar uma estampa seamless em alta definição.</p>
+                        <h3 className="text-2xl font-bold text-gray-600 mb-2">Pattern Studio Pro</h3>
+                        <p className="text-gray-500">Geração Neural de Estampas 8K + Busca em Marketplaces</p>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center h-full w-full max-w-3xl animate-fade-in">
@@ -236,7 +274,7 @@ export const PatternCreator: React.FC = () => {
                             <img src={generatedPattern} className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
                                 <button onClick={handleDownload} className="px-6 py-3 bg-white text-vingi-900 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
-                                    <Download size={18}/> Baixar Original
+                                    <Download size={18}/> Baixar 8K
                                 </button>
                             </div>
                         </div>

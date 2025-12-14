@@ -1,5 +1,6 @@
 
 export default async function handler(req, res) {
+  // 1. Configuração Manual de CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -30,67 +31,51 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, excludePatterns, targetUrl } = req.body;
+    const { action, prompt, mainImageBase64, mainMimeType, secondaryImageBase64, secondaryMimeType, targetUrl } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
-    const useFallback = !apiKey; 
     const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     // ==========================================================================================
-    // ROTA 0: SCRAPER ROBUSTO (PYTHON-LIKE LOGIC)
+    // ROTA 0: SCRAPER ROBUSTO (GET_LINK_PREVIEW)
     // ==========================================================================================
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
         
-        // Se for URL de busca genérica, não gastamos recurso tentando scrapear imagem
-        if (targetUrl.includes('google.com/search') || targetUrl.includes('pinterest.com/search')) {
-             return res.status(200).json({ success: false });
-        }
+        // Se for busca genérica, retornamos sucesso falso para o front usar o fallback de ícone/proxy
+        if (targetUrl.includes('google.com/search')) return res.status(200).json({ success: false });
 
         try {
-            // Simulando headers de um navegador real (como Selenium/Playwright fariam)
             const commonHeaders = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
                 'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
                 'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
                 'Upgrade-Insecure-Requests': '1'
             };
-
-            const siteRes = await fetch(targetUrl, { headers: commonHeaders });
-            if (!siteRes.ok) throw new Error('Site bloqueou ou não existe');
             
+            // Tentativa de Fetch
+            const siteRes = await fetch(targetUrl, { headers: commonHeaders });
+            if (!siteRes.ok) throw new Error('Site bloqueou');
             const html = await siteRes.text();
             
-            // Lógica de Extração em Cascata (Prioridade: OpenGraph > Twitter > Etsy Specific > Burda Specific > First Image)
             let imageUrl = null;
-
-            // 1. Meta Tags Padrão
+            
+            // 1. OG Image (Padrão Ouro)
             const metaRegex = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']\s*\/?>/i;
             const match = html.match(metaRegex);
             if (match) imageUrl = match[1];
 
-            // 2. Etsy Specific (Scraping avançado de data-attributes)
-            if (!imageUrl && (targetUrl.includes('etsy.com') || html.includes('etsystatic'))) {
-                const etsyRegex = /data-src-zoom-image=["']([^"']+)["']|data-src-full=["']([^"']+)["']|class=["']wt-max-width-full wt-horizontal-center wt-vertical-center carousel-image wt-rounded["'] src=["']([^"']+)["']/i;
+            // 2. Etsy Specific
+            if (!imageUrl && (targetUrl.includes('etsy.com'))) {
+                const etsyRegex = /data-src-zoom-image=["']([^"']+)["']|data-src-full=["']([^"']+)["']/i;
                 const etsyMatch = html.match(etsyRegex);
-                if (etsyMatch) imageUrl = etsyMatch[1] || etsyMatch[2] || etsyMatch[3];
+                if (etsyMatch) imageUrl = etsyMatch[1] || etsyMatch[2];
             }
 
-            // 3. Burda/Commerce Specific
-            if (!imageUrl) {
-                 const productRegex = /class=["']product-image-photo["']\s+src=["']([^"']+)["']|class=["']gallery-placeholder__image["']\s+src=["']([^"']+)["']/i;
-                 const prodMatch = html.match(productRegex);
-                 if (prodMatch) imageUrl = prodMatch[1] || prodMatch[2];
-            }
-
-            // 4. Fallback: Primeira imagem grande encontrada
+            // 3. Fallback Img Tag
             if (!imageUrl) {
                  const imgRegex = /<img[^>]+src=["'](https?:\/\/[^"']+(?:jpg|jpeg|png|webp))["'][^>]*>/i;
                  const imgMatch = html.match(imgRegex);
@@ -99,68 +84,131 @@ export default async function handler(req, res) {
 
             if (!imageUrl) return res.status(200).json({ success: false });
 
-            // Normalização de URL
+            // URL Normalization
             if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-            if (imageUrl.startsWith('/')) {
-                const urlObj = new URL(targetUrl);
-                imageUrl = urlObj.origin + imageUrl;
-            }
-
-            // Bypass de proteção de imagem (Referer Spoofing)
-            // Baixamos a imagem no backend e enviamos como base64 para o frontend
-            const domain = new URL(targetUrl).origin;
-            const imgRes = await fetch(imageUrl, {
-                headers: { 
-                    ...commonHeaders, 
-                    'Referer': domain, 
-                    'Sec-Fetch-Dest': 'image', 
-                    'Sec-Fetch-Mode': 'no-cors' 
-                }
-            });
-
-            const imgBuffer = await imgRes.arrayBuffer();
-            const base64Img = Buffer.from(imgBuffer).toString('base64');
-            const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
             
-            return res.status(200).json({ success: true, image: `data:${mimeType};base64,${base64Img}` });
+            // Retorna a URL direta. O Frontend usará Proxy se necessário.
+            return res.status(200).json({ success: true, image: imageUrl });
 
         } catch (err) {
-            console.error("Scraper Error:", err.message);
             return res.status(200).json({ success: false, error: err.message });
         }
     }
 
     // ==========================================================================================
-    // ROTA 1: BUSCA GLOBAL MASSIVA (60 RESULTADOS)
+    // ROTA 1: GERAÇÃO DE IMAGEM (PATTERN STUDIO)
+    // ==========================================================================================
+    if (action === 'GENERATE_PATTERN') {
+        if (!apiKey) return res.status(401).json({ success: false, error: "Missing API Key" });
+
+        try {
+            const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+            const finalPrompt = `Professional textile pattern design, seamless repeat. Style: ${prompt}. High definition, intricate details, commercial quality print. Flat lay lighting.`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: finalPrompt }] }],
+                generation_config: { response_mime_type: "image/jpeg", aspect_ratio: "1:1" }
+            };
+
+            const googleResponse = await fetch(imageEndpoint, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
+            });
+
+            if (!googleResponse.ok) throw new Error("Google GenAI Error");
+            const data = await googleResponse.json();
+            const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+            
+            if (!imagePart) throw new Error("No image generated");
+            
+            return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
+        } catch (e) {
+            console.error("Gen Image Error:", e);
+            return res.status(500).json({ success: false, error: e.message });
+        }
+    }
+
+    // ==========================================================================================
+    // ROTA 2: DESCRIBE PATTERN & FIND STOCKS (NOVO!)
+    // ==========================================================================================
+    if (action === 'DESCRIBE_PATTERN') {
+         if (!apiKey) return res.status(500).json({ error: "No Key" });
+
+        try {
+            const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
+            const MASTER_VISION_PROMPT = `
+            ATUE COMO: CURADOR TÊXTIL EXPERT & PESQUISADOR DE MERCADO.
+            
+            1. Analise a imagem e crie um prompt técnico para recriação (Inglês).
+            2. Extraia as cores principais (Pantone TCX).
+            3. SUGIRA 4 OPÇÕES DE COMPRA/DOWNLOAD REAIS (Market Intelligence) baseadas no estilo visual.
+               - Sites de busca: Shutterstock, Patternbank, Creative Market, Etsy, VectorStock.
+               - Gere URLs de busca INTELIGENTES que levem a resultados visuais reais.
+
+            JSON FORMAT:
+            { 
+              "prompt": "...", 
+              "colors": [{ "name": "...", "code": "...", "hex": "..." }],
+              "stockMatches": [
+                 { "source": "Shutterstock", "title": "Estampa Similar (Vetorial)", "url": "https://www.shutterstock.com/search/..." },
+                 { "source": "Patternbank", "title": "Design Profissional Têxtil", "url": "https://patternbank.com/search?q=..." },
+                 { "source": "Etsy", "title": "Seamless Pattern Digital", "url": "https://www.etsy.com/search?q=..." }
+              ]
+            }
+            `;
+
+            const visionPayload = {
+                contents: [{
+                    parts: [
+                        { text: MASTER_VISION_PROMPT },
+                        { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }
+                    ]
+                }],
+                generation_config: { response_mime_type: "application/json" }
+            };
+            
+            const visionRes = await fetch(visionEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(visionPayload) });
+            const visionData = await visionRes.json();
+            let generatedText = visionData.candidates?.[0]?.content?.parts?.[0]?.text;
+            const jsonResult = JSON.parse(cleanJson(generatedText));
+            return res.status(200).json({ success: true, ...jsonResult });
+        } catch (e) {
+            return res.status(500).json({ error: "Vision Failed" });
+        }
+    }
+
+    // ==========================================================================================
+    // ROTA 3: SCAN CLOTHING (GLOBAL SEARCH MASSIVA)
     // ==========================================================================================
     if (action === 'SCAN_CLOTHING' || !action) { 
-        if (useFallback) return res.status(503).json({ error: "Backend Unavailable" });
+        if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
 
         const GLOBAL_SEARCH_PROMPT = `
-        VOCÊ É: VINGI AI, Caçadora Global de Moldes (Polyglot Pattern Hunter).
-        
-        MISSÃO: Encontrar UMA LISTA MASSIVA DE MOLDES (40 a 60 itens) para a roupa da imagem.
-        
-        FONTES OBRIGATÓRIAS (GLOBAL):
-        - **RÚSSIA:** Vikisews, Grasser, Lekala, Laforme.
-        - **BRASIL:** Marlene Mukai, Maximus Tecidos, Sigbol.
-        - **EUA/UK/AUS:** Mood Fabrics, Peppermint Mag, The Fold Line, Tessuti, Style Arc.
-        - **VINTAGE:** Etsy (Busque por "Vintage Pattern [Category]"), eBay.
+        VOCÊ É: VINGI AI, O Maior Especialista em Moldes do Mundo.
+        MISSÃO: Retornar uma lista massiva e precisa de moldes de costura (40-60 itens).
+
+        ACERVO GLOBAL OBRIGATÓRIO (Pesquise Nestes Domínios):
+        1. EUA/UK: Simplicity, Vogue Patterns, McCall's, Butterick, Mood Fabrics (Free), The Fold Line, Peppermint Mag, Seamwork, Tilly and the Buttons.
+        2. EUROPA: Burda Style (Alemanha), Patrones (Espanha), Makerist (EU), MyFabrics, Vikisews (Rússia/Intl), Grasser (Rússia), Lekala (Sob Medida).
+        3. INDIE/MODERN: Papercut Patterns, Thread Theory, Pattern Emporium, Closet Core, Friday Pattern Co, True Bias.
+        4. BRASIL: Marlene Mukai, Maximus Tecidos, Sigbol.
+        5. VINTAGE/MARKET: Etsy (Busca profunda), eBay.
 
         REGRAS DE RETORNO:
-        1. **QUANTIDADE:** Retorne entre 40 e 60 resultados divididos nas categorias. Eu preciso de volume para curadoria.
-        2. **IDIOMA:** Descrições e Comparações em PORTUGUÊS (PT-BR).
-        3. **LINKS:** Se não tiver o link exato, gere um Link de Busca Inteligente na loja (ex: vikisews.com/?s=vestido...).
+        - Priorize links diretos de produtos. Se não existir, use links de busca INTELIGENTE dentro da loja (ex: burdastyle.com/catalogsearch/result/?q=termo).
+        - NÃO invente links mortos.
+        - Descrições em PT-BR ricas.
 
         ESTRUTURA JSON:
         {
-          "patternName": "Nome Técnico (PT-BR)",
+          "patternName": "Nome (PT-BR)",
           "category": "Categoria",
           "technicalDna": { "silhouette": "...", "neckline": "...", "sleeve": "..." },
           "matches": { 
-              "exact": [ ARRAY COM 15-20 ITENS REAIS ], 
-              "close": [ ARRAY COM 15-20 ITENS SIMILARES ], 
-              "adventurous": [ ARRAY COM 10-15 ITENS CRIATIVOS ] 
+             "exact": [ ... mínimo 20 itens ... ], 
+             "close": [ ... mínimo 20 itens ... ], 
+             "adventurous": [ ... mínimo 10 itens ... ] 
           },
           "curatedCollections": []
         }
@@ -180,7 +228,6 @@ export default async function handler(req, res) {
         return res.status(200).json(jsonResult);
     }
     
-    // Outras rotas (DESCRIBE_PATTERN, etc) mantidas aqui implicitamente pelo else
     return res.status(200).json({ success: false });
 
   } catch (error) {

@@ -6,15 +6,19 @@ import { ExternalPatternMatch } from '../types';
 // --- HELPERS INTERNOS DO CARD ---
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
+// Proxy de Imagem Gratuito e Rápido (wsrv.nl)
+// Redimensiona, converte para WebP e, crucialmente, mascara a origem para evitar bloqueios 403
+const getProxyUrl = (url: string) => `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=400&h=400&fit=cover&a=top&output=webp`;
+
 export const generateSafeUrl = (match: ExternalPatternMatch): string => {
     const { url, source, patternName } = match;
-    const lowerSource = source.toLowerCase();
-    const lowerUrl = url.toLowerCase();
     const cleanSearchTerm = encodeURIComponent(patternName.replace(/ pattern| sewing| molde| vestido| dress| pdf| download/gi, '').trim());
     const fullSearchTerm = encodeURIComponent(patternName + ' sewing pattern');
 
-    const isGenericLink = url.split('/').length < 4 && !url.includes('search');
+    const lowerUrl = url.toLowerCase();
+    const lowerSource = source.toLowerCase();
 
+    // Lógica de Link Inteligente
     if (lowerSource.includes('etsy') || lowerUrl.includes('etsy.com')) {
         if (lowerUrl.includes('/search')) return url;
         return `https://www.etsy.com/search?q=${fullSearchTerm}&explicit=1&ship_to=BR`;
@@ -23,35 +27,32 @@ export const generateSafeUrl = (match: ExternalPatternMatch): string => {
          if (lowerUrl.includes('catalogsearch')) return url;
         return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
     }
-    if (lowerSource.includes('mood') || lowerUrl.includes('moodfabrics')) {
-        return `https://www.moodfabrics.com/blog/?s=${cleanSearchTerm}`;
-    }
-    if (isGenericLink) {
-         return `https://www.google.com/search?q=${fullSearchTerm}+site:${lowerSource}`;
-    }
+    // Adicione mais regras específicas aqui se necessário
+    
     return url;
 };
 
 export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ match }) => {
     const safeUrl = generateSafeUrl(match);
     const [displayImage, setDisplayImage] = useState<string | null>(match.imageUrl || null);
-    const [loadingPreview, setLoadingPreview] = useState(false);
+    const [usingProxy, setUsingProxy] = useState(false);
     
     let domain = '';
     try { domain = new URL(safeUrl).hostname; } catch (e) { domain = 'google.com'; }
     const brandIcon = getBrandIcon(domain);
 
     useEffect(() => {
-        // Se já temos uma imagem válida (não vazia) vinda da IA, usamos ela.
-        if (match.imageUrl && match.imageUrl.length > 50) return;
-        
-        // Evita gastar recursos buscando imagens para links de busca genérica
+        // Se já temos imagem da IA e ela não falhou ainda
+        if (match.imageUrl && match.imageUrl.length > 50 && !usingProxy) {
+            setDisplayImage(match.imageUrl); // Tenta usar direto primeiro
+            return;
+        }
+
+        // Se for URL genérica, não tenta scrapear
         if (safeUrl.includes('/search') || safeUrl.includes('google.com')) return;
 
+        // Tenta buscar imagem real via backend (Stealth Scraper)
         let isMounted = true;
-        setLoadingPreview(true);
-
-        // Chama o backend "Stealth" para baixar a imagem real
         fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -60,16 +61,22 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
         .then(res => res.json())
         .then(data => {
             if (isMounted && data.success && data.image) {
-                setDisplayImage(data.image);
+                // Ao receber a URL, passamos pelo proxy para garantir display
+                setDisplayImage(getProxyUrl(data.image));
+                setUsingProxy(true);
             }
         })
-        .catch(err => console.log("Preview fail:", err))
-        .finally(() => {
-            if (isMounted) setLoadingPreview(false);
-        });
+        .catch(() => {}); // Falha silenciosa
 
         return () => { isMounted = false; };
     }, [safeUrl, match.imageUrl]);
+
+    const handleError = () => {
+        // Se a imagem falhar (seja direta ou proxy), fallback para o ícone da marca
+        if (displayImage !== brandIcon) {
+            setDisplayImage(brandIcon);
+        }
+    };
 
     const finalImage = displayImage || brandIcon;
     const isBrandIcon = finalImage === brandIcon;
@@ -80,21 +87,12 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
             {/* Visual Header */}
             <div className={`overflow-hidden relative border-b border-gray-100 flex items-center justify-center ${isBrandIcon ? 'h-24 bg-gray-50 p-4' : 'h-48 bg-white'}`}>
                 
-                {/* Loader enquanto busca a imagem stealth */}
-                {loadingPreview && (
-                    <div className="absolute top-2 left-2 z-20 bg-white/80 rounded-full p-1 shadow-sm backdrop-blur">
-                        <div className="w-3 h-3 border-2 border-vingi-500 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                )}
-                
                 <img 
                     src={finalImage} 
                     alt={match.source} 
+                    onError={handleError}
+                    loading="lazy"
                     className={`transition-all duration-700 ${isBrandIcon ? 'w-16 h-16 object-contain mix-blend-multiply opacity-60 grayscale' : 'w-full h-full object-cover group-hover:scale-105'}`}
-                    onError={(e) => { 
-                        (e.target as HTMLImageElement).src = brandIcon; 
-                        setDisplayImage(brandIcon); 
-                    }}
                 />
                 
                 <div className="absolute top-2 right-2 z-20">

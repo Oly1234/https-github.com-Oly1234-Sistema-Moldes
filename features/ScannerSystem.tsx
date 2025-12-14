@@ -7,49 +7,62 @@ import { PatternVisualCard } from '../components/PatternVisualCard';
 import { 
     UploadCloud, RefreshCw, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, 
     Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine,
-    Move, Minimize2, Maximize2
+    Move, Minimize2, Maximize2, ZoomIn
 } from 'lucide-react';
 
-// --- COMPONENTE NOVO: MODAL FLUTUANTE DE COMPARAÇÃO ---
+// --- MODAL FLUTUANTE 2.0 (DRAGGABLE & RESIZABLE REAL) ---
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
-    const [position, setPosition] = useState({ x: window.innerWidth - 180, y: window.innerHeight - 250 });
-    const [isDragging, setIsDragging] = useState(false);
+    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); // Posição inicial segura
+    const [size, setSize] = useState(180);
     const [isMinimized, setIsMinimized] = useState(false);
-    const [size, setSize] = useState(160); // Largura inicial
-    const dragStart = useRef({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragOffset = useRef({ x: 0, y: 0 });
+    const modalRef = useRef<HTMLDivElement>(null);
 
-    const handleMouseDown = (e: React.MouseEvent) => {
+    // Eventos Mouse/Touch para Drag
+    const handleStart = (clientX: number, clientY: number) => {
         setIsDragging(true);
-        dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+        dragOffset.current = { x: clientX - position.x, y: clientY - position.y };
+    };
+
+    const handleMove = (clientX: number, clientY: number) => {
+        if (!isDragging) return;
+        let newX = clientX - dragOffset.current.x;
+        let newY = clientY - dragOffset.current.y;
+
+        // Limites da tela
+        const maxX = window.innerWidth - size;
+        const maxY = window.innerHeight - (size * 1.5); 
+        setPosition({
+            x: Math.max(0, Math.min(newX, maxX)),
+            y: Math.max(0, Math.min(newY, maxY))
+        });
     };
 
     useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (isDragging) {
-                setPosition({
-                    x: e.clientX - dragStart.current.x,
-                    y: e.clientY - dragStart.current.y
-                });
-            }
-        };
-        const handleMouseUp = () => setIsDragging(false);
+        const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+        const onTouchMove = (e: TouchEvent) => handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        const onEnd = () => setIsDragging(false);
 
         if (isDragging) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onEnd);
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+            window.addEventListener('touchend', onEnd);
         }
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onEnd);
+            window.removeEventListener('touchmove', onTouchMove);
+            window.removeEventListener('touchend', onEnd);
         };
-    }, [isDragging]);
+    }, [isDragging, size]);
 
     if (isMinimized) {
         return (
             <div 
-                className="fixed bottom-4 right-4 bg-vingi-900 text-white p-3 rounded-full shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform"
+                className="fixed bottom-24 right-4 bg-vingi-900 text-white p-3 rounded-full shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform animate-bounce-subtle"
                 onClick={() => setIsMinimized(false)}
-                title="Abrir Comparador"
             >
                 <ImageIcon size={24} />
             </div>
@@ -58,36 +71,36 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
 
     return (
         <div 
-            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col"
+            ref={modalRef}
+            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow"
             style={{ 
                 left: position.x, 
                 top: position.y, 
                 width: size,
-                transition: isDragging ? 'none' : 'width 0.2s'
+                touchAction: 'none' // Crucial para drag mobile
             }}
         >
             <div 
-                className="bg-vingi-900 h-8 flex items-center justify-between px-2 cursor-move select-none"
-                onMouseDown={handleMouseDown}
+                className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-move active:cursor-grabbing"
+                onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
+                onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
             >
-                <span className="text-[10px] font-bold text-white flex items-center gap-1"><Move size={10}/> COMPARADOR</span>
-                <button onClick={() => setIsMinimized(true)} className="text-white hover:bg-white/20 rounded p-0.5"><Minimize2 size={12}/></button>
+                <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Comparar</span>
+                <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
+                    <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
+                </div>
             </div>
             
-            <div className="relative group">
-                <img src={image} className="w-full object-cover" style={{ height: size * 1.2 }} draggable={false} />
-                
-                {/* Resize Handle Simplificado */}
-                <div className="absolute bottom-1 right-1 flex gap-1 bg-black/50 rounded-full px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                     <button onClick={() => setSize(s => Math.max(120, s - 20))} className="text-white"><Minimize2 size={12}/></button>
-                     <button onClick={() => setSize(s => Math.min(400, s + 20))} className="text-white"><Maximize2 size={12}/></button>
-                </div>
+            <div className="relative bg-gray-100">
+                <img src={image} className="w-full object-contain bg-white" style={{ maxHeight: size * 1.5 }} draggable={false} />
             </div>
         </div>
     );
 };
 
-// --- HELPERS LOCAIS ---
+// ... Resto do ScannerSystem (Helpers, Actions, Render) mantidos ...
+// Apenas re-exportando o componente principal que usa o modal acima
 const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
@@ -122,43 +135,28 @@ const FilterTab = ({ label, count, active, onClick, icon: Icon }: any) => (
 );
 
 export const ScannerSystem: React.FC = () => {
-  // --- STATE LOCAL DO MÓDULO ---
   const [state, setState] = useState<AppState>(AppState.IDLE);
   const [result, setResult] = useState<PatternAnalysisResult | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedSecondaryImage, setUploadedSecondaryImage] = useState<string | null>(null);
-  
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  
-  // PAGINAÇÃO
-  const [visibleCount, setVisibleCount] = useState(15); // Começa com 15
-
-  // Refs
+  const [visibleCount, setVisibleCount] = useState(15);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to top on state change
-  useLayoutEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [state]);
-
-  // Loading Rotation
+  useLayoutEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [state]);
   useEffect(() => {
     let interval: any;
     if (state === AppState.ANALYZING) {
         setLoadingStep(0);
-        interval = setInterval(() => {
-            setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length);
-        }, 2000);
+        interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % MOCK_LOADING_STEPS.length); }, 2000);
     }
     return () => clearInterval(interval);
   }, [state]);
-
-  // --- ACTIONS ---
 
   const addToHistory = (res: PatternAnalysisResult) => {
       const newItem: ScanHistoryItem = {
@@ -196,28 +194,24 @@ export const ScannerSystem: React.FC = () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING);
     setErrorMsg(null);
-    setVisibleCount(15); // Reseta para 15
+    setVisibleCount(15);
     
     setTimeout(async () => {
         try {
             const compressedMain = await compressImage(uploadedImage);
             const mainBase64 = compressedMain.split(',')[1];
             const mainType = compressedMain.split(';')[0].split(':')[1];
-            
             let secondaryBase64: string | null = null;
             let secondaryType: string | null = null;
-            
             if (uploadedSecondaryImage) {
                 const compressedSec = await compressImage(uploadedSecondaryImage);
                 secondaryBase64 = compressedSec.split(',')[1];
                 secondaryType = compressedSec.split(';')[0].split(':')[1];
             }
-
             const analysisResult = await analyzeClothingImage(mainBase64, mainType, secondaryBase64, secondaryType);
             setResult(analysisResult);
             addToHistory(analysisResult);
             setState(AppState.SUCCESS);
-
         } catch (err: any) {
             setErrorMsg(err.message || "Erro desconhecido na análise.");
             setState(AppState.ERROR);
@@ -237,25 +231,15 @@ export const ScannerSystem: React.FC = () => {
 
   const handleFabClick = () => {
     if (state === AppState.ANALYZING) return;
-    if (state === AppState.SUCCESS || state === AppState.ERROR) {
-        resetApp();
-        return;
-    }
-    if (state === AppState.IDLE && uploadedImage) {
-        startAnalysis();
-        return;
-    }
-    if (state === AppState.IDLE && !uploadedImage) {
-        cameraInputRef.current?.click();
-    }
+    if (state === AppState.SUCCESS || state === AppState.ERROR) { resetApp(); return; }
+    if (state === AppState.IDLE && uploadedImage) { startAnalysis(); return; }
+    if (state === AppState.IDLE && !uploadedImage) { cameraInputRef.current?.click(); }
   };
 
-  // --- DERIVED DATA ---
   const exactMatches = result?.matches?.exact || [];
   const closeMatches = result?.matches?.close || [];
   const vibeMatches = result?.matches?.adventurous || [];
   const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches].sort((a, b) => b.similarityScore - a.similarityScore);
-
   const getFilteredMatches = () => {
       switch(activeTab) {
           case 'EXACT': return exactMatches;
@@ -264,12 +248,10 @@ export const ScannerSystem: React.FC = () => {
           default: return allMatches;
       }
   };
-
   const filteredData = getFilteredMatches();
   const visibleData = filteredData.slice(0, visibleCount);
   const strictQuery = result ? `${result.technicalDna.silhouette} ${result.technicalDna.neckline} pattern` : '';
 
-  // --- RENDER FAB ---
   const renderFab = () => {
       let icon = <Camera size={24} className="text-white" />;
       let label: string | null = null;
@@ -287,7 +269,6 @@ export const ScannerSystem: React.FC = () => {
           label = "PESQUISAR";
           className = "bg-vingi-600 hover:bg-vingi-500 border-2 border-white shadow-xl shadow-vingi-900/50 w-auto px-8 h-14 rounded-full animate-bounce-subtle z-50 ring-4 ring-black/10 scale-105";
       }
-
       return (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 md:hidden z-[60]">
              <button onClick={handleFabClick} className={`flex items-center justify-center gap-2 transition-all duration-300 ease-out transform ${className}`}>
@@ -300,13 +281,7 @@ export const ScannerSystem: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col relative" ref={scrollRef}>
-        
-        {/* INJEÇÃO DO MODAL FLUTUANTE QUANDO TIVER RESULTADOS */}
-        {state === AppState.SUCCESS && uploadedImage && (
-            <FloatingComparisonModal image={uploadedImage} />
-        )}
-
-        {/* HEADER ESPECÍFICO DO SCANNER */}
+        {state === AppState.SUCCESS && uploadedImage && ( <FloatingComparisonModal image={uploadedImage} /> )}
         {state !== AppState.ANALYZING && state !== AppState.ERROR && (
             <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all shadow-sm">
                 <h1 className="text-lg font-bold tracking-tight text-vingi-900">VINGI <span className="text-vingi-500">AI</span></h1>
@@ -315,10 +290,7 @@ export const ScannerSystem: React.FC = () => {
                 )}
             </header>
         )}
-
         <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-full flex flex-col w-full">
-            
-            {/* TELA INICIAL / UPLOAD */}
             {state === AppState.IDLE && (
                 <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
                 <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
@@ -328,10 +300,8 @@ export const ScannerSystem: React.FC = () => {
                         </div>
                         <h2 className="text-3xl font-bold text-gray-900 mb-3">Análise Visual 3D</h2>
                         <p className="text-gray-500 text-sm mb-8 max-w-xs leading-relaxed">Carregue a foto da peça para análise de DNA técnico e busca global de moldes.</p>
-
                         <input type="file" ref={fileInputRef} onChange={handleMainUpload} accept="image/*" className="hidden" />
                         <input type="file" ref={cameraInputRef} onChange={handleMainUpload} accept="image/*" capture="environment" className="hidden" />
-
                         {!uploadedImage ? (
                             <div className="flex gap-4 w-full max-w-xs flex-col md:flex-row">
                                 <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 transition-all flex items-center justify-center gap-2">
@@ -350,7 +320,6 @@ export const ScannerSystem: React.FC = () => {
                         )}
                         <span className="text-[10px] text-gray-300 mt-6 font-mono">SYSTEM v6.1 (Modular)</span>
                     </div>
-
                     <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center">
                         <div className="flex items-center gap-2 mb-4">
                             <span className="w-2 h-2 rounded-full bg-gray-300"></span>
@@ -375,8 +344,6 @@ export const ScannerSystem: React.FC = () => {
                 </div>
                 </div>
             )}
-            
-            {/* TELA DE LOADING */}
             {state === AppState.ANALYZING && (
                 <div className="flex flex-col items-center justify-center h-[90vh] w-full p-6 animate-fade-in">
                      <div className="relative w-full max-w-sm aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-200 bg-slate-900">
@@ -395,8 +362,6 @@ export const ScannerSystem: React.FC = () => {
                      </div>
                 </div>
             )}
-            
-            {/* TELA DE ERRO */}
             {state === AppState.ERROR && (
                 <div className="flex flex-col items-center justify-center h-[80vh] text-center max-w-lg mx-auto">
                     <div className="bg-red-50 p-6 rounded-full mb-6">
@@ -410,11 +375,8 @@ export const ScannerSystem: React.FC = () => {
                     </div>
                 </div>
             )}
-
-            {/* TELA DE RESULTADOS */}
             {state === AppState.SUCCESS && result && (
                 <div className="animate-fade-in space-y-8 pb-20">
-                
                 {uploadedImage && (
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-6 flex flex-col md:flex-row gap-6 items-start">
                          <img src={uploadedImage} className="w-24 h-32 object-cover rounded-lg shadow-md border border-gray-100" />
@@ -430,7 +392,6 @@ export const ScannerSystem: React.FC = () => {
                          </div>
                     </div>
                 )}
-
                 <div className="flex items-center justify-between overflow-x-auto pb-2">
                     <h3 className="text-lg font-bold text-gray-800 mr-4">Resultados</h3>
                     <div className="flex gap-2">
@@ -439,14 +400,11 @@ export const ScannerSystem: React.FC = () => {
                         <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => setActiveTab('CLOSE')} icon={Sparkles} />
                     </div>
                 </div>
-
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {visibleData.map((match, i) => (
                         <PatternVisualCard key={i} match={match} />
                     ))}
                 </div>
-                
-                {/* BOTÃO CARREGAR MAIS (PAGINAÇÃO 15 em 15) */}
                 {visibleCount < filteredData.length && (
                     <div className="mt-8 flex justify-center flex-col items-center">
                         <p className="text-xs text-gray-400 mb-2">Exibindo {visibleCount} de {filteredData.length} resultados</p>
@@ -458,8 +416,6 @@ export const ScannerSystem: React.FC = () => {
                         </button>
                     </div>
                 )}
-
-                {/* Coleções Sugeridas */}
                 {result.curatedCollections && result.curatedCollections.length > 0 && (
                     <div className="mt-12 bg-gray-50 p-8 rounded-2xl border border-gray-200 relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-vingi-100 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2"></div>
@@ -481,7 +437,6 @@ export const ScannerSystem: React.FC = () => {
                         </div>
                     </div>
                 )}
-
                 <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200">
                     <h4 className="font-bold mb-4 flex items-center gap-2 text-sm text-gray-500 uppercase tracking-widest"><Globe size={14}/> Pesquisa Global Manual</h4>
                     <div className="flex gap-2 flex-wrap">
@@ -490,12 +445,9 @@ export const ScannerSystem: React.FC = () => {
                         <ExternalSearchButton name="Etsy Global" url={`https://www.etsy.com/search?q=${encodeURIComponent(strictQuery + ' sewing pattern')}`} colorClass="bg-orange-500" icon={ShoppingBag} />
                     </div>
                 </div>
-
                 </div>
             )}
         </div>
-        
-        {/* RENDERIZAR O FAB AQUI DENTRO DO MÓDULO */}
         {renderFab()}
     </div>
   );
