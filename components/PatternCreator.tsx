@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, Layers, ShoppingBag, Grid3X3, Target, Globe, Box, Maximize2, Feather } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, Layers, ShoppingBag, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -32,6 +32,7 @@ export const PatternCreator: React.FC = () => {
     
     // Technical Data
     const [technicalSpecs, setTechnicalSpecs] = useState<any>(null);
+    const [genError, setGenError] = useState<string | null>(null);
 
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -50,6 +51,7 @@ export const PatternCreator: React.FC = () => {
                     setFabricMatches([]);
                     setTechnicalSpecs(null);
                     setPrompt('');
+                    setGenError(null);
                 }
             };
             reader.readAsDataURL(file);
@@ -59,6 +61,7 @@ export const PatternCreator: React.FC = () => {
     const analyzeReference = async () => {
         if (!referenceImage) return;
         setIsAnalyzing(true);
+        setGenError(null);
         try {
             const compressedBase64 = await compressImage(referenceImage);
             const parts = compressedBase64.split(',');
@@ -103,6 +106,7 @@ export const PatternCreator: React.FC = () => {
 
     const generatePatternFromData = async (promptText: string, colorsData: PantoneColor[]) => {
         setIsGenerating(true);
+        setGenError(null);
         try {
              const response = await fetch('/api/analyze', {
                 method: 'POST',
@@ -116,9 +120,12 @@ export const PatternCreator: React.FC = () => {
             const data = await response.json();
             if (data.success && data.image) { 
                 setGeneratedPattern(data.image); 
+            } else {
+                setGenError("Não foi possível gerar a estampa. " + (data.error || "Tente novamente."));
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Gen Error", error);
+            setGenError(error.message || "Erro na geração.");
         } finally {
             setIsGenerating(false);
         }
@@ -215,6 +222,11 @@ export const PatternCreator: React.FC = () => {
                                 <button onClick={() => prompt && generatePatternFromData(prompt, detectedColors)} disabled={isGenerating} className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 hover:brightness-110 transition-all">
                                     {isGenerating ? <Loader2 className="animate-spin"/> : <Sparkles/>} Recriar Digitalmente
                                 </button>
+                                {genError && (
+                                    <div className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle size={12}/> {genError}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -225,7 +237,16 @@ export const PatternCreator: React.FC = () => {
                     
                     {/* PARTE SUPERIOR: GERAÇÃO DIGITAL */}
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center min-h-[50vh]">
-                        {!generatedPattern ? (
+                        {isGenerating && !generatedPattern ? (
+                             <div className="flex flex-col items-center justify-center opacity-70">
+                                <div className="relative">
+                                    <Loader2 size={64} className="text-vingi-500 animate-spin"/>
+                                    <Sparkles size={24} className="absolute top-0 right-0 text-purple-500 animate-pulse"/>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-600 mt-4">Criando Estampa Exclusiva...</h3>
+                                <p className="text-sm text-gray-400">Processando textura seamless com IA</p>
+                             </div>
+                        ) : !generatedPattern ? (
                             <div className="text-center opacity-40">
                                 <ImageIcon size={64} className="mx-auto mb-4 text-gray-400"/>
                                 <h3 className="text-2xl font-bold text-gray-600">Área de Criação</h3>
