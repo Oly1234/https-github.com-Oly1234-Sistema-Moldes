@@ -62,7 +62,9 @@ export default async function handler(req, res) {
             
             let imageUrl = null;
             
-            // 1. JSON-LD
+            // --- ESTRATÉGIA HÍBRIDA: JSON-LD + SEARCH GRID SCRAPING ---
+
+            // 1. Tenta extrair de JSON-LD (funciona bem para produtos únicos)
             const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i);
             if (jsonLdMatch) {
                 try {
@@ -78,32 +80,64 @@ export default async function handler(req, res) {
                 } catch (e) {}
             }
 
-            // 2. Open Graph
+            // 2. Tenta Open Graph
             if (!imageUrl) {
                 const metaRegex = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']\s*\/?>/i;
                 const match = html.match(metaRegex);
                 if (match) imageUrl = match[1];
             }
 
-            // 3. Fallbacks Específicos
+            // 3. FALLBACKS DE "SEARCH GRID" (Crucial para PatternBank, Shutterstock, Etsy Search)
+            // Isso permite que o sistema entre numa página de busca e "roube" a primeira imagem relevante.
             if (!imageUrl) {
+                
+                // SHUTTERSTOCK: Pega a primeira imagem da galeria de busca
                 if (targetUrl.includes('shutterstock')) {
-                     const galleryMatch = html.match(/src=["'](https:\/\/image\.shutterstock\.com\/image-[^"']+)["']/i);
-                     if (galleryMatch) imageUrl = galleryMatch[1];
+                     // Tenta seletor de galeria
+                     const gridImg = html.match(/<img[^>]+src=["'](https:\/\/image\.shutterstock\.com\/image-[^"']+)["'][^>]*>/i);
+                     if (gridImg) imageUrl = gridImg[1];
                 }
+
+                // PATTERNBANK: Pega o primeiro design da lista
                 if (targetUrl.includes('patternbank')) {
-                     const pbMatch = html.match(/data-src=["']([^"']+)["']|src=["']([^"']+)["']/i); 
-                     if (pbMatch) imageUrl = pbMatch[1] || pbMatch[2];
+                     const pbMatch = html.match(/class=["']design-image["'][^>]*src=["']([^"']+)["']/i); 
+                     if (pbMatch) imageUrl = pbMatch[1];
+                     
+                     // Fallback para lazy load data-src
+                     if (!imageUrl) {
+                         const pbLazy = html.match(/data-src=["'](https:\/\/s3\.amazonaws\.com\/patternbank[^"']+)["']/i);
+                         if (pbLazy) imageUrl = pbLazy[1];
+                     }
                 }
+
+                // SPOONFLOWER
+                if (targetUrl.includes('spoonflower')) {
+                    const sfMatch = html.match(/src=["'](https:\/\/s3\.amazonaws\.com\/spoonflower[^"']+)["']/i);
+                    if (sfMatch) imageUrl = sfMatch[1];
+                }
+
+                // ADOBE STOCK
+                if (targetUrl.includes('adobe')) {
+                    const asMatch = html.match(/src=["'](https:\/\/t4\.ftcdn\.net\/jpg\/[^"']+)["']/i);
+                    if (asMatch) imageUrl = asMatch[1];
+                }
+
+                // ETSY (Search Page)
                 if (targetUrl.includes('etsy')) {
-                     const etsyMatch = html.match(/data-src-zoom-image=["']([^"']+)["']|data-src-full=["']([^"']+)["']/i);
-                     if (etsyMatch) imageUrl = etsyMatch[1] || etsyMatch[2];
+                     const etsyMatch = html.match(/src=["'](https:\/\/i\.etsystatic\.com\/[^"']+\/r\/il\/[^"']+)["']/i);
+                     if (etsyMatch) imageUrl = etsyMatch[1];
                 }
             }
 
             if (!imageUrl) return res.status(200).json({ success: false });
+            
+            // Sanitização
             if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
             imageUrl = imageUrl.replace(/&amp;/g, '&');
+            
+            // Remove thumbnails muito pequenos se possível (optimistic)
+            if (imageUrl.includes('75x75')) imageUrl = imageUrl.replace('75x75', '300x300');
+            
             return res.status(200).json({ success: true, image: imageUrl });
 
         } catch (err) {
@@ -146,17 +180,42 @@ export default async function handler(req, res) {
     // ROTA 2: PATTERN STUDIO (INDEPENDENTE)
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
-        // Mantém a lógica existente para o criador de estampas
         if (!apiKey) return res.status(500).json({ error: "No Key" });
         try {
             const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
             const MASTER_VISION_PROMPT = `
-            ACT AS: Senior Textile Designer.
-            TASK: Analyze the image for a Generative AI prompt.
-            1. Describe Artistic Technique (Watercolor, Vector, etc).
-            2. Extract 5 Colors.
-            3. Generate 30 Search URLs for Stock Sites (Shutterstock, Patternbank).
-            JSON OUTPUT: { "prompt": "...", "colors": [], "stockMatches": [] }
+            ACT AS: Senior Textile Designer & Print Engineer.
+            
+            TASK 1: Deconstruct the Artistic Technique (Visual DNA).
+            - LINE QUALITY: Monoline, variable width, ink bleed, or vector crisp?
+            - BRUSHWORK: Dry brush, wet-on-wet watercolor, gouache opacity?
+            - STYLE: Liberty London, Bauhaus, Arts & Crafts, Tropical Maximalism?
+            
+            TASK 2: Extract 5 Dominant Pantone Colors (Name + Hex).
+            
+            TASK 3: Generate 30 (THIRTY) High-Quality Search URLs.
+            CRITICAL: Create "SEARCH QUERY" links. Do NOT try to guess specific product IDs.
+            - Shutterstock: "https://www.shutterstock.com/search/" + keywords
+            - Patternbank: "https://patternbank.com/search?q=" + keywords
+            - Spoonflower: "https://www.spoonflower.com/en/shop?q=" + keywords
+            - Adobe Stock: "https://stock.adobe.com/search?k=" + keywords
+            
+            JSON OUTPUT:
+            { 
+              "prompt": "Professional textile design, [Technique], [Style], seamless repeat...",
+              "colors": [{ "name": "...", "code": "...", "hex": "..." }],
+              "stockMatches": [
+                 ... GENERATE 30 ITEMS ...
+                 { 
+                   "source": "Shutterstock", 
+                   "patternName": "Watercolor Floral Search", 
+                   "type": "ROYALTY-FREE", 
+                   "linkType": "SEARCH_QUERY", 
+                   "url": "https://www.shutterstock.com/search/watercolor+floral+seamless",
+                   "similarityScore": 95 
+                 }
+              ]
+            }
             `;
             const visionPayload = {
                 contents: [{ parts: [{ text: MASTER_VISION_PROMPT }, { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }] }],
@@ -170,63 +229,35 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 3: SCAN CLOTHING - CORREÇÃO DE "ZERO RESULTADOS" E "RESULTADOS FAKES"
+    // ROTA 3: SCAN CLOTHING - INDEPENDENTE
     // ==========================================================================================
     if (action === 'SCAN_CLOTHING' || !action) { 
         if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
 
-        // PROMPT PROJETADO PARA GERAR LINKS DE BUSCA REAIS E EM QUANTIDADE
         const GLOBAL_SEARCH_PROMPT = `
         VOCÊ É: VINGI AI, O Melhor Buscador de Moldes do Mundo.
+        TAREFA: Analisar a roupa e encontrar MOLDES (Sewing Patterns).
+        PROBLEMA: Não tente adivinhar links diretos (404). USE LINKS DE BUSCA (SEARCH QUERIES).
         
-        TAREFA: Analisar a roupa e encontrar MOLDES (Sewing Patterns) para compra ou download.
+        QUANTIDADE: 40 resultados (15 Exatos, 15 Próximos, 10 Ousados).
         
-        PROBLEMA A EVITAR: Não tente adivinhar links diretos de produtos antigos (eles dão 404).
-        SOLUÇÃO: Gere URLs DE BUSCA (SEARCH QUERIES) usando os termos técnicos que você identificar.
-        
-        QUANTIDADE OBRIGATÓRIA: 
-        - Você DEVE gerar pelo menos 40 resultados no total.
-        - 15 Exatos + 15 Próximos + 10 Ousados.
-        
-        PASSO 1: Identifique o DNA Técnico (Ex: "Square Neck Puff Sleeve Mini Dress").
-        
-        PASSO 2: Gere os LINKS DE BUSCA para os maiores sites de molde do mundo:
-        - Etsy: "https://www.etsy.com/search?q=" + DNA_TERM + "+sewing+pattern"
+        PASSO 1: DNA Técnico (Ex: "Square Neck Puff Sleeve").
+        PASSO 2: Gere LINKS DE BUSCA:
+        - Etsy: "https://www.etsy.com/search?q=" + DNA_TERM
         - Burda: "https://www.burdastyle.com/catalogsearch/result/?q=" + DNA_TERM
-        - The Fold Line: "https://thefoldline.com/?s=" + DNA_TERM
         - Vikisews: "https://vikisews.com/search/?q=" + DNA_TERM
-        - Makerist: "https://www.makerist.com/patterns?q=" + DNA_TERM
-        - Mood Fabrics: "https://www.moodfabrics.com/blog/?s=" + DNA_TERM
 
-        ESTRUTURA JSON (Responda APENAS JSON):
+        JSON OUTPUT:
         {
-          "patternName": "Nome Técnico Completo em Português",
-          "category": "Vestido/Blusa/Calça",
-          "technicalDna": { 
-             "silhouette": "Silhueta (A-line, Bodycon...)", 
-             "neckline": "Decote", 
-             "sleeve": "Manga", 
-             "fabricStructure": "Tecido Sugerido" 
-          },
+          "patternName": "Nome Técnico PT-BR",
+          "category": "Categoria",
+          "technicalDna": { "silhouette": "...", "neckline": "...", "sleeve": "...", "fabricStructure": "..." },
           "matches": { 
-             "exact": [ 
-                 ... LISTA DE 15 ITENS ...
-                 { 
-                   "source": "Etsy", 
-                   "patternName": "Vestido Manga Bufante (Busca)", 
-                   "type": "PAGO", 
-                   "linkType": "SEARCH_QUERY", 
-                   "url": "https://www.etsy.com/search?q=puff+sleeve+square+neck+dress+pattern", 
-                   "description": "Busca direta por moldes com estas características exatas.",
-                   "similarityScore": 99 
-                 }
-             ], 
-             "close": [ ... LISTA DE 15 ITENS ... ], 
-             "adventurous": [ ... LISTA DE 10 ITENS ... ] 
+             "exact": [ ... { "source": "Etsy", "patternName": "...", "type": "PAGO", "linkType": "SEARCH_QUERY", "url": "...", "similarityScore": 99 } ... ], 
+             "close": [ ... ], 
+             "adventurous": [ ... ] 
           },
-          "curatedCollections": [
-             { "sourceName": "Etsy Search", "title": "Todos os Moldes Similares", "itemCount": "100+", "searchUrl": "URL DE BUSCA GERAL", "description": "Busca ampla.", "icon": "SHOPPING" }
-          ]
+          "curatedCollections": [ ... ]
         }
         `;
 
@@ -242,23 +273,14 @@ export default async function handler(req, res) {
         const text = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
         const jsonResult = JSON.parse(cleanJson(text));
         
-        // --- FALLBACK DE SEGURANÇA (Se a IA falhar em gerar a lista) ---
-        // Se a lista vier vazia, injetamos buscas manuais baseadas no nome identificado
+        // Fallback de segurança para listas vazias
         if ((!jsonResult.matches.exact || jsonResult.matches.exact.length === 0) && jsonResult.patternName) {
-            const term = encodeURIComponent(jsonResult.patternName + " sewing pattern");
             const termEn = encodeURIComponent(jsonResult.technicalDna.silhouette + " " + jsonResult.technicalDna.neckline + " pattern");
-            
             jsonResult.matches.exact = [
                 { source: "Etsy Global", patternName: "Resultados no Etsy", type: "PAGO", linkType: "SEARCH_QUERY", url: `https://www.etsy.com/search?q=${termEn}`, similarityScore: 95 },
-                { source: "Burda Style", patternName: "Catálogo Burda", type: "PREMIUM", linkType: "SEARCH_QUERY", url: `https://www.burdastyle.com/catalogsearch/result/?q=${termEn}`, similarityScore: 90 },
-                { source: "Google Shopping", patternName: "Busca Geral", type: "BUSCA", linkType: "SEARCH_QUERY", url: `https://www.google.com/search?tbm=shop&q=${term}`, similarityScore: 85 },
-                { source: "The Fold Line", patternName: "Indie Patterns", type: "INDIE", linkType: "SEARCH_QUERY", url: `https://thefoldline.com/?s=${termEn}`, similarityScore: 90 },
-                { source: "Vikisews", patternName: "Moldes Russos", type: "TÉCNICO", linkType: "SEARCH_QUERY", url: `https://vikisews.com/search/?q=${termEn}`, similarityScore: 88 },
-                { source: "Mood Fabrics", patternName: "Moldes Grátis", type: "GRATUITO", linkType: "SEARCH_QUERY", url: `https://www.moodfabrics.com/blog/?s=${termEn}`, similarityScore: 85 },
-                { source: "Pinterest", patternName: "Inspiração Visual", type: "VISUAL", linkType: "SEARCH_QUERY", url: `https://www.pinterest.com/search/pins/?q=${term}`, similarityScore: 80 }
+                { source: "Google Shopping", patternName: "Busca Geral", type: "BUSCA", linkType: "SEARCH_QUERY", url: `https://www.google.com/search?tbm=shop&q=${termEn}`, similarityScore: 85 }
             ];
-            // Duplica para preencher visualmente se necessário
-            jsonResult.matches.close = [...jsonResult.matches.exact]; 
+            jsonResult.matches.close = [...jsonResult.matches.exact];
         }
 
         return res.status(200).json(jsonResult);

@@ -17,23 +17,15 @@ export const generateSafeUrl = (match: ExternalPatternMatch): string => {
     const cleanSearchTerm = encodeURIComponent(patternName.replace(/ pattern| sewing| molde| vestido| dress| pdf| download/gi, '').trim());
     const fullSearchTerm = encodeURIComponent(patternName + ' sewing pattern');
 
-    // Detecção de URLs quebradas ou alucinadas (IDs aleatórios sem estrutura correta)
-    // Se a IA gerou um link direto que parece suspeito, convertemos para busca.
-    const isDirectLink = !url.includes('search') && !url.includes('?q=') && !url.includes('?s=');
-    const isKnownDomain = url.includes('etsy.com') || url.includes('burdastyle') || url.includes('vikisews');
-
-    // Se é Etsy mas não tem /listing/ ou /search, provavelmente está errado -> Força busca
-    if (url.includes('etsy.com') && !url.includes('/listing/') && !url.includes('/search')) {
-        return `https://www.etsy.com/search?q=${fullSearchTerm}&explicit=1`;
-    }
-
-    // Se é um link direto "genérico" que não sabemos se funciona, preferimos a busca
-    if (match.linkType === 'SEARCH_QUERY') {
+    // Se é um link direto "genérico" ou SEARCH_QUERY, validamos
+    if (match.linkType === 'SEARCH_QUERY' || !url.includes('/')) {
         // Confirma se a URL de busca está bem formada, senão recria
         if (!url.includes('=')) {
              if (source.toLowerCase().includes('etsy')) return `https://www.etsy.com/search?q=${fullSearchTerm}`;
              if (source.toLowerCase().includes('burda')) return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
              if (source.toLowerCase().includes('vikisews')) return `https://vikisews.com/search/?q=${cleanSearchTerm}`;
+             if (source.toLowerCase().includes('shutterstock')) return `https://www.shutterstock.com/search/${cleanSearchTerm}`;
+             if (source.toLowerCase().includes('patternbank')) return `https://patternbank.com/search?q=${cleanSearchTerm}`;
              return `https://www.google.com/search?q=${fullSearchTerm}`;
         }
     }
@@ -46,6 +38,7 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
 
     const safeUrl = generateSafeUrl(match);
     
+    // Se a IA já mandou uma imagem válida, usa. Senão null.
     const initialImage = (match.imageUrl && match.imageUrl.length > 10) ? match.imageUrl : null;
     const [displayImage, setDisplayImage] = useState<string | null>(initialImage);
     const [usingProxy, setUsingProxy] = useState(false);
@@ -59,17 +52,21 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
     const backupIcon = getBackupIcon(domain);
 
     useEffect(() => {
+        // Se já temos imagem inicial e não estamos usando proxy, exibe e para.
         if (initialImage && !usingProxy) {
             setDisplayImage(initialImage);
             return;
         }
 
-        // Não tenta preview de páginas de busca genéricas (Google), apenas lojas
+        // Não tenta preview de páginas de busca genéricas do Google, pois bloqueiam scraping.
+        // Mas TENTA para sites específicos de Patterns (Shutterstock, Etsy, etc).
         if (!safeUrl || safeUrl.includes('google.com/search')) return;
 
         let isMounted = true;
         
-        // Pequeno delay para não sobrecarregar em listas grandes (30+ itens)
+        // Delay randômico para não sobrecarregar em listas grandes
+        const delay = Math.random() * 2000;
+
         const timer = setTimeout(() => {
             fetch('/api/analyze', {
                 method: 'POST',
@@ -83,8 +80,10 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
                     setUsingProxy(true);
                 }
             })
-            .catch(() => {});
-        }, Math.random() * 2000); // Random delay 0-2s para distribuir carga
+            .catch(() => {
+                // Silently fail, keep generic icon
+            });
+        }, delay); 
 
         return () => { isMounted = false; clearTimeout(timer); };
     }, [safeUrl, initialImage]);
@@ -99,7 +98,7 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
 
     const finalImage = displayImage || primaryIcon;
     const isBrandIcon = finalImage === primaryIcon || finalImage === backupIcon;
-    const isPremium = match.type === 'PAGO' || match.type === 'PREMIUM';
+    const isPremium = match.type === 'PAGO' || match.type === 'PREMIUM' || match.type === 'ROYALTY-FREE';
 
     return (
         <div onClick={() => safeUrl && window.open(safeUrl, '_blank')} className="bg-white rounded-xl border border-gray-200 hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1 group overflow-hidden flex flex-col h-full animate-fade-in relative">
@@ -124,10 +123,10 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
                     </span>
                 </div>
                 <h3 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight mb-2 flex-1 group-hover:text-vingi-600 transition-colors">
-                    {match.patternName || 'Molde Identificado'}
+                    {match.patternName || 'Design Identificado'}
                 </h3>
                 <div className="pt-2 border-t border-gray-50 flex items-center justify-between text-xs text-vingi-500 font-medium">
-                    <span>Ver Molde</span>
+                    <span>Ver Original</span>
                     <ArrowRightCircle size={14} className="group-hover:translate-x-1 transition-transform"/>
                 </div>
             </div>
