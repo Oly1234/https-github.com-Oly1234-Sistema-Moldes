@@ -342,7 +342,7 @@ export const PatternCreator: React.FC = () => {
                 <div className="fixed inset-0 z-[100] bg-vingi-900/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
                         <div className="bg-gray-50 border-b border-gray-100 p-4 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Settings2 size={18} className="text-vingi-600"/> Configuração de Estampa</h3>
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2"><Settings2 size={18} className="text-vingi-500"/> Configuração de Estampa</h3>
                             <button onClick={() => setShowSetupModal(false)} className="text-gray-400 hover:text-red-500"><Settings2 size={18} className="rotate-45"/></button>
                         </div>
                         <div className="p-6 space-y-6">
@@ -402,7 +402,7 @@ export const PatternCreator: React.FC = () => {
                                 <p className="text-[10px] text-gray-400 mt-1 text-right">Deixe vazio para usar apenas a imagem.</p>
                             </div>
                             
-                            <button onClick={confirmSetupAndAnalyze} className="w-full py-4 bg-vingi-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-vingi-700 transition-transform active:scale-95">
+                            <button onClick={confirmSetupAndAnalyze} className="w-full py-4 bg-vingi-900 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-vingi-800 transition-transform active:scale-95">
                                 <Check size={18} /> CONFIRMAR & ANALISAR
                             </button>
                         </div>
