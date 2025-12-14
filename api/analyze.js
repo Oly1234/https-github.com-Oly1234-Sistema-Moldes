@@ -38,33 +38,74 @@ export default async function handler(req, res) {
     const genAIEndpoint = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     // ==========================================================================================
-    // ROTA 0: SCRAPER ROBUSTO "PYTHON-LIKE" (GET_LINK_PREVIEW)
+    // ROTA 0: SCRAPER TIPO "BEAUTIFUL SOUP" (GET_LINK_PREVIEW)
     // ==========================================================================================
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
+        // Ignora google search genérico, foca em lojas
         if (targetUrl.includes('google.com/search')) return res.status(200).json({ success: false });
 
-        try {
-            const commonHeaders = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Cache-Control': 'no-cache',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Upgrade-Insecure-Requests': '1'
-            };
-            
-            const siteRes = await fetch(targetUrl, { headers: commonHeaders });
-            if (!siteRes.ok) throw new Error(`Site bloqueou (${siteRes.status})`);
-            const html = await siteRes.text();
-            
-            let imageUrl = null;
-            
-            // --- ESTRATÉGIA HÍBRIDA: JSON-LD + SEARCH GRID SCRAPING ---
+        const fetchWithFallback = async (url) => {
+            let html = '';
+            let finalUrl = url;
 
-            // 1. Tenta extrair de JSON-LD (funciona bem para produtos únicos)
+            // TENTATIVA 1: Direct Fetch com Headers de Browser (Playwright Simulation)
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Cache-Control': 'no-cache',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none'
+                    },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    html = await response.text();
+                } else {
+                    throw new Error(`Status ${response.status}`);
+                }
+            } catch (directError) {
+                // TENTATIVA 2: API Pública de Metadados (Microlink/Similar) para furar WAF/403
+                // Isso resolve o problema de sites que bloqueiam Vercel/AWS IPs
+                console.log(`Direct fetch failed for ${url}, trying fallback...`);
+                try {
+                    const fallbackRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=true&audio=false&video=false`);
+                    const fallbackData = await fallbackRes.json();
+                    if (fallbackData.status === 'success' && fallbackData.data.image) {
+                        return { type: 'api', data: fallbackData.data.image.url };
+                    }
+                } catch (e) {
+                    console.log('Fallback failed');
+                }
+            }
+            return { type: 'html', data: html };
+        };
+
+        try {
+            const result = await fetchWithFallback(targetUrl);
+            
+            // Se a API externa já devolveu a imagem, retornamos direto
+            if (result.type === 'api') {
+                 return res.status(200).json({ success: true, image: result.data });
+            }
+
+            const html = result.data;
+            if (!html) return res.status(200).json({ success: false });
+
+            let imageUrl = null;
+
+            // --- LÓGICA DE EXTRAÇÃO CIRÚRGICA (PYTHON STYLE) ---
+            
+            // SELETOR 1: JSON-LD (E-commerce schema) - Alta precisão para produtos
             const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i);
             if (jsonLdMatch) {
                 try {
@@ -80,63 +121,62 @@ export default async function handler(req, res) {
                 } catch (e) {}
             }
 
-            // 2. Tenta Open Graph
-            if (!imageUrl) {
-                const metaRegex = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']\s*\/?>/i;
-                const match = html.match(metaRegex);
-                if (match) imageUrl = match[1];
-            }
+            // SELETOR 2: META TAGS (OG:IMAGE) - Padrão da web
+            // Mas cuidado: em páginas de busca, isso geralmente é o logo do site.
+            // Só usamos OG se NÃO for uma página de busca óbvia, ou se não acharmos nada melhor depois.
+            let ogImage = null;
+            const metaMatch = html.match(/<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']\s*\/?>/i);
+            if (metaMatch) ogImage = metaMatch[1];
 
-            // 3. FALLBACKS DE "SEARCH GRID" (Crucial para PatternBank, Shutterstock, Etsy Search)
-            // Isso permite que o sistema entre numa página de busca e "roube" a primeira imagem relevante.
-            if (!imageUrl) {
-                
-                // SHUTTERSTOCK: Pega a primeira imagem da galeria de busca
+            // SELETOR 3: SEARCH GRID SCRAPING (O "Pulo do Gato" para páginas de busca)
+            // Se a URL contém 'search', 'query', 'catalog', a gente ignora o og:image e busca o primeiro resultado do grid.
+            
+            const isSearchPage = targetUrl.includes('search') || targetUrl.includes('?q=') || targetUrl.includes('catalog');
+            
+            if (isSearchPage || !imageUrl) {
+                // SHUTTERSTOCK
                 if (targetUrl.includes('shutterstock')) {
-                     // Tenta seletor de galeria
-                     const gridImg = html.match(/<img[^>]+src=["'](https:\/\/image\.shutterstock\.com\/image-[^"']+)["'][^>]*>/i);
+                     const gridImg = html.match(/src=["'](https:\/\/image\.shutterstock\.com\/image-[^"']+)["']/i);
                      if (gridImg) imageUrl = gridImg[1];
                 }
-
-                // PATTERNBANK: Pega o primeiro design da lista
-                if (targetUrl.includes('patternbank')) {
+                // PATTERNBANK
+                else if (targetUrl.includes('patternbank')) {
                      const pbMatch = html.match(/class=["']design-image["'][^>]*src=["']([^"']+)["']/i); 
                      if (pbMatch) imageUrl = pbMatch[1];
-                     
-                     // Fallback para lazy load data-src
-                     if (!imageUrl) {
+                     if (!imageUrl) { // Fallback lazy
                          const pbLazy = html.match(/data-src=["'](https:\/\/s3\.amazonaws\.com\/patternbank[^"']+)["']/i);
                          if (pbLazy) imageUrl = pbLazy[1];
                      }
                 }
-
-                // SPOONFLOWER
-                if (targetUrl.includes('spoonflower')) {
-                    const sfMatch = html.match(/src=["'](https:\/\/s3\.amazonaws\.com\/spoonflower[^"']+)["']/i);
-                    if (sfMatch) imageUrl = sfMatch[1];
-                }
-
-                // ADOBE STOCK
-                if (targetUrl.includes('adobe')) {
-                    const asMatch = html.match(/src=["'](https:\/\/t4\.ftcdn\.net\/jpg\/[^"']+)["']/i);
-                    if (asMatch) imageUrl = asMatch[1];
-                }
-
-                // ETSY (Search Page)
-                if (targetUrl.includes('etsy')) {
+                // ETSY (Search Grid)
+                else if (targetUrl.includes('etsy')) {
+                     // Busca imagem dentro de classes de card v2
                      const etsyMatch = html.match(/src=["'](https:\/\/i\.etsystatic\.com\/[^"']+\/r\/il\/[^"']+)["']/i);
                      if (etsyMatch) imageUrl = etsyMatch[1];
                 }
+                // SPOONFLOWER
+                else if (targetUrl.includes('spoonflower')) {
+                    const sfMatch = html.match(/src=["'](https:\/\/s3\.amazonaws\.com\/spoonflower[^"']+)["']/i);
+                    if (sfMatch) imageUrl = sfMatch[1];
+                }
+                // BURDA STYLE
+                else if (targetUrl.includes('burdastyle')) {
+                    const burdaMatch = html.match(/class=["']product-image-photo["'][^>]*src=["']([^"']+)["']/i);
+                    if (burdaMatch) imageUrl = burdaMatch[1];
+                }
+            }
+
+            // Se não achou nada específico de grid, usa o OG Image (Melhor que nada)
+            if (!imageUrl && ogImage) {
+                imageUrl = ogImage;
             }
 
             if (!imageUrl) return res.status(200).json({ success: false });
             
-            // Sanitização
+            // Sanitização Final
             if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
             imageUrl = imageUrl.replace(/&amp;/g, '&');
-            
-            // Remove thumbnails muito pequenos se possível (optimistic)
-            if (imageUrl.includes('75x75')) imageUrl = imageUrl.replace('75x75', '300x300');
+            if (imageUrl.includes('75x75')) imageUrl = imageUrl.replace('75x75', '300x300'); // Upscale Etsy thumb
             
             return res.status(200).json({ success: true, image: imageUrl });
 
@@ -146,7 +186,7 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 1: GERAÇÃO DE ESTAMPA (INDEPENDENTE)
+    // ROTA 1: GERAÇÃO DE ESTAMPA (MANTIDA)
     // ==========================================================================================
     if (action === 'GENERATE_PATTERN') {
         if (!apiKey) return res.status(401).json({ success: false, error: "Missing API Key" });
@@ -154,68 +194,32 @@ export default async function handler(req, res) {
             const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
             const colorInstruction = colors && colors.length > 0 ? `STRICT COLOR PALETTE: ${colors.map(c => c.name).join(', ')}.` : '';
             const finalPrompt = `Create a High-End Seamless Pattern. ${prompt}. ${colorInstruction}. Flat lay, 8k resolution, texture detailed.`;
-            
             const payload = {
                 contents: [{ parts: [{ text: finalPrompt }] }],
                 generation_config: { response_mime_type: "image/jpeg", aspect_ratio: "1:1" }
             };
-
-            const googleResponse = await fetch(imageEndpoint, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(payload) 
-            });
-
+            const googleResponse = await fetch(imageEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!googleResponse.ok) throw new Error("Google GenAI Error");
             const data = await googleResponse.json();
             const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
             if (!imagePart) return res.status(200).json({ success: false });
             return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
-        } catch (e) {
-            return res.status(200).json({ success: false }); 
-        }
+        } catch (e) { return res.status(200).json({ success: false }); }
     }
 
     // ==========================================================================================
-    // ROTA 2: PATTERN STUDIO (INDEPENDENTE)
+    // ROTA 2: PATTERN STUDIO (MANTIDA)
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
         if (!apiKey) return res.status(500).json({ error: "No Key" });
         try {
             const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
             const MASTER_VISION_PROMPT = `
-            ACT AS: Senior Textile Designer & Print Engineer.
-            
+            ACT AS: Senior Textile Designer.
             TASK 1: Deconstruct the Artistic Technique (Visual DNA).
-            - LINE QUALITY: Monoline, variable width, ink bleed, or vector crisp?
-            - BRUSHWORK: Dry brush, wet-on-wet watercolor, gouache opacity?
-            - STYLE: Liberty London, Bauhaus, Arts & Crafts, Tropical Maximalism?
-            
-            TASK 2: Extract 5 Dominant Pantone Colors (Name + Hex).
-            
-            TASK 3: Generate 30 (THIRTY) High-Quality Search URLs.
-            CRITICAL: Create "SEARCH QUERY" links. Do NOT try to guess specific product IDs.
-            - Shutterstock: "https://www.shutterstock.com/search/" + keywords
-            - Patternbank: "https://patternbank.com/search?q=" + keywords
-            - Spoonflower: "https://www.spoonflower.com/en/shop?q=" + keywords
-            - Adobe Stock: "https://stock.adobe.com/search?k=" + keywords
-            
-            JSON OUTPUT:
-            { 
-              "prompt": "Professional textile design, [Technique], [Style], seamless repeat...",
-              "colors": [{ "name": "...", "code": "...", "hex": "..." }],
-              "stockMatches": [
-                 ... GENERATE 30 ITEMS ...
-                 { 
-                   "source": "Shutterstock", 
-                   "patternName": "Watercolor Floral Search", 
-                   "type": "ROYALTY-FREE", 
-                   "linkType": "SEARCH_QUERY", 
-                   "url": "https://www.shutterstock.com/search/watercolor+floral+seamless",
-                   "similarityScore": 95 
-                 }
-              ]
-            }
+            TASK 2: Extract 5 Dominant Pantone Colors.
+            TASK 3: Generate 30 High-Quality Search URLs (Shutterstock, Patternbank, etc).
+            JSON OUTPUT: { "prompt": "...", "colors": [], "stockMatches": [] }
             `;
             const visionPayload = {
                 contents: [{ parts: [{ text: MASTER_VISION_PROMPT }, { inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }] }],
@@ -229,51 +233,30 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 3: SCAN CLOTHING - INDEPENDENTE
+    // ROTA 3: SCAN CLOTHING (MANTIDA)
     // ==========================================================================================
     if (action === 'SCAN_CLOTHING' || !action) { 
         if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
-
         const GLOBAL_SEARCH_PROMPT = `
-        VOCÊ É: VINGI AI, O Melhor Buscador de Moldes do Mundo.
-        TAREFA: Analisar a roupa e encontrar MOLDES (Sewing Patterns).
-        PROBLEMA: Não tente adivinhar links diretos (404). USE LINKS DE BUSCA (SEARCH QUERIES).
-        
+        VOCÊ É: VINGI AI, O Melhor Buscador de Moldes.
+        TAREFA: Encontrar MOLDES (Sewing Patterns).
+        PROBLEMA: Não use links diretos antigos. USE SEARCH QUERIES.
         QUANTIDADE: 40 resultados (15 Exatos, 15 Próximos, 10 Ousados).
-        
-        PASSO 1: DNA Técnico (Ex: "Square Neck Puff Sleeve").
-        PASSO 2: Gere LINKS DE BUSCA:
-        - Etsy: "https://www.etsy.com/search?q=" + DNA_TERM
-        - Burda: "https://www.burdastyle.com/catalogsearch/result/?q=" + DNA_TERM
-        - Vikisews: "https://vikisews.com/search/?q=" + DNA_TERM
-
-        JSON OUTPUT:
-        {
-          "patternName": "Nome Técnico PT-BR",
-          "category": "Categoria",
-          "technicalDna": { "silhouette": "...", "neckline": "...", "sleeve": "...", "fabricStructure": "..." },
-          "matches": { 
-             "exact": [ ... { "source": "Etsy", "patternName": "...", "type": "PAGO", "linkType": "SEARCH_QUERY", "url": "...", "similarityScore": 99 } ... ], 
-             "close": [ ... ], 
-             "adventurous": [ ... ] 
-          },
-          "curatedCollections": [ ... ]
-        }
+        PASSO 1: DNA Técnico.
+        PASSO 2: Gere LINKS DE BUSCA (Etsy, Burda, Vikisews).
+        JSON OUTPUT: { "patternName": "...", "technicalDna": {}, "matches": { "exact": [], "close": [], "adventurous": [] }, "curatedCollections": [] }
         `;
-
         const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         const parts = [{ inline_data: { mime_type: mainMimeType, data: mainImageBase64 } }];
         if (secondaryImageBase64) parts.push({ inline_data: { mime_type: secondaryMimeType, data: secondaryImageBase64 } });
         parts.push({ text: GLOBAL_SEARCH_PROMPT });
-
         const googleResponse = await fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts }] }) });
-        
         if (!googleResponse.ok) throw new Error("Erro Gemini API");
         const dataMain = await googleResponse.json();
         const text = dataMain.candidates?.[0]?.content?.parts?.[0]?.text;
         const jsonResult = JSON.parse(cleanJson(text));
         
-        // Fallback de segurança para listas vazias
+        // Fallback Safety
         if ((!jsonResult.matches.exact || jsonResult.matches.exact.length === 0) && jsonResult.patternName) {
             const termEn = encodeURIComponent(jsonResult.technicalDna.silhouette + " " + jsonResult.technicalDna.neckline + " pattern");
             jsonResult.matches.exact = [
@@ -282,7 +265,6 @@ export default async function handler(req, res) {
             ];
             jsonResult.matches.close = [...jsonResult.matches.exact];
         }
-
         return res.status(200).json(jsonResult);
     }
     

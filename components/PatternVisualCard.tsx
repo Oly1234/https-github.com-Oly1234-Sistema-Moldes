@@ -3,23 +3,43 @@ import React, { useState, useEffect } from 'react';
 import { ExternalLink, ArrowRightCircle } from 'lucide-react';
 import { ExternalPatternMatch } from '../types';
 
-// --- HELPERS INTERNOS DO CARD ---
+// --- HELPERS ---
 const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 const getBackupIcon = (domain: string) => `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+// Proxy visual para garantir que imagens http ou com cors carreguem rápido
 const getProxyUrl = (url: string) => `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=400&h=400&fit=cover&a=top&output=webp`;
+
+// Cache Local para evitar re-fetching da mesma URL
+const getCachedImage = (url: string) => {
+    try {
+        const key = `vingi_img_cache_${btoa(url).substring(0, 32)}`;
+        const cached = localStorage.getItem(key);
+        if (cached) {
+            const { img, timestamp } = JSON.parse(cached);
+            // Cache válido por 24h
+            if (Date.now() - timestamp < 86400000) return img;
+        }
+    } catch (e) { return null; }
+    return null;
+};
+
+const setCachedImage = (url: string, img: string) => {
+    try {
+        const key = `vingi_img_cache_${btoa(url).substring(0, 32)}`;
+        localStorage.setItem(key, JSON.stringify({ img, timestamp: Date.now() }));
+    } catch (e) {}
+};
 
 export const generateSafeUrl = (match: ExternalPatternMatch): string => {
     let url = match?.url || '';
     const source = match?.source || 'Web';
     const patternName = match?.patternName || 'Sewing Pattern';
     
-    // Limpeza de termos para busca
     const cleanSearchTerm = encodeURIComponent(patternName.replace(/ pattern| sewing| molde| vestido| dress| pdf| download/gi, '').trim());
     const fullSearchTerm = encodeURIComponent(patternName + ' sewing pattern');
 
-    // Se é um link direto "genérico" ou SEARCH_QUERY, validamos
+    // Validação de Links Genéricos
     if (match.linkType === 'SEARCH_QUERY' || !url.includes('/')) {
-        // Confirma se a URL de busca está bem formada, senão recria
         if (!url.includes('=')) {
              if (source.toLowerCase().includes('etsy')) return `https://www.etsy.com/search?q=${fullSearchTerm}`;
              if (source.toLowerCase().includes('burda')) return `https://www.burdastyle.com/catalogsearch/result/?q=${cleanSearchTerm}`;
@@ -29,7 +49,6 @@ export const generateSafeUrl = (match: ExternalPatternMatch): string => {
              return `https://www.google.com/search?q=${fullSearchTerm}`;
         }
     }
-
     return url;
 };
 
@@ -38,34 +57,37 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
 
     const safeUrl = generateSafeUrl(match);
     
-    // Se a IA já mandou uma imagem válida, usa. Senão null.
+    // 1. Tenta usar imagem que veio da IA
     const initialImage = (match.imageUrl && match.imageUrl.length > 10) ? match.imageUrl : null;
     const [displayImage, setDisplayImage] = useState<string | null>(initialImage);
     const [usingProxy, setUsingProxy] = useState(false);
     
     let domain = '';
-    try { 
-        if (safeUrl) domain = new URL(safeUrl).hostname; 
-    } catch (e) { domain = 'google.com'; }
+    try { if (safeUrl) domain = new URL(safeUrl).hostname; } catch (e) { domain = 'google.com'; }
     
     const primaryIcon = getBrandIcon(domain);
     const backupIcon = getBackupIcon(domain);
 
     useEffect(() => {
-        // Se já temos imagem inicial e não estamos usando proxy, exibe e para.
+        // Se já temos imagem inicial e não estamos usando proxy, exibe.
         if (initialImage && !usingProxy) {
             setDisplayImage(initialImage);
             return;
         }
 
-        // Não tenta preview de páginas de busca genéricas do Google, pois bloqueiam scraping.
-        // Mas TENTA para sites específicos de Patterns (Shutterstock, Etsy, etc).
         if (!safeUrl || safeUrl.includes('google.com/search')) return;
 
+        // 2. Verifica Cache Local (Fase 3 do Prompt)
+        const cached = getCachedImage(safeUrl);
+        if (cached) {
+            setDisplayImage(getProxyUrl(cached));
+            setUsingProxy(true);
+            return;
+        }
+
+        // 3. Se não tem cache, busca no Backend (Fase 1 e 2)
         let isMounted = true;
-        
-        // Delay randômico para não sobrecarregar em listas grandes
-        const delay = Math.random() * 2000;
+        const delay = Math.random() * 1500; // Jitter para não sobrecarregar API
 
         const timer = setTimeout(() => {
             fetch('/api/analyze', {
@@ -76,13 +98,13 @@ export const PatternVisualCard: React.FC<{ match: ExternalPatternMatch }> = ({ m
             .then(res => res.json())
             .then(data => {
                 if (isMounted && data.success && data.image) {
-                    setDisplayImage(getProxyUrl(data.image));
+                    const finalImg = data.image;
+                    setCachedImage(safeUrl, finalImg); // Salva no cache
+                    setDisplayImage(getProxyUrl(finalImg));
                     setUsingProxy(true);
                 }
             })
-            .catch(() => {
-                // Silently fail, keep generic icon
-            });
+            .catch(() => {});
         }, delay); 
 
         return () => { isMounted = false; clearTimeout(timer); };
