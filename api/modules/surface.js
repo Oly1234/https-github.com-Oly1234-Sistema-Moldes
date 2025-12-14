@@ -1,33 +1,23 @@
 
 // api/modules/surface.js
-// ESPECIALIDADE: Design de Estampas, Pantones & Marketplaces Digitais
+// ESPECIALIDADE: Design de Estampas
 
 export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType, cleanJson) => {
-    // ANALISADOR TÊXTIL AVANÇADO
     const MASTER_VISION_PROMPT = `
-    ACT AS: Senior Textile Engineer & Surface Designer.
-    TASK: Technical Deconstruction of the Uploaded Pattern/Texture.
+    ACT AS: Surface Designer.
+    TASK: Analyze the pattern style.
     
     ANALYZE:
-    1. REPEAT SYSTEM: Is it Half-Drop, Block, Brick, Diamond, or Random?
-    2. MOTIF SCALE: Large (>20cm), Medium (5-10cm), Small (<5cm), Micro.
-    3. DENSITY/COVERAGE: High (Packed), Medium, Low (Sparse/Open Ground).
-    4. KEY ELEMENTS: List specific motifs (e.g. 'Watercolor Peony', 'Chevron', 'Paisley').
-    5. TECHNIQUE: Vector, Watercolor, Ikat, Screen Print, Digital.
-    6. COLORS: Extract up to 5 dominant colors with names and hex codes.
-    
+    1. MOTIF: Floral, Geometric, Animal, Abstract.
+    2. STYLE: Watercolor, Vector, Vintage, Modern.
+    3. COLORS: Dominant colors.
+
     OUTPUT JSON:
     { 
-        "prompt": "High-fidelity generation prompt for a Seamless Repeat Pattern matching this style exactly.", 
-        "colors": [{"name": "Pantone-ish Name", "hex": "#RRGGBB"}], 
-        "technicalSpecs": { 
-            "repeat": "Half-Drop/Block/etc", 
-            "scale": "Large/Medium/Small", 
-            "density": "High/Low",
-            "elements": ["Element 1", "Element 2"],
-            "technique": "Vector/Watercolor"
-        },
-        "searchQuery": "Optimized search query for digital pattern marketplaces (e.g. 'Watercolor floral seamless pattern half-drop')"
+        "prompt": "Generation prompt for this pattern.", 
+        "colors": [{"name": "Color", "hex": "#000"}], 
+        "technicalSpecs": { "technique": "Vector/Watercolor", "elements": ["Flower"] },
+        "searchQuery": "Simple query (e.g. 'Blue floral seamless pattern')"
     }
     `;
 
@@ -40,47 +30,37 @@ export const analyzeSurfaceDesign = async (apiKey, mainImageBase64, mainMimeType
     const visionRes = await fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(visionPayload) });
     const visionData = await visionRes.json();
     const text = visionData.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!text) throw new Error("Falha na análise da estampa");
-    
+    if (!text) throw new Error("Falha na análise");
     return JSON.parse(cleanJson(text));
 };
 
 export const getSurfaceMarketplaces = (analysis) => {
-    const baseQuery = analysis.searchQuery || `${analysis.technicalSpecs.technique} ${analysis.technicalSpecs.elements[0]} pattern`;
+    const baseQuery = analysis.searchQuery;
     
-    const createMarketLink = (source, type, urlBase, querySuffix, boost) => ({
-        source,
-        patternName: `${analysis.technicalSpecs.elements[0]} (${type})`, 
+    // Identidade Visual por Marketplace
+    const createMarketLink = (storeName, type, urlBase, visualStyle, boost) => ({
+        source: storeName,
+        patternName: `${analysis.technicalSpecs.elements[0]} Print`, 
         type,
         linkType: "SEARCH_QUERY",
-        url: `${urlBase}${encodeURIComponent(baseQuery + " " + querySuffix)}`,
-        // Backup Termo ÚNICO: Inclui o NOME DA FONTE (ex: Patternbank) explicitamente
-        // Isso força o Bing a buscar imagens associadas àquele marketplace específico, evitando duplicatas
-        backupSearchTerm: `"${source}" ${baseQuery} seamless pattern texture swatch`, 
+        url: `${urlBase}${encodeURIComponent(baseQuery)}`,
+        // Backup Term força imagens diferentes: Spoonflower mostra tecido, Creative Market mostra arte digital
+        backupSearchTerm: `"${storeName}" ${baseQuery} ${visualStyle}`, 
         similarityScore: 90 + boost,
         imageUrl: null 
     });
 
-    // MATRIZ DE MARKETPLACES DE DESIGN TÊXTIL (DIGITAL)
-    const patternMarketplaces = [
-        // Marketplaces Globais (Premium)
-        { name: "Patternbank", type: "PREMIUM", url: "https://patternbank.com/designs?search=", suffix: "", boost: 2 },
-        { name: "Print Pattern Repeat", type: "STUDIO", url: "https://printpatternrepeat.com/?s=", suffix: "", boost: 1 },
-        { name: "Pattern Design", type: "EUROPE", url: "https://patterndesigns.com/en/search/", suffix: "", boost: 0 },
-        
-        // Marketplaces Independentes & Vetores
-        { name: "Creative Market", type: "INDIE", url: "https://creativemarket.com/search?q=", suffix: "seamless pattern", boost: 1 },
-        { name: "VectorStock", type: "VETOR", url: "https://www.vectorstock.com/royalty-free-vectors/", suffix: "seamless pattern vector", boost: 0 },
-        { name: "Depositphotos", type: "STOCK", url: "https://depositphotos.com/stock-photos/", suffix: "seamless pattern", boost: -1 },
-        { name: "Adobe Stock", type: "PRO", url: "https://stock.adobe.com/search?k=", suffix: "seamless pattern", boost: -1 },
-        
-        // Ferramentas & Freemium
-        { name: "Vecteezy", type: "FREE/PAID", url: "https://www.vecteezy.com/free-vector/", suffix: "seamless pattern", boost: -1 },
-        { name: "Etsy Digital", type: "DIGITAL", url: "https://www.etsy.com/search?q=", suffix: "digital seamless pattern commercial license", boost: 0 },
-        { name: "Spoonflower", type: "FABRIC", url: "https://www.spoonflower.com/en/shop?on=fabric&q=", suffix: "", boost: 0 },
-        { name: "Patterncooler", type: "TOOL", url: "https://www.google.com/search?q=site:patterncooler.com+", suffix: "", boost: -5 }
-    ];
+    const matches = [];
 
-    return patternMarketplaces.map(store => createMarketLink(store.name, store.type, store.url, store.suffix, store.boost));
+    // Foco em Arte Digital Limpa
+    matches.push(createMarketLink("Patternbank", "PREMIUM", "https://patternbank.com/designs?search=", "textile design print close-up", 2));
+    matches.push(createMarketLink("Creative Market", "INDIE", "https://creativemarket.com/search?q=", "digital paper background texture", 1));
+    matches.push(createMarketLink("Shutterstock", "STOCK", "https://www.shutterstock.com/search/", "seamless pattern vector flat", 0));
+    
+    // Foco em Tecido Real / Textura
+    matches.push(createMarketLink("Spoonflower", "FABRIC", "https://www.spoonflower.com/en/shop?on=fabric&q=", "printed fabric swatch zoom", 1));
+    matches.push(createMarketLink("Etsy Digital", "MKT", "https://www.etsy.com/search?q=", "digital paper pack", 1));
+    matches.push(createMarketLink("Adobe Stock", "PRO", "https://stock.adobe.com/search?k=", "background texture wallpaper", 0));
+
+    return matches;
 };

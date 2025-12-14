@@ -1,13 +1,12 @@
 
 // api/modules/scraper.js
-// ESPECIALIDADE: Web Scraping, Busca de Imagens no Bing & Link Preview
+// ESPECIALIDADE: Web Scraping & Busca Inteligente
 
 export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceImage, apiKey, cleanJson) => {
     
     const browserHeaders = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Cache-Control': 'no-cache'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
     };
 
     const fetchHtml = async (url) => {
@@ -17,20 +16,14 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return await response.text();
-        } catch (e) {
-            return null;
-        }
+        } catch (e) { return null; }
     };
 
-    // SUB-ROTINA: Busca no Bing (Otimizada para Texturas)
+    // SUB-ROTINA: Busca no Bing (Diversificada)
     const fetchCandidatesFromBing = async (term) => {
         if (!term) return [];
-        
-        // Limpeza e Foco em Textura/Close-up
-        const cleanTerm = term.replace(/seamless pattern/gi, '').trim();
-        // Adiciona "texture zoom" ou "swatch" para buscar o detalhe da estampa
-        const query = `${cleanTerm} seamless pattern texture swatch close-up`; 
-        
+        // Termo limpo mas mantendo a "assinatura" da loja (ex: "model", "envelope")
+        const query = term.replace(/sewing pattern/gi, 'pattern').trim();
         const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
         const html = await fetchHtml(searchUrl);
         if (!html) return [];
@@ -39,33 +32,38 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         const regex = /murl&quot;:&quot;(https?:\/\/[^&]+)&quot;.*?&quot;t&quot;:&quot;([^&]+)&quot;/g;
         let match;
         let count = 0;
-        
-        while ((match = regex.exec(html)) !== null && count < 6) {
+        while ((match = regex.exec(html)) !== null && count < 8) {
             candidates.push({ url: match[1], title: match[2] });
             count++;
         }
         return candidates;
     };
 
-    // SUB-ROTINA: Juiz Visual (IA)
-    const selectBestMatchAI = async (candidates, userRefImage) => {
+    // SUB-ROTINA: Juiz Visual (IA) - Relaxado para "Vibe Match"
+    const selectBestMatchAI = async (candidates, userRefImage, diversityOffset) => {
         if (!candidates || candidates.length === 0) return null;
-        if (!userRefImage || !apiKey) return candidates[0].url; 
+        if (!userRefImage || !apiKey) {
+            // LÓGICA DE DIVERSIDADE DETERMINÍSTICA (SEM IA)
+            // Se não tiver imagem de referência, usa o offset para garantir
+            // que lojas diferentes peguem resultados diferentes (0, 1, ou 2)
+            const safeIndex = diversityOffset % Math.min(candidates.length, 3);
+            return candidates[safeIndex].url;
+        }
 
         try {
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const candidatesText = candidates.map((c, i) => `ID ${i}: ${c.title}`).join('\n');
             
-            // Prompt focado em Texturas e Cores
+            // Prompt relaxado: "Diferenciar bastante desde que lembre bem"
             const JUDGE_PROMPT = `
-            TASK: Visual Texture Matcher.
-            INPUT: User Reference Texture + Candidate Images.
-            GOAL: Select the image ID that matches the COLOR PALETTE and MOTIF STYLE (e.g., Floral, Geometric).
+            TASK: Select the best image.
+            CONTEXT: The user wants to buy a product similar to the reference.
             
-            RULES: 
-            1. REJECT generic logos, mockups of mugs/pillows if a flat texture is available.
-            2. PREFER flat lay texture swatches.
-            3. Must match the visual vibe of the user image.
+            RULES:
+            1. LOOK FOR: High quality product photos (Models for clothes, Swatches for fabric).
+            2. AVOID: Generic logos, blurry text, pixelated icons.
+            3. VIBE MATCH: It doesn't need to be identical. If the reference is a floral dress, pick any nice floral dress pattern.
+            4. DIVERSITY: Prefer an image that looks distinct and specific to the search term "${backupSearchTerm}".
             
             CANDIDATES:
             ${candidatesText}
@@ -87,83 +85,77 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             const data = await response.json();
             const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
             const decision = JSON.parse(cleanJson(text));
-            const bestIndex = decision.bestId !== undefined ? decision.bestId : 0;
-            return candidates[bestIndex] ? candidates[bestIndex].url : candidates[0].url;
+            
+            // Se a IA retornar erro ou ID inválido, usa o offset de diversidade
+            let bestIndex = decision.bestId !== undefined ? decision.bestId : 0;
+            if (!candidates[bestIndex]) bestIndex = 0;
+            
+            return candidates[bestIndex].url;
 
         } catch (e) {
-            return candidates[0].url;
+            // Fallback com diversidade
+            const safeIndex = diversityOffset % Math.min(candidates.length, 3);
+            return candidates[safeIndex].url;
         }
     };
 
-    // --- LÓGICA PRINCIPAL DO CRAWLER CIRÚRGICO ---
+    // --- LÓGICA PRINCIPAL ---
     let imageUrl = null;
     
-    // 1. TENTATIVA DIRETA NO SITE (Seletores de Marketplaces de Design)
+    // 1. TENTATIVA DIRETA (Seletores específicos)
     const html = await fetchHtml(targetUrl);
-    
     if (html) {
-        // MAPA DE SELETORES ESPECÍFICOS (Surface Design)
+        // Seletores otimizados para principais lojas
         const storeSelectors = [
-            // Patternbank (Geralmente divs com background ou img tags específicas)
-            { domain: 'patternbank.com', regex: /<img[^>]+class="[^"]*design-image[^"]*"[^>]+src="([^"]+)"/i },
-            // Spoonflower (Muitas vezes usa classes product-image)
-            { domain: 'spoonflower.com', regex: /<img[^>]+class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i },
-            // Creative Market
-            { domain: 'creativemarket.com', regex: /<img[^>]+class="[^"]*product-card-img[^"]*"[^>]+src="([^"]+)"/i },
-            // Adobe Stock / Shutterstock (Thumbnails)
-            { domain: 'stock.adobe.com', regex: /<img[^>]+itemprop="thumbnailUrl"[^>]+src="([^"]+)"/i },
-            { domain: 'shutterstock.com', regex: /<img[^>]+data-src="([^"]+)"[^>]+class="[^"]*jss[^"]*"/i },
-            // Etsy (Reuso do seletor de clothing, mas funciona pra digital)
-            { domain: 'etsy.com', regex: /v2-listing-card__img[\s\S]*?src="([^"]+)"/i },
-            // Design Bundles
-            { domain: 'designbundles.net', regex: /<img[^>]+class="product-image[^"]*"[^>]+src="([^"]+)"/i },
-            // Genérico E-commerce (WooCommerce/Shopify grids)
-            { domain: '', regex: /<img[^>]+class="[^"]*(grid-view-item__image|product-card__image|woocommerce-loop-product__link)[^"]*"[^>]+src="([^"]+)"/i }
+            { domain: 'patternbank', regex: /<img[^>]+class="[^"]*design-image[^"]*"[^>]+src="([^"]+)"/i },
+            { domain: 'spoonflower', regex: /<img[^>]+class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i },
+            { domain: 'simplicity', regex: /<img[^>]+class="card-image[^"]*"[^>]+src="([^"]+)"/i },
+            { domain: 'burdastyle', regex: /<img[^>]+class="product-image-photo[^"]*"[^>]+src="([^"]+)"/i },
+            { domain: 'etsy', regex: /v2-listing-card__img[\s\S]*?src="([^"]+)"/i },
+            // Genérico E-commerce (pega a primeira imagem de produto do grid)
+            { domain: '', regex: /<img[^>]+src="([^"]+)"[^>]+class="[^"]*(product|item|card|grid)[^"]*"[^>]*>/i }
         ];
 
         const activeSelector = storeSelectors.find(s => targetUrl.includes(s.domain) && s.domain !== '');
-        
         if (activeSelector) {
             const match = html.match(activeSelector.regex);
             if (match && match[1]) imageUrl = match[1];
         }
-
-        // Fallback Genérico de Grid (Evita Logos)
+        
+        // Seletor Genérico se falhar o específico
         if (!imageUrl) {
-            const productImgRegex = /<img[^>]+src="([^"]+)"[^>]+class="[^"]*(product|item|card|grid|result)[^"]*"[^>]*>/i;
-            const match = html.match(productImgRegex);
-            
-            // Backup: Imagens quadradas médias (padrão de thumbnails de pattern)
-            const backupGridRegex = /<img[^>]+src="([^"]+)"[^>]+alt="[^"]*"[^>]*width="[2-9][0-9][0-9]"[^>]*>/i;
-            
-            if (match && match[1] && !match[1].includes('logo') && !match[1].includes('icon')) {
-                imageUrl = match[1];
-            } else {
-                 const match2 = html.match(backupGridRegex);
-                 if (match2 && match2[1]) imageUrl = match2[1];
-            }
+             const genericMatch = html.match(storeSelectors[storeSelectors.length-1].regex);
+             if (genericMatch && genericMatch[1] && !genericMatch[1].includes('logo')) imageUrl = genericMatch[1];
         }
     }
 
-    // 2. FALLBACK PARA BING (Apenas se falhar extração direta)
-    if ((!imageUrl || imageUrl.includes('logo') || imageUrl.includes('.svg') || imageUrl.length < 20) && backupSearchTerm) {
+    // 2. FALLBACK PARA BING (Com Diversidade Forçada)
+    if ((!imageUrl || imageUrl.includes('logo') || imageUrl.length < 20) && backupSearchTerm) {
         const candidates = await fetchCandidatesFromBing(backupSearchTerm);
         if (candidates.length > 0) {
+            // Cálculo do Offset de Diversidade baseado no domínio
+            // Ex: "simplicity.com".length = 14 -> offset 2
+            // Ex: "etsy.com".length = 8 -> offset 2
+            // Ex: "burda".length = 5 -> offset 2
+            // Usamos o CharCode do primeiro caractere para variar mais
+            let domainHash = 0;
+            try { domainHash = new URL(targetUrl).hostname.charCodeAt(0); } catch(e) { domainHash = 1; }
+            const diversityOffset = domainHash % 3;
+
             if (userReferenceImage && apiKey) {
-                imageUrl = await selectBestMatchAI(candidates, userReferenceImage);
+                imageUrl = await selectBestMatchAI(candidates, userReferenceImage, diversityOffset);
             } else {
-                imageUrl = candidates[0].url;
+                // Sem IA: Usa a matemática para escolher imagens diferentes para lojas diferentes
+                imageUrl = candidates[diversityOffset % candidates.length].url;
             }
         }
     }
 
-    // Limpeza Final da URL
+    // Limpeza Final
     if (imageUrl) {
         imageUrl = imageUrl.replace(/&amp;/g, '&');
         if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-        if (imageUrl.includes('etsystatic')) {
-            imageUrl = imageUrl.replace('340x270', '794xN').replace('il_fullxfull', 'il_794xN');
-        }
+        if (imageUrl.includes('etsystatic')) imageUrl = imageUrl.replace('340x270', '794xN');
     }
     
     return imageUrl;

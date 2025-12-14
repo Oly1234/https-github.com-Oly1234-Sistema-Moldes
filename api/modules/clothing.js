@@ -4,26 +4,23 @@
 
 export const analyzeClothingDna = async (apiKey, mainImageBase64, mainMimeType, cleanJson) => {
     const SEARCH_GEN_PROMPT = `
-    ACT AS: Senior Pattern Maker & Garment Technologist.
-    TASK: Analyze the garment image to find the exact sewing pattern available for purchase.
+    ACT AS: Senior Pattern Maker.
+    TASK: Analyze the garment to find the exact sewing pattern style.
     
     ANALYSIS REQUIRED:
-    1. SILHOUETTE: (e.g., A-line, Sheath, Wrap, Empire).
-    2. NECKLINE: (e.g., V-neck, Boat, Cowl, Sweetheart).
-    3. SLEEVE: (e.g., Raglan, Set-in, Bishop, Cap).
-    4. LENGTH: (e.g., Mini, Midi, Maxi, Floor).
-    5. FABRIC SUGGESTION: (e.g., Chiffon, Heavy Cotton, Jersey).
-    6. COMPLEXITY: Beginner, Intermediate, Advanced.
+    1. CATEGORY: Dress, Top, Skirt, Pants, Coat.
+    2. KEY FEATURE 1: (e.g. Puff Sleeve, Raglan, Pleated).
+    3. KEY FEATURE 2: (e.g. V-Neck, Wrap, Empire Waist).
+    4. VIBE: Vintage, Modern, Boho, Minimalist.
 
     OUTPUT JSON:
     { 
-        "patternName": "Technical Name (e.g. 'Wrap Dress with Bishop Sleeves')", 
-        "category": "Dress/Top/Pants",
+        "patternName": "Concise Name (e.g. 'Boho Wrap Dress')", 
         "technicalDna": { 
             "silhouette": "...", "neckline": "...", "sleeve": "...", 
             "length": "...", "fit": "...", "fabric": "..." 
         }, 
-        "searchQuery": "Optimized English query for pattern shops (e.g. 'Boho wrap dress sewing pattern pdf')" 
+        "searchQuery": "General search terms (e.g. 'Wrap dress sewing pattern')" 
     }
     `;
 
@@ -42,63 +39,48 @@ export const analyzeClothingDna = async (apiKey, mainImageBase64, mainMimeType, 
 };
 
 export const getClothingStores = (analysis) => {
-    const mainQuery = analysis.searchQuery || `${analysis.patternName} sewing pattern`;
-    const shortName = analysis.patternName;
+    const baseTerm = analysis.patternName; // Ex: Boho Wrap Dress
 
-    // Função de criação de link com termo de backup ÚNICO e ESPECÍFICO por Marca
-    const createRealLink = (source, type, urlBase, termQuery, score) => ({
-        source, 
-        patternName: shortName, 
-        type, 
-        linkType: "SEARCH_QUERY",
-        url: `${urlBase}${encodeURIComponent(termQuery)}`,
-        // Backup Term inclui explicitamente a MARCA no início para diversificar os resultados visuais no Bing
-        backupSearchTerm: `"${source}" ${shortName} sewing pattern envelope`, 
-        similarityScore: score, 
-        imageUrl: null 
-    });
-
-    // MATRIZ DE LOJAS DE MOLDES (CLOTHING PATTERNS)
-    const stores = [
-        // 1. Clássicos & Editoras (Alta Precisão)
-        { name: "Simplicity", type: "USA", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: 2 },
-        { name: "Burda Style", type: "GER", url: "https://www.burdastyle.com/catalogsearch/result/?q=", group: "exact", boost: 2 },
-        { name: "Vogue Patterns", type: "USA", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: 1 },
-        { name: "McCall's", type: "USA", url: "https://simplicity.com/search.php?search_query=", group: "exact", boost: 1 },
+    // Função que cria uma identidade visual para a busca de backup
+    const createStoreLink = (storeName, type, urlBase, visualStyle, boost) => {
+        // Estratégia de Termo Único:
+        // [Nome da Loja] + [Nome do Molde] + [Estilo Visual Desejado]
+        // Ex: "Burda Style Boho Wrap Dress magazine photo"
+        const specificBackupTerm = `"${storeName}" ${baseTerm} sewing pattern ${visualStyle}`;
         
-        // 2. Indies Premium & Modernos
-        { name: "Tilly and the Buttons", type: "UK", url: "https://shop.tillyandthebuttons.com/search?q=", group: "exact", boost: 1 },
-        { name: "Papercut Patterns", type: "NZ", url: "https://papercutpatterns.com/search?q=", group: "close", boost: 1 },
-        { name: "Sew Over It", type: "UK", url: "https://sewoverit.com/?s=", group: "close", boost: 1 },
-        { name: "Thread Theory", type: "MENS", url: "https://threadtheory.ca/search?q=", group: "close", boost: 0 },
-        { name: "The Fold Line", type: "UK/MKT", url: "https://thefoldline.com/?s=", group: "close", boost: 2 },
-        { name: "Vikisews", type: "RU/US", url: "https://vikisews.com/search/?q=", group: "exact", boost: 1 },
-        
-        // 3. Grátis & Comunidade
-        { name: "FreeSewing", type: "OPEN", url: "https://freesewing.org/search/?q=", group: "exact", boost: 0 },
-        { name: "Dr-Cos", type: "JP/COS", url: "https://dr-cos.info/?s=", group: "adventurous", boost: -1 },
-        { name: "Pattydoo", type: "GER", url: "https://www.pattydoo.de/en/search?s=", group: "close", boost: 0 },
-        { name: "Grasser", type: "RU", url: "https://en-grasser.com/search/?q=", group: "exact", boost: 0 },
-        { name: "Mood Fabrics", type: "FREE", url: "https://www.moodfabrics.com/blog/?s=", group: "close", boost: 1 },
-        
-        // 4. Sob Medida & CAD
-        { name: "Lekala", type: "CAD", url: "https://www.lekala.co/catalog?q=", group: "exact", boost: -1 },
-        { name: "Sewist", type: "CAD", url: "https://www.sewist.com/search?q=", group: "exact", boost: -1 },
-        
-        // 5. Marketplaces Globais
-        { name: "Etsy Global", type: "MKT", url: "https://www.etsy.com/search?q=", group: "exact", boost: 1 },
-        { name: "Makerist", type: "EU", url: "https://www.makerist.com/search?q=", group: "close", boost: 0 },
-        { name: "Google Shopping", type: "GERAL", url: "https://www.google.com/search?tbm=shop&q=", group: "adventurous", boost: -2 }
-    ];
+        return {
+            source: storeName,
+            patternName: baseTerm,
+            type,
+            linkType: "SEARCH_QUERY",
+            url: `${urlBase}${encodeURIComponent(analysis.searchQuery)}`,
+            backupSearchTerm: specificBackupTerm, 
+            similarityScore: 90 + boost,
+            imageUrl: null
+        };
+    };
 
     const matches = { exact: [], close: [], adventurous: [] };
-    stores.forEach(store => {
-        let score = 90 + store.boost;
-        if (store.group === 'close') score = 80 + store.boost;
-        if (store.group === 'adventurous') score = 70 + store.boost;
-        const link = createRealLink(store.name, store.type, store.url, mainQuery, score);
-        matches[store.group].push(link);
-    });
+
+    // 1. EXACT (Marcas Oficiais - Foco em Capas de Envelope e Modelos Reais)
+    matches.exact.push(createStoreLink("Simplicity", "USA", "https://simplicity.com/search.php?search_query=", "model wearing dress", 2));
+    matches.exact.push(createStoreLink("Burda Style", "GER", "https://www.burdastyle.com/catalogsearch/result/?q=", "magazine model photo", 2));
+    matches.exact.push(createStoreLink("Vogue Patterns", "USA", "https://simplicity.com/search.php?search_query=", "fashion photography", 1));
+    matches.exact.push(createStoreLink("McCall's", "USA", "https://simplicity.com/search.php?search_query=", "envelope cover model", 1));
+    matches.exact.push(createStoreLink("Vikisews", "RU", "https://vikisews.com/search/?q=", "garment photoshoot", 1));
+
+    // 2. CLOSE (Indies e Modernos - Foco em Fotos de Usuários ou Capas Artísticas)
+    matches.close.push(createStoreLink("The Fold Line", "UK", "https://thefoldline.com/?s=", "pattern cover", 2));
+    matches.close.push(createStoreLink("Tilly and the Buttons", "UK", "https://shop.tillyandthebuttons.com/search?q=", "real person wearing", 1));
+    matches.close.push(createStoreLink("Papercut Patterns", "NZ", "https://papercutpatterns.com/search?q=", "model editorial", 1));
+    matches.close.push(createStoreLink("Sew Over It", "UK", "https://sewoverit.com/?s=", "finished garment", 1));
+    matches.close.push(createStoreLink("Mood Fabrics", "FREE", "https://www.moodfabrics.com/blog/?s=", "sewn garment photo", 1));
+
+    // 3. ADVENTUROUS (Marketplaces - Foco em Variedade)
+    matches.adventurous.push(createStoreLink("Etsy", "MKT", "https://www.etsy.com/search?q=", "sewing pattern photo", 1));
+    matches.adventurous.push(createStoreLink("Makerist", "EU", "https://www.makerist.com/search?q=", "pattern usage photo", 0));
+    matches.adventurous.push(createStoreLink("Lekala", "CAD", "https://www.lekala.co/catalog?q=", "technical drawing garment", -1));
+    matches.adventurous.push(createStoreLink("Google Shopping", "WEB", "https://www.google.com/search?tbm=shop&q=", "garment", -2));
 
     return matches;
 };
