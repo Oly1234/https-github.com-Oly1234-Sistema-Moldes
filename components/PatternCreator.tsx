@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2, Settings2, Check } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2, Settings2, Check, Printer } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -11,7 +11,7 @@ interface GeneratedAsset {
     prompt: string;
     layout: string;
     timestamp: number;
-    specs: { width: number; height: number };
+    specs: { width: number; height: number; dpi: number };
 }
 
 // Modal Flutuante para Comparação
@@ -164,6 +164,7 @@ export const PatternCreator: React.FC = () => {
     const [selvedgePos, setSelvedgePos] = useState<'Inferior' | 'Superior' | 'Esquerda' | 'Direita'>('Inferior');
     const [widthCm, setWidthCm] = useState<number>(140);
     const [heightCm, setHeightCm] = useState<number>(100);
+    const [dpi, setDpi] = useState<number>(72); // Default Web Quality
     const [userInstruction, setUserInstruction] = useState<string>(''); // Texto do usuário
 
     // Resultados
@@ -175,6 +176,13 @@ export const PatternCreator: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // --- HELPER DE CÁLCULO DE PIXELS ---
+    const calculatePixels = () => {
+        const wPx = Math.round((widthCm / 2.54) * dpi);
+        const hPx = Math.round((heightCm / 2.54) * dpi);
+        return `${wPx}x${hPx}px`;
+    };
 
     // --- HANDLERS ---
 
@@ -284,6 +292,7 @@ export const PatternCreator: React.FC = () => {
                         selvedge: selvedgePos,
                         width: widthCm,
                         height: heightCm,
+                        dpi: dpi, // Passa DPI para o backend
                         styleGuide: technicalSpecs?.restorationInstructions || 'High quality vector style'
                     }
                 })
@@ -297,7 +306,7 @@ export const PatternCreator: React.FC = () => {
                     prompt: prompt,
                     layout: layoutType,
                     timestamp: Date.now(),
-                    specs: { width: widthCm, height: heightCm }
+                    specs: { width: widthCm, height: heightCm, dpi: dpi }
                 };
                 setHistory(prev => [newAsset, ...prev]);
 
@@ -314,7 +323,7 @@ export const PatternCreator: React.FC = () => {
     const handleDownload = (imgUrl: string = generatedPattern!) => {
         if (!imgUrl) return;
         const link = document.createElement('a');
-        link.download = `vingi-${layoutType.toLowerCase()}-${Date.now()}.jpg`;
+        link.download = `vingi-${layoutType.toLowerCase()}-${dpi}dpi-${Date.now()}.jpg`;
         link.href = imgUrl;
         link.click();
     };
@@ -324,6 +333,7 @@ export const PatternCreator: React.FC = () => {
         setLayoutType(asset.layout as any);
         setWidthCm(asset.specs.width);
         setHeightCm(asset.specs.height);
+        setDpi(asset.specs.dpi || 72);
         setGenError(null);
     };
 
@@ -340,12 +350,12 @@ export const PatternCreator: React.FC = () => {
             {/* --- MODAL DE SETUP (WIZARD) --- */}
             {showSetupModal && (
                 <div className="fixed inset-0 z-[100] bg-vingi-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
-                        <div className="bg-gray-50 border-b border-gray-100 p-4 flex justify-between items-center">
+                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+                        <div className="bg-gray-50 border-b border-gray-100 p-4 flex justify-between items-center shrink-0">
                             <h3 className="font-bold text-gray-800 flex items-center gap-2"><Settings2 size={18} className="text-vingi-500"/> Configuração de Estampa</h3>
                             <button onClick={() => setShowSetupModal(false)} className="text-gray-400 hover:text-red-500"><Settings2 size={18} className="rotate-45"/></button>
                         </div>
-                        <div className="p-6 space-y-6">
+                        <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                             
                             {/* 1. Preview Rápido */}
                             <div className="flex items-center gap-4 bg-blue-50 p-3 rounded-xl border border-blue-100">
@@ -374,7 +384,32 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 3. Layout */}
+                            {/* 3. Resolução (DPI) - NOVO */}
+                            <div>
+                                <div className="flex justify-between items-end mb-2">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">Resolução (Qualidade)</label>
+                                    <span className="text-[10px] text-vingi-600 font-mono bg-vingi-50 px-2 py-0.5 rounded">{calculatePixels()}</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button onClick={() => setDpi(72)} className={`py-2 rounded-lg border text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${dpi === 72 ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        <Globe size={14}/> 
+                                        <span>72 DPI</span>
+                                        <span className="text-[8px] opacity-60 font-normal">Web/Rascunho</span>
+                                    </button>
+                                    <button onClick={() => setDpi(150)} className={`py-2 rounded-lg border text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${dpi === 150 ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        <Printer size={14}/> 
+                                        <span>150 DPI</span>
+                                        <span className="text-[8px] opacity-60 font-normal">Têxtil Std</span>
+                                    </button>
+                                    <button onClick={() => setDpi(300)} className={`py-2 rounded-lg border text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all ${dpi === 300 ? 'bg-vingi-900 text-white border-vingi-900 shadow-md ring-1 ring-vingi-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        <Sparkles size={14} className="text-yellow-400"/> 
+                                        <span>300 DPI</span>
+                                        <span className="text-[8px] opacity-60 font-normal">Alta Definição</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 4. Layout */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Estrutura do Layout</label>
                                 <div className="grid grid-cols-3 gap-2">
@@ -390,7 +425,7 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 4. Texto Opcional */}
+                            {/* 5. Texto Opcional */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Instruções para a IA (Opcional)</label>
                                 <textarea 
@@ -402,7 +437,7 @@ export const PatternCreator: React.FC = () => {
                                 <p className="text-[10px] text-gray-400 mt-1 text-right">Deixe vazio para usar apenas a imagem.</p>
                             </div>
                             
-                            <button onClick={confirmSetupAndAnalyze} className="w-full py-4 bg-vingi-900 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-vingi-800 transition-transform active:scale-95">
+                            <button onClick={confirmSetupAndAnalyze} className="w-full py-4 bg-vingi-900 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-vingi-800 transition-transform active:scale-95 shrink-0">
                                 <Check size={18} /> CONFIRMAR & ANALISAR
                             </button>
                         </div>
@@ -477,6 +512,15 @@ export const PatternCreator: React.FC = () => {
                                                 <input type="number" value={heightCm} readOnly className="w-full py-2 text-sm font-bold text-gray-800 outline-none bg-transparent cursor-not-allowed"/>
                                                 <span className="text-[10px] text-gray-400 font-bold">CM</span>
                                             </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Resolução Exibida */}
+                                    <div className="mb-4">
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Resolução de Saída</label>
+                                        <div className="flex justify-between items-center bg-white border border-gray-200 rounded-lg p-2 opacity-80">
+                                            <span className="text-xs font-bold text-gray-700">{dpi} DPI</span>
+                                            <span className="text-[9px] font-mono text-gray-400">{calculatePixels()}</span>
                                         </div>
                                     </div>
 
@@ -565,7 +609,7 @@ export const PatternCreator: React.FC = () => {
                                     <Sparkles size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-purple-600 animate-pulse"/>
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-700 mt-6">Atelier Trabalhando...</h3>
-                                <p className="text-sm text-gray-400">Calculando layout {layoutType} ({widthCm}x{heightCm}cm)...</p>
+                                <p className="text-sm text-gray-400">Calculando layout {layoutType} ({widthCm}x{heightCm}cm) em {dpi} DPI...</p>
                              </div>
                         ) : (
                             <div className="w-full max-w-4xl animate-fade-in flex flex-col md:flex-row gap-8 items-center">
@@ -580,6 +624,7 @@ export const PatternCreator: React.FC = () => {
                                     <div className="flex gap-2">
                                         <span className="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded uppercase">{layoutType}</span>
                                         <span className="px-2 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded uppercase">{widthCm}x{heightCm}cm</span>
+                                        <span className="px-2 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded uppercase">{dpi} DPI</span>
                                         {layoutType === 'Barrada' && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">Barra {selvedgePos}</span>}
                                     </div>
                                     <p className="text-gray-500 text-sm">Estampa gerada respeitando a área útil e direção da ourela solicitada. Pronta para plotagem ou sublimação.</p>

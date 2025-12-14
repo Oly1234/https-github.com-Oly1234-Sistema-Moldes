@@ -9,7 +9,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
 
     // 2. Desconstrução das Specs
     // 'styleGuide' substitui 'restoration' para focar em criação
-    const { layout = "Corrida", selvedge = "Inferior", width = 140, height = 100, styleGuide = "Clean lines" } = textileSpecs || {};
+    const { layout = "Corrida", selvedge = "Inferior", width = 140, height = 100, styleGuide = "Clean lines", dpi = 72 } = textileSpecs || {};
     
     const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious colors';
 
@@ -38,6 +38,15 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         `;
     }
 
+    // AJUSTE DE QUALIDADE BASEADO EM DPI (PRO MODE)
+    // Se o DPI for alto (>=150), forçamos um estilo vetorizado/limpo que permita Upscaling sem perda (SVG-like).
+    let qualityPrompt = "Style: Vector illustration style, flat lighting, high definition.";
+    if (dpi >= 300) {
+        qualityPrompt = "Style: ULTRA-HIGH DEFINITION, 8K, Vector Art, Sharp Edges, No Noise, Professional Print Quality. Optimized for upscaling.";
+    } else if (dpi >= 150) {
+        qualityPrompt = "Style: High definition textile print, clear lines, standard print quality.";
+    }
+
     // Prompt Otimizado para evitar Safety Blocks e erros de formato
     const finalPrompt = `
     Create a professional textile pattern design file.
@@ -49,7 +58,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     
     Quality Standards (Auto-Restoration):
     - ${styleGuide}
-    - Style: Vector illustration style, flat lighting, high definition.
+    - ${qualityPrompt}
     - Output: A single high-quality texture tile.
     `;
 
