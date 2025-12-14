@@ -1,6 +1,7 @@
 
 // api/modules/scraper.js
-// ESPECIALIDADE: Web Scraping & Busca Inteligente
+// DEPARTAMENTO: INTELIGÊNCIA VISUAL & SCRAPING
+// RESPONSÁVEL: Vingi Scout (O Perdigueiro)
 
 export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceImage, apiKey, cleanJson) => {
     
@@ -25,8 +26,8 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         
         let query = term.replace(/sewing pattern/gi, 'pattern').trim();
         
-        // NOVA TECNOLOGIA: Busca Dedicada por Site
-        // Se tivermos o domínio, forçamos a busca DENTRO dele primeiro
+        // FORÇAR BUSCA DEDICADA: Isso garante que a imagem venha do site correto
+        // Exemplo: 'site:patternbank.com "Watercolor tropical"'
         if (specificDomain) {
             query += ` site:${specificDomain}`;
         }
@@ -46,7 +47,7 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         return candidates;
     };
 
-    // SUB-ROTINA: Juiz Visual (IA) - Modo Estrito
+    // SUB-ROTINA: O Curador Visual (IA)
     const selectBestMatchAI = async (candidates, userRefImage) => {
         if (!candidates || candidates.length === 0) return null;
         if (!userRefImage || !apiKey) return candidates[0].url;
@@ -55,20 +56,19 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const candidatesText = candidates.map((c, i) => `ID ${i}: ${c.title}`).join('\n');
             
-            // PROMPT ATUALIZADO: Foco em "Gêmeo Visual"
-            const JUDGE_PROMPT = `
-            ACT AS: Strict Visual Curator.
-            TASK: Pick the image that is the "Visual Twin" of the User Reference.
+            // PROMPT DO PERDIGUEIRO: Foco em encontrar o "Gêmeo Visual"
+            const SCOUT_PROMPT = `
+            ACT AS: Visual Scout.
+            TASK: Match the User's Reference Image with the best Search Result.
             
             INPUT:
-            - Reference Image (User's photo)
-            - Candidate List (Search results)
+            - Reference Image (The visual target).
+            - Candidate List (Images found on the web).
 
-            RULES:
-            1. LINK DEDICATION: We prefer images that look like they belong to the specific store listed in the title.
-            2. VISUAL MATCH: Match the COLOR, SHAPE, and ANGLE of the reference.
-            3. IGNORE: Icons, Logos, Text-only images.
-            4. PRIORITY: If the reference is a Model wearing a dress, pick a Model wearing a dress. If it's a technical drawing, pick a drawing.
+            CRITERIA:
+            1. VISUAL TWIN: Does the candidate description sound like the reference image? (e.g. if reference is red floral, pick red floral).
+            2. DOMAIN MATCH: Prefer images that clearly belong to the store context.
+            3. IGNORE: Logos, tiny icons, text-only placeholders.
             
             CANDIDATES:
             ${candidatesText}
@@ -79,7 +79,7 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
             const payload = {
                 contents: [{
                     parts: [
-                        { text: JUDGE_PROMPT },
+                        { text: SCOUT_PROMPT },
                         { inline_data: { mime_type: "image/jpeg", data: userRefImage } } 
                     ]
                 }],
@@ -101,13 +101,12 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         }
     };
 
-    // --- LÓGICA PRINCIPAL DO SCRAPER ---
+    // --- EXECUÇÃO DO DEPARTAMENTO ---
     let imageUrl = null;
     let domain = '';
     try { domain = new URL(targetUrl).hostname; } catch(e) {}
 
-    // 1. TENTATIVA DIRETA (Seletores DOM)
-    // ... (Mantido igual para velocidade)
+    // 1. TENTATIVA RÁPIDA (Seletores Diretos no HTML)
     const html = await fetchHtml(targetUrl);
     if (html) {
         const storeSelectors = [
@@ -133,27 +132,27 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         }
     }
 
-    // 2. FALLBACK INTELIGENTE (Se falhar a direta ou for imagem ruim)
+    // 2. BUSCA DO PERDIGUEIRO (Se não achou direto ou imagem é ruim)
     if ((!imageUrl || imageUrl.includes('logo') || imageUrl.length < 20) && backupSearchTerm) {
         
-        // Estratégia A: Busca Dedicada (site:loja.com Termo)
-        // Isso garante que a imagem venha DO SITE do link
+        // Estratégia: Busca Dedicada no Bing (site:loja.com + termo)
+        // Isso força o Bing a mostrar imagens daquela loja específica que pareçam com a referência
         let candidates = [];
         if (domain && domain.length > 3 && !domain.includes('google')) {
              candidates = await fetchCandidatesFromBing(backupSearchTerm, domain);
         }
 
-        // Estratégia B: Busca Genérica (Se a dedicada falhar)
+        // Se a busca dedicada falhar, tenta busca genérica
         if (candidates.length === 0) {
              candidates = await fetchCandidatesFromBing(backupSearchTerm, null);
         }
 
         if (candidates.length > 0) {
             if (userReferenceImage && apiKey) {
-                // Passamos para a IA escolher a imagem mais parecida com a referência
+                // O Curador Visual escolhe a melhor
                 imageUrl = await selectBestMatchAI(candidates, userReferenceImage);
             } else {
-                // Fallback matemático se não tiver IA
+                // Fallback Determinístico (Espalha os resultados para não repetir a primeira foto)
                 let domainHash = 0;
                 try { domainHash = domain.charCodeAt(0); } catch(e) { domainHash = 1; }
                 const diversityOffset = domainHash % candidates.length;
@@ -162,7 +161,7 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         }
     }
 
-    // Limpeza Final
+    // Higienização Final (Estagiário da Limpeza)
     if (imageUrl) {
         imageUrl = imageUrl.replace(/&amp;/g, '&');
         if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;

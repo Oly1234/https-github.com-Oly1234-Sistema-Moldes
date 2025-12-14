@@ -1,10 +1,10 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2 } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
-// Modal Flutuante para Comparação (Reutilizado para consistência)
+// Modal Flutuante para Comparação
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     const [position, setPosition] = useState({ x: window.innerWidth - 220, y: 100 }); 
     const [size, setSize] = useState(180);
@@ -103,7 +103,11 @@ export const PatternCreator: React.FC = () => {
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
+    
+    // Resultados de Busca & Paginação
     const [fabricMatches, setFabricMatches] = useState<ExternalPatternMatch[]>([]);
+    const [visibleMatchesCount, setVisibleMatchesCount] = useState(10); 
+    
     const [technicalSpecs, setTechnicalSpecs] = useState<any>(null);
     const [genError, setGenError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -121,6 +125,7 @@ export const PatternCreator: React.FC = () => {
                     setGeneratedPattern(null);
                     setDetectedColors([]);
                     setFabricMatches([]);
+                    setVisibleMatchesCount(10); // Reset paginação
                     setTechnicalSpecs(null);
                     setPrompt('');
                     setGenError(null);
@@ -198,6 +203,9 @@ export const PatternCreator: React.FC = () => {
         link.click();
     };
 
+    // Paginação dos dados
+    const visibleData = fabricMatches.slice(0, visibleMatchesCount);
+
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden relative">
             {/* MODAL DE REFERÊNCIA FLUTUANTE */}
@@ -209,7 +217,7 @@ export const PatternCreator: React.FC = () => {
             </header>
 
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                {/* COLUNA 1: LABORATÓRIO */}
+                {/* COLUNA 1: LABORATÓRIO (DEPARTAMENTO DE CRIAÇÃO) */}
                 <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10">
                     <div className="p-6 space-y-8">
                         <div>
@@ -275,7 +283,7 @@ export const PatternCreator: React.FC = () => {
                     </div>
                 </div>
 
-                {/* COLUNA 2: RESULTADOS VISUAIS */}
+                {/* COLUNA 2: RESULTADOS VISUAIS (DEPARTAMENTO DE PESQUISA) */}
                 <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f1f5f9]">
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -313,6 +321,8 @@ export const PatternCreator: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    
+                    {/* ÁREA DE MERCADO COM PAGINAÇÃO */}
                     <div className="p-6 md:p-8">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -331,11 +341,24 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                              )
                         ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                {fabricMatches.map((match, i) => (
-                                    <PatternVisualCard key={i} match={match} userReferenceImage={referenceImage} />
-                                ))}
-                            </div>
+                            <>
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {visibleData.map((match, i) => (
+                                        <PatternVisualCard key={i} match={match} userReferenceImage={referenceImage} />
+                                    ))}
+                                </div>
+                                
+                                {visibleMatchesCount < fabricMatches.length && (
+                                    <div className="mt-8 flex justify-center">
+                                        <button 
+                                            onClick={() => setVisibleMatchesCount(p => p + 10)} 
+                                            className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all flex items-center gap-2"
+                                        >
+                                            <Plus size={16}/> Carregar Mais ({fabricMatches.length - visibleMatchesCount})
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
