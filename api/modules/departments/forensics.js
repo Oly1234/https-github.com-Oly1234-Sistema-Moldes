@@ -1,48 +1,64 @@
 
 // DEPARTAMENTO: FORENSE VISUAL (The Lens)
-// Responsabilidade: Desmembrar a imagem em dados técnicos puros.
+// Responsabilidade: Desmembrar a imagem em dados técnicos puros e keywords de cauda longa.
 
 export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson, context = 'TEXTURE') => {
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // AB DE CRIADOR: Foco na Arte/Superfície
+        // ABA DE CRIADOR: Foco na Arte/Superfície
+        // Lógica atualizada para gerar KEYWORDS ricas (História da Arte + Técnica)
         SYSTEM_PROMPT = `
-        ACT AS: Surface Design Specialist.
-        TASK: Analyze the ARTWORK style and repetition.
+        ACT AS: Art Historian & Surface Designer.
+        TASK: Analyze the ARTWORK style to find EXACT MATCHES in stock libraries.
+        
+        ANALYSIS:
+        1. Identify the Art Movement (e.g., Art Deco, Memphis, Toile de Jouy, Chinoiserie).
+        2. Identify the Technique (e.g., Watercolor, Vector Flat, Halftone, Ikat).
+        3. Identify the Motif (e.g., Monstera Leaf, Paisley, Houndstooth).
         
         OUTPUT JSON:
-        1. "visualDescription": Precise keywords for the print (e.g. "Seamless watercolor tropical hibiscus pattern").
-        2. "technicalSpecs": { 
-            "technique": "Watercolor/Digital/Vector", 
-            "motifs": ["Flower", "Leaf", "Abstract"], 
-            "complexity": "Simple/Complex" 
+        {
+            "visualDescription": "Specific Art Term" (e.g. "William Morris Strawberry Thief style print"),
+            "searchKeywords": [
+                "Primary art history term (e.g. 'Arts and Crafts movement floral pattern')",
+                "Secondary technique term (e.g. 'Detailed botanical illustration seamless')",
+                "Commercial stock term (e.g. 'Vintage floral wallpaper swatch')",
+                "Vibe term (e.g. 'Dark academia aesthetic print')"
+            ],
+            "technicalSpecs": { 
+                "technique": "Digital/Traditional", 
+                "motifs": ["Primary Motif"], 
+                "complexity": "High/Low",
+                "vibe": "Mood"
+            }
         }
         `;
     } else {
         // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa (Desmembramento)
         SYSTEM_PROMPT = `
         ACT AS: Master Pattern Cutter & Fashion Historian.
-        TASK: "Dismember" the garment in the image into its construction components.
+        TASK: "Dismember" the garment into components to find SEWING PATTERNS.
         
         ANALYSIS REQUIRED:
-        1. STRUCTURE: Where are the seams? (Princess seams, Darts, Drop shoulder?)
-        2. COMPONENTS: Sleeve type (Raglan, Set-in, Bishop), Collar type.
-        3. FABRIC: Stiff (Denim/Wool) or Drapey (Silk/Rayon)?
+        1. STRUCTURE: Seams, Darts, Silhouette.
+        2. SPECIFICITY: Don't just say "Dress". Say "Bias Cut Slip Dress with Cowl Neck".
+        3. KEYWORDS: Generate 4 distinct search angles (Technical, Vintage, Indie, Vibe).
         
         OUTPUT JSON:
         {
-            "visualDescription": "Technical Name of the Garment" (e.g. "Bias Cut Cowl Neck Slip Dress"),
+            "visualDescription": "Technical Name" (e.g. "Bias Cut Slip Dress"),
             "searchKeywords": [
-                "Primary technical term (e.g. 'Bias cut slip dress pattern')",
-                "Secondary vibe term (e.g. '90s minimalist evening dress sewing pattern')",
-                "Specific detail term (e.g. 'Spaghetti strap midi dress pattern')"
+                "Technical Pattern Name (e.g. 'Cowl neck slip dress sewing pattern')",
+                "Vintage/Specific Term (e.g. '90s minimalist evening dress pattern')",
+                "Construction Term (e.g. 'Bias cut dress pdf pattern')",
+                "Vibe/Style Term (e.g. 'Silk satin nightgown pattern')"
             ],
             "technicalSpecs": { 
-                "silhouette": "Defined by the cut (e.g. A-Line, Sheath)", 
-                "neckline": "Specific neckline", 
-                "details": "Key construction details (e.g. Invisible Zipper, French Seams)",
-                "fabric": "Suggested fabric weight"
+                "silhouette": "Type", 
+                "neckline": "Type", 
+                "details": "Details",
+                "fabric": "Suggestion"
             }
         }
         `;
@@ -62,10 +78,9 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         return JSON.parse(cleanJson(text));
     } catch (e) {
         console.error("Forensics Dept Error:", e);
-        // Fallback robusto
         return {
-            visualDescription: "Fashion Garment",
-            searchKeywords: ["Sewing pattern", "Dress pattern"],
+            visualDescription: "Fashion Item",
+            searchKeywords: ["Sewing pattern", "Style pattern", "Fashion design", "Garment"],
             technicalSpecs: { silhouette: "Unknown", neckline: "Unknown", details: "None", fabric: "Any" }
         };
     }
