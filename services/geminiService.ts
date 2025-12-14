@@ -113,15 +113,17 @@ export const analyzeClothingImage = async (
   excludePatterns: string[] = []
 ): Promise<PatternAnalysisResult> => {
   
+  // AUMENTADO TIMEOUT PARA 3 MINUTOS (180s)
+  // Geração massiva de texto/json pelo Gemini pode levar > 60s
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 180000); 
 
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'SCAN_CLOTHING', // Action específica
+        action: 'SCAN_CLOTHING', 
         mainImageBase64,
         mainMimeType,
         secondaryImageBase64,
@@ -133,17 +135,18 @@ export const analyzeClothingImage = async (
 
     clearTimeout(timeoutId);
 
-    // Se a API não existir (404) ou der erro (500), usamos o MOCK para o Preview não quebrar
+    // Se a API não existir (404) ou der erro (500), usamos o MOCK
     if (!response.ok) {
-        console.warn(`Backend indisponível (${response.status}). Usando Modo Simulação Global.`);
+        const errText = await response.text();
+        console.warn(`Backend indisponível (${response.status}): ${errText}. Usando Modo Simulação.`);
         return MOCK_GLOBAL_RESULT;
     }
 
     const result = await response.json();
     
-    // Se o backend retornar erro explícito ou objeto vazio
-    if (result.error || !result.patternName) {
-         console.warn("Backend retornou erro de dados. Usando Fallback.");
+    // Validação mínima dos dados
+    if (result.error || !result.patternName || !result.matches) {
+         console.warn("Backend retornou erro de dados ou JSON incompleto. Usando Fallback.");
          return MOCK_GLOBAL_RESULT;
     }
 
@@ -151,10 +154,14 @@ export const analyzeClothingImage = async (
 
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.error("Erro na conexão ou análise:", error);
     
-    // EM PREVIEW, SEMPRE RETORNAMOS O RESULTADO MOCK SE FALHAR
-    // Isso garante que o usuário veja a funcionalidade prometida
+    if (error.name === 'AbortError') {
+        console.error("TIMEOUT: A análise demorou mais que 3 minutos.");
+    } else {
+        console.error("Erro na conexão:", error);
+    }
+    
+    // EM CASO DE ERRO CRÍTICO, FALLBACK PARA MOCK PARA NÃO TRAVAR O USUÁRIO
     return MOCK_GLOBAL_RESULT;
   }
 };

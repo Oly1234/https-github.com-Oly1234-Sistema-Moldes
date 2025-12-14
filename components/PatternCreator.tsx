@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, ExternalLink, ShoppingCart, Layers } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, ShoppingCart } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -26,28 +26,16 @@ const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
     });
 };
 
-const generateFallbackPattern = (colors: PantoneColor[]): string => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024; canvas.height = 1024;
-    const ctx = canvas.getContext('2d')!;
-    const baseColor = colors[0]?.hex || '#f0f9ff';
-    ctx.fillStyle = baseColor;
-    ctx.fillRect(0, 0, 1024, 1024);
-    const palette = colors.length > 0 ? colors.map(c => c.hex) : ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
-    for (let i = 0; i < 40; i++) {
-        const color = palette[Math.floor(Math.random() * palette.length)];
-        ctx.fillStyle = color + '80';
-        ctx.beginPath();
-        const x = Math.random() * 1024;
-        const y = Math.random() * 1024;
-        const size = Math.random() * 200 + 50;
-        if (Math.random() > 0.5) { ctx.arc(x, y, size, 0, Math.PI * 2); } else { ctx.rect(x, y, size, size); }
-        ctx.fill();
-    }
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = 'rgba(0,0,0,0.05)';
-    for(let i=0; i<1024; i+=4) { ctx.fillRect(i, 0, 1, 1024); ctx.fillRect(0, i, 1024, 1); }
-    return canvas.toDataURL('image/jpeg', 0.8);
+// --- NOVA GERAÇÃO DE FALLBACK DE ALTA QUALIDADE ---
+// Se o Gemini falhar, usamos o Pollinations (Stable Diffusion) para gerar a imagem baseada no texto.
+// Isso elimina os "círculos e quadrados".
+const generateHighQualityFallback = (prompt: string, colors: PantoneColor[]): string => {
+    const seed = Math.floor(Math.random() * 10000);
+    const colorString = colors.map(c => c.name).join(' and ');
+    // Melhorando o prompt para garantir repetição (seamless)
+    const enhancedPrompt = `seamless texture pattern, ${prompt}, ${colorString} color palette, fabric printing design, high resolution, flat vector style, no watermark`;
+    const encoded = encodeURIComponent(enhancedPrompt);
+    return `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}&model=flux`;
 };
 
 export const PatternCreator: React.FC = () => {
@@ -58,7 +46,7 @@ export const PatternCreator: React.FC = () => {
     
     // Resultados de Stock Real (vindos do Backend)
     const [stockMatches, setStockMatches] = useState<ExternalPatternMatch[]>([]);
-    const [visibleStockCount, setVisibleStockCount] = useState(15);
+    const [visibleStockCount, setVisibleStockCount] = useState(10); // Começa com 10
     
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -75,7 +63,7 @@ export const PatternCreator: React.FC = () => {
                 setDetectedColors([]);
                 setStockMatches([]);
                 setPrompt('');
-                setVisibleStockCount(15);
+                setVisibleStockCount(10);
             };
             reader.readAsDataURL(file);
         }
@@ -108,13 +96,10 @@ export const PatternCreator: React.FC = () => {
                 const colors = data.colors || [];
                 setDetectedColors(colors);
                 
-                // Exibe APENAS matches retornados pelo Backend (Links Reais)
-                // Não geramos mais nada fake aqui. Se a lista for vazia, o usuário verá vazio.
-                // Mas o PatternVisualCard vai tentar scrapear a imagem da URL.
+                // Recebe até 30 matches do backend
                 setStockMatches(data.stockMatches || []);
                 
-                // DISPARA A GERAÇÃO DA ESTAMPA AUTOMATICAMENTE
-                // Usando o prompt e as cores detectadas
+                // Dispara geração da estampa
                 if (data.prompt) {
                     generatePatternFromData(data.prompt, colors);
                 }
@@ -123,14 +108,12 @@ export const PatternCreator: React.FC = () => {
             }
         } catch (error) {
             console.log("Erro na análise:", error);
-            // Fallback Mínimo apenas para não travar a UI
             setPrompt("Could not analyze image pattern.");
         } finally {
             setIsAnalyzing(false);
         }
     };
 
-    // Função separada para permitir re-geração manual ou automática
     const generatePatternFromData = async (promptText: string, colorsData: PantoneColor[]) => {
         setIsGenerating(true);
         try {
@@ -143,12 +126,23 @@ export const PatternCreator: React.FC = () => {
                     colors: colorsData
                 })
             });
-            if (!response.ok) throw new Error("API Busy");
+            
             const data = await response.json();
-            if (data.success && data.image) { setGeneratedPattern(data.image); } 
+            
+            // Se o backend retornar sucesso e imagem, use-a
+            if (response.ok && data.success && data.image) { 
+                setGeneratedPattern(data.image); 
+            } else {
+                // SE FALHAR (ou backend não tiver imagem), USA O GERADOR EXTERNO COM O PROMPT
+                // Isso resolve o problema de "círculos e quadrados"
+                console.log("Usando Gerador Externo de Alta Qualidade...");
+                const hqPattern = generateHighQualityFallback(promptText, colorsData);
+                setGeneratedPattern(hqPattern);
+            }
         } catch (error) {
-            const localPattern = generateFallbackPattern(colorsData);
-            setGeneratedPattern(localPattern);
+            // Em caso de erro de rede, também usa o gerador externo
+            const hqPattern = generateHighQualityFallback(promptText, colorsData);
+            setGeneratedPattern(hqPattern);
         } finally {
             setIsGenerating(false);
         }
@@ -164,6 +158,10 @@ export const PatternCreator: React.FC = () => {
         link.download = `vingi-pattern-${Date.now()}.jpg`;
         link.href = generatedPattern;
         link.click();
+    };
+
+    const handleLoadMore = () => {
+        setVisibleStockCount(prev => prev + 10);
     };
 
     return (
@@ -299,7 +297,7 @@ export const PatternCreator: React.FC = () => {
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-800">Marketplace de Estampas</h3>
                                     <p className="text-sm text-gray-500">
-                                        Opções reais encontradas em bancos de imagens.
+                                        Opções reais encontradas (Exibindo {Math.min(visibleStockCount, stockMatches.length)} de {stockMatches.length})
                                     </p>
                                 </div>
                             </div>
@@ -313,10 +311,10 @@ export const PatternCreator: React.FC = () => {
                             {visibleStockCount < stockMatches.length && (
                                 <div className="mt-8 flex justify-center">
                                     <button 
-                                        onClick={() => setVisibleStockCount(p => p + 15)}
+                                        onClick={handleLoadMore}
                                         className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 text-gray-600 transition-all"
                                     >
-                                        Carregar Mais Estampas (+15)
+                                        Carregar Mais Estampas (+10)
                                     </button>
                                 </div>
                             )}

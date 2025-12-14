@@ -131,7 +131,10 @@ export const ScannerSystem: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  const [visibleCount, setVisibleCount] = useState(15);
+  
+  // PAGINAÇÃO: Começa com 10
+  const [visibleCount, setVisibleCount] = useState(10);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
@@ -183,7 +186,7 @@ export const ScannerSystem: React.FC = () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING);
     setErrorMsg(null);
-    setVisibleCount(15);
+    setVisibleCount(10); // Reset para 10
     
     setTimeout(async () => {
         try {
@@ -214,7 +217,7 @@ export const ScannerSystem: React.FC = () => {
     setUploadedImage(null);
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
-    setVisibleCount(15);
+    setVisibleCount(10);
     setErrorMsg(null);
   };
 
@@ -229,7 +232,6 @@ export const ScannerSystem: React.FC = () => {
   const closeMatches = result?.matches?.close || [];
   const vibeMatches = result?.matches?.adventurous || [];
   
-  // FILTRAGEM DEFENSIVA: Remove itens nulos ou inválidos para não quebrar o sort/map
   const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches]
         .filter(m => m && typeof m === 'object' && m.patternName)
         .sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0));
@@ -387,7 +389,7 @@ export const ScannerSystem: React.FC = () => {
                     </div>
                 )}
                 <div className="flex items-center justify-between overflow-x-auto pb-2">
-                    <h3 className="text-lg font-bold text-gray-800 mr-4">Resultados</h3>
+                    <h3 className="text-lg font-bold text-gray-800 mr-4">Resultados ({filteredData.length})</h3>
                     <div className="flex gap-2">
                         <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => setActiveTab('ALL')} icon={Layers} />
                         <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => setActiveTab('EXACT')} icon={CheckCircle2} />
@@ -403,10 +405,10 @@ export const ScannerSystem: React.FC = () => {
                     <div className="mt-8 flex justify-center flex-col items-center">
                         <p className="text-xs text-gray-400 mb-2">Exibindo {visibleCount} de {filteredData.length} resultados</p>
                         <button 
-                            onClick={() => setVisibleCount(p => p + 15)} 
+                            onClick={() => setVisibleCount(p => p + 10)} 
                             className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all transform hover:-translate-y-1"
                         >
-                            Carregar Mais Moldes (+15)
+                            Carregar Mais Moldes (+10)
                         </button>
                     </div>
                 )}
