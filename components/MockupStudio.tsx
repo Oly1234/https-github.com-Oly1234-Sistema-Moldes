@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, RotateCw, ZoomIn, Eraser, Download, Wand2, MonitorPlay, X, Target, FlipHorizontal, FlipVertical, Lock, Unlock, Layers, Zap, MousePointer2, CheckCircle2, Sparkles, Move } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, RotateCw, ZoomIn, Eraser, Download, Wand2, MonitorPlay, X, Target, FlipHorizontal, FlipVertical, Lock, Unlock, Layers, Zap, MousePointer2, CheckCircle2, Sparkles, Move, Maximize } from 'lucide-react';
 
 // --- TYPES ---
 interface AppliedLayer {
@@ -12,16 +12,9 @@ interface AppliedLayer {
   offsetY: number;
   scale: number;
   rotation: number;
-  flipX: boolean; // Novo: Controle Horizontal
-  flipY: boolean; // Novo: Controle Vertical
+  flipX: boolean; 
+  flipY: boolean; 
   timestamp?: number;
-}
-
-interface SimulationMapping {
-    layerId: string;
-    targetX: number;
-    targetY: number;
-    active: boolean;
 }
 
 export const MockupStudio: React.FC = () => {
@@ -37,30 +30,30 @@ export const MockupStudio: React.FC = () => {
   const [tool, setTool] = useState<'WAND' | 'MOVE'>('WAND');
   const [tolerance, setTolerance] = useState(40); 
   
-  // Smart Settings (Globais ou Individuais)
+  // Smart Settings
   const [globalScale, setGlobalScale] = useState(0.5); 
   const [globalRotation, setGlobalRotation] = useState(0);
   const [globalFlipX, setGlobalFlipX] = useState(false);
   const [globalFlipY, setGlobalFlipY] = useState(false);
-  const [syncSettings, setSyncSettings] = useState(true); // Se true, sliders afetam TUDO. Se false, afetam só a camada ativa.
+  const [syncSettings, setSyncSettings] = useState(true); 
   const [realismOpacity, setRealismOpacity] = useState(0.9); 
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // --- LIVE SIMULATION STATE ---
-  const [showSimModal, setShowSimModal] = useState(false);
-  const [simImage, setSimImage] = useState<string | null>(null);
-  const [simImgObj, setSimImgObj] = useState<HTMLImageElement | null>(null);
-  const [simMappings, setSimMappings] = useState<SimulationMapping[]>([]);
+  // --- VIEWPORT STATE (ZOOM/PAN DA CÂMERA) ---
+  const [viewTransform, setViewTransform] = useState({ k: 1, x: 0, y: 0 }); // k = scale
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [isPinching, setIsPinching] = useState(false);
 
   // --- REFS ---
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
-  const simCanvasRef = useRef<HTMLCanvasElement>(null);
   const moldInputRef = useRef<HTMLInputElement>(null);
   const patternInputRef = useRef<HTMLInputElement>(null);
   
   // Controle de Interação
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
+  const lastPinchDist = useRef<number>(0);
+  const lastPinchCenter = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -70,7 +63,7 @@ export const MockupStudio: React.FC = () => {
       img.onload = () => {
         if (mainCanvasRef.current) {
             const canvas = mainCanvasRef.current;
-            const MAX_DIM = 2000;
+            const MAX_DIM = 2500; // Alta resolução interna
             let w = img.naturalWidth;
             let h = img.naturalHeight;
             if (w > MAX_DIM || h > MAX_DIM) {
@@ -79,6 +72,9 @@ export const MockupStudio: React.FC = () => {
                 else { h = MAX_DIM; w = MAX_DIM * ratio; }
             }
             canvas.width = w; canvas.height = h;
+            
+            // Reset Viewport
+            setViewTransform({ k: 1, x: 0, y: 0 });
         }
         setMoldImgObj(img);
         setLayers([]);
@@ -95,37 +91,24 @@ export const MockupStudio: React.FC = () => {
     if (syncSettings && layers.length > 0) {
         setLayers(prev => prev.map(layer => ({ 
             ...layer, 
-            scale: globalScale, 
-            rotation: globalRotation, 
-            flipX: globalFlipX,
-            flipY: globalFlipY
+            scale: globalScale, rotation: globalRotation, flipX: globalFlipX, flipY: globalFlipY
         })));
     } else if (!syncSettings && activeLayerId) {
-        // Atualiza apenas a camada ativa se o sync estiver desligado
         setLayers(prev => prev.map(layer => {
             if (layer.id === activeLayerId) {
-                return {
-                    ...layer,
-                    scale: globalScale,
-                    rotation: globalRotation,
-                    flipX: globalFlipX,
-                    flipY: globalFlipY
-                };
+                return { ...layer, scale: globalScale, rotation: globalRotation, flipX: globalFlipX, flipY: globalFlipY };
             }
             return layer;
         }));
     }
   }, [globalScale, globalRotation, globalFlipX, globalFlipY, syncSettings]);
 
-  // Update controls when active layer changes (Inverse Sync)
+  // Inverse Sync
   useEffect(() => {
       if (!syncSettings && activeLayerId) {
           const layer = layers.find(l => l.id === activeLayerId);
           if (layer) { 
-              setGlobalScale(layer.scale); 
-              setGlobalRotation(layer.rotation); 
-              setGlobalFlipX(layer.flipX);
-              setGlobalFlipY(layer.flipY);
+              setGlobalScale(layer.scale); setGlobalRotation(layer.rotation); setGlobalFlipX(layer.flipX); setGlobalFlipY(layer.flipY);
           }
       }
   }, [activeLayerId, syncSettings]);
@@ -150,59 +133,44 @@ export const MockupStudio: React.FC = () => {
         layerCanvas.width = canvas.width; layerCanvas.height = canvas.height;
         const lCtx = layerCanvas.getContext('2d')!;
         
-        // Draw Mask
         lCtx.drawImage(layer.maskCanvas, 0, 0);
-        
-        // Composite Pattern inside Mask
         lCtx.globalCompositeOperation = 'source-in';
         lCtx.save();
-        
-        // Transform Origin to Mask Center
         lCtx.translate(layer.maskCenter.x, layer.maskCenter.y);
-        
-        // Apply Transforms
         lCtx.rotate((layer.rotation * Math.PI) / 180);
         lCtx.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
         lCtx.scale(layer.scale, layer.scale);
-        
-        // Move Pattern relative to center
         lCtx.translate(layer.offsetX, layer.offsetY);
         
-        // Draw Tiled Pattern
         const pat = lCtx.createPattern(layer.patternImg, 'repeat');
         if (pat) { 
             lCtx.fillStyle = pat; 
-            // Draw a huge rect to cover rotation/movement
             const safeSize = 10000; 
             lCtx.fillRect(-safeSize/2, -safeSize/2, safeSize, safeSize); 
         }
         lCtx.restore();
         
-        // Draw Composition to Main Canvas
         ctx.save();
         ctx.globalAlpha = realismOpacity; 
         ctx.drawImage(layerCanvas, 0, 0);
         ctx.restore();
 
-        // Draw Active Indicator
         if (layer.id === activeLayerId) {
             ctx.save();
             ctx.globalAlpha = 1; 
             ctx.globalCompositeOperation = 'source-over';
             ctx.beginPath();
-            ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 6, 0, Math.PI * 2);
+            ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 8, 0, Math.PI * 2);
             ctx.fillStyle = '#3b82f6'; 
             ctx.strokeStyle = 'white'; 
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.shadowBlur = 4;
-            ctx.shadowColor = 'rgba(0,0,0,0.3)';
-            ctx.fill(); 
-            ctx.stroke();
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.fill(); ctx.stroke();
             ctx.restore();
         }
     });
 
-    // 3. Multiply Original Shadows (Realism)
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
     ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height);
@@ -211,19 +179,17 @@ export const MockupStudio: React.FC = () => {
 
   useEffect(() => { requestAnimationFrame(render); }, [render]);
 
-  // --- LOGIC ---
+  // --- FLOOD FILL LOGIC ---
   const createMaskFromClick = (startX: number, startY: number) => {
     if (!mainCanvasRef.current || !moldImgObj) return null;
     const canvas = mainCanvasRef.current;
     const width = canvas.width; const height = canvas.height;
     
-    // Get Raw Pixel Data
     const tempC = document.createElement('canvas'); tempC.width = width; tempC.height = height;
     const tCtx = tempC.getContext('2d')!; tCtx.drawImage(moldImgObj, 0, 0, width, height);
     const data = tCtx.getImageData(0, 0, width, height).data;
     
     const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
-    // Ignore pure black/dark areas (lines)
     if (data[startPos] < 40 && data[startPos + 1] < 40 && data[startPos + 2] < 40) return null;
 
     const maskData = new Uint8ClampedArray(width * height * 4);
@@ -232,39 +198,31 @@ export const MockupStudio: React.FC = () => {
     const tol = tolerance;
     let minX = width, maxX = 0, minY = height, maxY = 0;
     let pixelCount = 0;
-    const r0 = data[startPos];
-    const g0 = data[startPos+1];
-    const b0 = data[startPos+2];
+    const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
     
-    // Optimized Scanline Flood Fill
     while (stack.length) {
         const [x, y] = stack.pop()!;
         let py = y;
         let pPos = (py * width + x) * 4;
         
-        // Move UP
         while (py >= 0 && !visited[py*width+x]) {
             const diff = Math.abs(data[pPos] - r0) + Math.abs(data[pPos+1] - g0) + Math.abs(data[pPos+2] - b0);
             if (diff > tol * 3) break;
             py--; pPos -= width*4;
         }
-        pPos += width*4; py++; // Back one step valid
+        pPos += width*4; py++; 
         
         let reachL = false, reachR = false;
-        
-        // Move DOWN painting
         while (py < height && !visited[py*width+x]) {
             const diff = Math.abs(data[pPos] - r0) + Math.abs(data[pPos+1] - g0) + Math.abs(data[pPos+2] - b0);
             if (diff > tol * 3) break;
 
             maskData[pPos] = 255; maskData[pPos+1] = 255; maskData[pPos+2] = 255; maskData[pPos+3] = 255;
-            visited[py*width+x] = 1; 
-            pixelCount++;
+            visited[py*width+x] = 1; pixelCount++;
 
             if (x < minX) minX = x; if (x > maxX) maxX = x;
             if (py < minY) minY = py; if (py > maxY) maxY = py;
 
-            // Check Left
             if (x > 0) {
                 const lp = pPos - 4;
                 const lDiff = Math.abs(data[lp] - r0) + Math.abs(data[lp+1] - g0) + Math.abs(data[lp+2] - b0);
@@ -272,7 +230,6 @@ export const MockupStudio: React.FC = () => {
                     if (!reachL) { stack.push([x-1, py]); reachL = true; }
                 } else if (reachL) reachL = false;
             }
-            // Check Right
             if (x < width-1) {
                 const rp = pPos + 4;
                 const rDiff = Math.abs(data[rp] - r0) + Math.abs(data[rp+1] - g0) + Math.abs(data[rp+2] - b0);
@@ -280,12 +237,11 @@ export const MockupStudio: React.FC = () => {
                     if (!reachR) { stack.push([x+1, py]); reachR = true; }
                 } else if (reachR) reachR = false;
             }
-
             py++; pPos += width*4;
         }
     }
     
-    if (pixelCount < 50) return null; // Too small noise
+    if (pixelCount < 50) return null; 
     const maskCanvas = document.createElement('canvas'); maskCanvas.width = width; maskCanvas.height = height;
     maskCanvas.getContext('2d')!.putImageData(new ImageData(maskData, width, height), 0, 0);
     return { maskCanvas, centerX: minX + (maxX - minX) / 2, centerY: minY + (maxY - minY) / 2 };
@@ -295,7 +251,6 @@ export const MockupStudio: React.FC = () => {
     if (!mainCanvasRef.current || !moldImgObj || !patternImgObj) return;
     setIsProcessing(true);
     setTimeout(() => {
-        // ... (Logica de autofill mantida, mas agora adicionando flipX/Y defaults)
         const canvas = mainCanvasRef.current!;
         const width = canvas.width; const height = canvas.height;
         const ctx = canvas.getContext('2d')!;
@@ -334,16 +289,40 @@ export const MockupStudio: React.FC = () => {
     }, 100);
   };
 
-  // --- EVENTS ---
-  const handleCanvasClick = (e: React.MouseEvent | React.TouchEvent) => {
+  // --- TOUCH / MOUSE EVENTS ---
+  const getCoords = (e: React.MouseEvent | React.TouchEvent) => {
+      if ('touches' in e) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      return { x: (e as React.MouseEvent).clientX, y: (e as React.MouseEvent).clientY };
+  };
+
+  const getDistance = (t1: React.Touch, t2: React.Touch) => {
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const getCenter = (t1: React.Touch, t2: React.Touch) => {
+      return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+  };
+
+  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+    // 2 Fingers -> Zoom/Pan (Multi-touch)
+    if ('touches' in e && e.touches.length === 2) {
+        setIsPinching(true);
+        lastPinchDist.current = getDistance(e.touches[0], e.touches[1]);
+        lastPinchCenter.current = getCenter(e.touches[0], e.touches[1]);
+        return;
+    }
+
+    // 1 Finger -> Tool Action
     if (!moldImgObj || !patternImgObj) return;
-    const canvas = mainCanvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-    if ('touches' in e) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; } 
-    else { clientX = (e as React.MouseEvent).clientX; clientY = (e as React.MouseEvent).clientY; }
+    const { x: clientX, y: clientY } = getCoords(e);
     
-    // Convert click to canvas coordinates
+    // Convert to Canvas Local Coords accounting for CSS Transform (Scale/Pan)
+    const canvas = mainCanvasRef.current!;
+    const rect = canvas.getBoundingClientRect(); // This rect already includes the CSS transform scale!
+    
+    // Normalization works because getBoundingClientRect gives the VISUAL dimensions
     const x = (clientX - rect.left) * (canvas.width / rect.width);
     const y = (clientY - rect.top) * (canvas.height / rect.height);
 
@@ -356,23 +335,17 @@ export const MockupStudio: React.FC = () => {
                 maskCenter: { x: res.centerX, y: res.centerY },
                 patternImg: patternImgObj,
                 offsetX: 0, offsetY: 0,
-                scale: globalScale, 
-                rotation: globalRotation, 
-                flipX: globalFlipX, 
-                flipY: globalFlipY, 
+                scale: globalScale, rotation: globalRotation, flipX: globalFlipX, flipY: globalFlipY, 
                 timestamp: Date.now()
             };
             setLayers(prev => [...prev, newLayer]);
             setActiveLayerId(newLayer.id);
-            // CORREÇÃO: NÃO MUDAR A TOOL AUTOMATICAMENTE
-            // Isso permite clicar em várias áreas (manga esq, manga dir) sequencialmente
         }
     } else if (tool === 'MOVE') {
-        // Hit Detection para selecionar camada
         let clickedId = null;
-        // Check de cima para baixo (ordem de render)
         for (let i = layers.length - 1; i >= 0; i--) {
             const ctx = layers[i].maskCanvas.getContext('2d')!;
+            // Check alpha channel
             if (ctx.getImageData(x, y, 1, 1).data[3] > 0) { clickedId = layers[i].id; break; }
         }
         
@@ -380,53 +353,84 @@ export const MockupStudio: React.FC = () => {
             setActiveLayerId(clickedId);
             isDragging.current = true;
             lastPos.current = { x: clientX, y: clientY };
-            
-            // Se o sync estiver desligado, puxa os dados da camada clicada para os controles
             if (!syncSettings) {
                 const l = layers.find(lay => lay.id === clickedId);
                 if (l) { 
-                    setGlobalScale(l.scale); 
-                    setGlobalRotation(l.rotation); 
-                    setGlobalFlipX(l.flipX);
-                    setGlobalFlipY(l.flipY);
+                    setGlobalScale(l.scale); setGlobalRotation(l.rotation); setGlobalFlipX(l.flipX); setGlobalFlipY(l.flipY);
                 }
             }
-        } else { 
-            setActiveLayerId(null); 
+        } else {
+            setActiveLayerId(null);
         }
     }
   };
 
-  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (isPinching && 'touches' in e && e.touches.length === 2) {
+        const dist = getDistance(e.touches[0], e.touches[1]);
+        const center = getCenter(e.touches[0], e.touches[1]);
+        
+        // Zoom Logic
+        const zoomFactor = dist / lastPinchDist.current;
+        const newScale = Math.min(Math.max(viewTransform.k * zoomFactor, 0.5), 5); // Limit Zoom 0.5x to 5x
+        
+        // Pan Logic (Move center)
+        const dx = center.x - lastPinchCenter.current.x;
+        const dy = center.y - lastPinchCenter.current.y;
+        
+        setViewTransform(prev => ({
+            k: newScale,
+            x: prev.x + dx,
+            y: prev.y + dy
+        }));
+
+        lastPinchDist.current = dist;
+        lastPinchCenter.current = center;
+        return;
+    }
+
     if (!isDragging.current || !activeLayerId || tool !== 'MOVE') return;
-    if (e.cancelable) e.preventDefault();
+    if (e.cancelable && e.nativeEvent) e.preventDefault(); // Stop scroll
 
-    let clientX, clientY;
-    if ('touches' in e) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; } 
-    else { clientX = (e as React.MouseEvent).clientX; clientY = (e as React.MouseEvent).clientY; }
-
+    const { x: clientX, y: clientY } = getCoords(e);
     const canvas = mainCanvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     
-    // Delta em pixels do canvas (considerando o zoom CSS)
-    const dxScreen = (clientX - lastPos.current.x) * (canvas.width / rect.width);
-    const dyScreen = (clientY - lastPos.current.y) * (canvas.height / rect.height);
+    // Calculate raw screen delta
+    const dxScreenRaw = clientX - lastPos.current.x;
+    const dyScreenRaw = clientY - lastPos.current.y;
+
+    // Adjust for CANVAS SCALE (Resolution vs CSS Size)
+    // ratio = (Canvas Real Width) / (CSS Displayed Width)
+    const ratioX = canvas.width / rect.width;
+    const ratioY = canvas.height / rect.height;
+
+    // Apply ratio to get delta in CANVAS PIXELS
+    const dxCanvas = dxScreenRaw * ratioX;
+    const dyCanvas = dyScreenRaw * ratioY;
     
     const layer = layers.find(l => l.id === activeLayerId);
     
     if (layer) {
-        // Ajusta o movimento baseado na rotação para ser intuitivo (arrastar pra direita sempre move a estampa pra direita visualmente)
+        // Project screen movement to local pattern space accounting for rotation
         const angleRad = (layer.rotation * Math.PI) / 180;
-        let dxLocal = dxScreen * Math.cos(angleRad) + dyScreen * Math.sin(angleRad);
-        let dyLocal = -dxScreen * Math.sin(angleRad) + dyScreen * Math.cos(angleRad);
         
-        // Ajusta se estiver espelhado
+        // Standard rotation matrix for coordinate projection
+        let dxLocal = dxCanvas * Math.cos(angleRad) + dyCanvas * Math.sin(angleRad);
+        let dyLocal = -dxCanvas * Math.sin(angleRad) + dyCanvas * Math.cos(angleRad);
+        
+        // Flip Correction: If flipped, visual right is local left (or vice-versa), so invert delta
         if (layer.flipX) dxLocal = -dxLocal;
-        if (layer.flipY) dyLocal = -dyLocal; // Correção para flip vertical
+        if (layer.flipY) dyLocal = -dyLocal; 
 
         setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, offsetX: l.offsetX + dxLocal, offsetY: l.offsetY + dyLocal } : l));
     }
     lastPos.current = { x: clientX, y: clientY };
+  };
+
+  const handlePointerUp = () => {
+      isDragging.current = false;
+      setIsPinching(false);
   };
 
   const handleDownload = () => {
@@ -441,36 +445,60 @@ export const MockupStudio: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-full w-full bg-[#f0f2f5] overflow-hidden relative">
       
-      {/* 1. WORKSPACE (TOP on Mobile, RIGHT on Desktop) */}
-      <div className="order-1 md:order-2 flex-1 relative bg-[#e2e8f0] flex items-center justify-center overflow-hidden touch-none h-[50vh] md:h-full shrink-0">
-           <div className="absolute inset-0 opacity-15 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#64748b 1px, transparent 1px), linear-gradient(90deg, #64748b 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+      {/* 1. WORKSPACE (Maximizado Mobile) */}
+      <div className="order-1 md:order-2 flex-1 relative bg-gray-200/50 flex items-center justify-center overflow-hidden touch-none h-[65vh] md:h-full shrink-0">
+           <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
 
            {!moldImage ? (
                <div className="text-center opacity-50 px-4">
-                   <UploadCloud size={64} className="mx-auto mb-4 text-gray-400"/>
-                   <h2 className="text-xl font-bold text-gray-500">Área de Trabalho</h2>
-                   <p className="text-sm text-gray-400">Carregue um molde para começar</p>
+                   <UploadCloud size={48} className="mx-auto mb-2 text-gray-400"/>
+                   <h2 className="text-lg font-bold text-gray-500">Área de Trabalho</h2>
+                   <p className="text-xs text-gray-400">Carregue um molde para começar</p>
                </div>
            ) : (
                 <div 
-                    className="relative shadow-2xl bg-white border-4 border-white rounded-lg overflow-hidden max-w-[95%] max-h-[90%]"
-                    style={{ cursor: tool === 'WAND' ? 'crosshair' : (isDragging.current ? 'grabbing' : 'grab') }}
+                    ref={viewportRef}
+                    className="relative w-full h-full flex items-center justify-center p-0 md:p-8 overflow-hidden"
                 >
-                    <canvas 
-                        ref={mainCanvasRef}
-                        onMouseDown={handleCanvasClick}
-                        onMouseMove={handleMove}
-                        onMouseUp={() => isDragging.current = false}
-                        onMouseLeave={() => isDragging.current = false}
-                        onTouchStart={handleCanvasClick}
-                        onTouchMove={handleMove}
-                        onTouchEnd={() => isDragging.current = false}
-                        className="block w-auto h-auto max-w-full max-h-[85vh] md:max-h-[85vh] object-contain"
-                    />
+                    {/* CANVAS CONTAINER COM TRANSFORM (ZOOM) */}
+                    <div 
+                        style={{ 
+                            transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.k})`,
+                            transformOrigin: 'center center',
+                            transition: isPinching ? 'none' : 'transform 0.1s ease-out',
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <canvas 
+                            ref={mainCanvasRef}
+                            onMouseDown={handlePointerDown}
+                            onMouseMove={handlePointerMove}
+                            onMouseUp={handlePointerUp}
+                            onMouseLeave={handlePointerUp}
+                            onTouchStart={handlePointerDown}
+                            onTouchMove={handlePointerMove}
+                            onTouchEnd={handlePointerUp}
+                            className="block max-w-full max-h-full object-contain shadow-2xl bg-white"
+                            style={{ cursor: tool === 'WAND' ? 'crosshair' : (isDragging.current ? 'grabbing' : 'grab') }}
+                        />
+                    </div>
+                    
+                    {/* RESET ZOOM BUTTON */}
+                    <button 
+                        onClick={() => setViewTransform({ k: 1, x: 0, y: 0 })}
+                        className="absolute top-4 right-4 bg-white/80 backdrop-blur p-2 rounded-full shadow-lg text-gray-600 hover:text-gray-900 z-50 md:hidden"
+                    >
+                        <Maximize size={16} />
+                    </button>
+
                     {isProcessing && (
-                         <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50">
-                             <div className="bg-vingi-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-pulse">
-                                 <Wand2 className="animate-spin" size={20}/><span className="font-bold tracking-wide">AUTO-FILL IA</span>
+                         <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50 pointer-events-none">
+                             <div className="bg-vingi-900 text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 animate-pulse">
+                                 <Wand2 className="animate-spin" size={16}/><span className="text-xs font-bold tracking-wide">IA...</span>
                              </div>
                          </div>
                     )}
@@ -478,106 +506,81 @@ export const MockupStudio: React.FC = () => {
            )}
       </div>
 
-      {/* 2. CONTROLS (BOTTOM on Mobile, LEFT on Desktop) */}
-      <div className="order-2 md:order-1 w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-2xl z-20 h-[50vh] md:h-full overflow-y-auto custom-scrollbar">
-          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center sticky top-0 z-10 backdrop-blur">
-              <h2 className="text-lg font-bold text-vingi-900 flex items-center gap-2">
-                  <Wand2 className="text-vingi-600" size={20} /> Studio
+      {/* 2. CONTROLS (Compacto Mobile) */}
+      <div className="order-2 md:order-1 w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-2xl z-20 h-[35vh] md:h-full overflow-y-auto custom-scrollbar">
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center sticky top-0 z-10 backdrop-blur">
+              <h2 className="text-sm font-bold text-vingi-900 flex items-center gap-2">
+                  <Wand2 className="text-vingi-600" size={16} /> Studio
               </h2>
-              {activeLayerId && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold flex items-center gap-1"><CheckCircle2 size={10}/> CAMADA ATIVA</span>}
+              {activeLayerId && <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><CheckCircle2 size={10}/> ATIVA</span>}
           </div>
 
-          <div className="p-5 space-y-6 pb-24 md:pb-5">
+          <div className="p-3 space-y-4 pb-24 md:pb-5">
               {/* ASSETS */}
-              <div className="grid grid-cols-2 gap-3">
-                  <div onClick={() => moldInputRef.current?.click()} className={`relative h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${moldImage ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-vingi-400'}`}>
+              <div className="grid grid-cols-2 gap-2">
+                  <div onClick={() => moldInputRef.current?.click()} className={`relative h-16 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${moldImage ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-vingi-400'}`}>
                       <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
-                      {moldImage ? <img src={moldImage} className="w-full h-full object-contain p-1"/> : <UploadCloud className="text-gray-300"/>}
-                      <span className="text-[9px] font-bold text-gray-400 mt-1">MOLDE</span>
+                      {moldImage ? <img src={moldImage} className="w-full h-full object-contain p-1"/> : <UploadCloud size={20} className="text-gray-300"/>}
+                      <span className="text-[8px] font-bold text-gray-400 mt-1">MOLDE</span>
                   </div>
-                  <div onClick={() => patternInputRef.current?.click()} className={`relative h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${patternImage ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-vingi-400'}`}>
+                  <div onClick={() => patternInputRef.current?.click()} className={`relative h-16 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${patternImage ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-vingi-400'}`}>
                       <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
-                      {patternImage ? <img src={patternImage} className="w-full h-full object-cover rounded-lg"/> : <ImageIcon className="text-gray-300"/>}
-                      <span className="text-[9px] font-bold text-gray-400 mt-1">ESTAMPA</span>
+                      {patternImage ? <img src={patternImage} className="w-full h-full object-cover rounded-lg"/> : <ImageIcon size={20} className="text-gray-300"/>}
+                      <span className="text-[8px] font-bold text-gray-400 mt-1">ESTAMPA</span>
                   </div>
               </div>
 
               {/* TOOLS */}
-              <div className="space-y-3">
-                  <div className="flex gap-2">
-                      <button 
-                        onClick={() => setTool('WAND')} 
-                        className={`flex-1 py-3 rounded-xl border-2 text-xs font-bold flex flex-col items-center gap-1 transition-all ${tool === 'WAND' ? 'border-vingi-600 bg-vingi-50 text-vingi-700 shadow-md' : 'border-gray-100 bg-white text-gray-400 hover:bg-gray-50'}`}
-                      >
-                          <Zap size={16}/> SELECIONAR
-                      </button>
-                      <button 
-                        onClick={() => setTool('MOVE')} 
-                        className={`flex-1 py-3 rounded-xl border-2 text-xs font-bold flex flex-col items-center gap-1 transition-all ${tool === 'MOVE' ? 'border-vingi-600 bg-vingi-50 text-vingi-700 shadow-md' : 'border-gray-100 bg-white text-gray-400 hover:bg-gray-50'}`}
-                      >
-                          <Move size={16}/> MOVER
-                      </button>
-                  </div>
-                  
+              <div className="flex gap-2">
                   <button 
-                    onClick={handleAutoFill}
-                    disabled={!moldImage || !patternImage || isProcessing}
-                    className="w-full py-2 bg-gradient-to-r from-vingi-600 to-vingi-500 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 text-xs disabled:opacity-50"
+                    onClick={() => setTool('WAND')} 
+                    className={`flex-1 py-2 rounded-lg border text-[10px] font-bold flex items-center justify-center gap-1 transition-all ${tool === 'WAND' ? 'border-vingi-600 bg-vingi-50 text-vingi-700 shadow-md' : 'border-gray-200 text-gray-400'}`}
                   >
-                      {isProcessing ? <Wand2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
-                      {isProcessing ? 'PROCESSANDO...' : 'PREENCHIMENTO INTELIGENTE (IA)'}
+                      <Zap size={14}/> SELECIONAR
+                  </button>
+                  <button 
+                    onClick={() => setTool('MOVE')} 
+                    className={`flex-1 py-2 rounded-lg border text-[10px] font-bold flex items-center justify-center gap-1 transition-all ${tool === 'MOVE' ? 'border-vingi-600 bg-vingi-50 text-vingi-700 shadow-md' : 'border-gray-200 text-gray-400'}`}
+                  >
+                      <Move size={14}/> MOVER
+                  </button>
+                  <button onClick={handleAutoFill} disabled={!moldImage || !patternImage || isProcessing} className="px-3 py-2 bg-vingi-900 text-white rounded-lg flex items-center justify-center shadow-md disabled:opacity-50">
+                     <Sparkles size={14}/>
                   </button>
               </div>
 
               {/* ACTIVE LAYER CONTROLS */}
-              <div className={`bg-white rounded-xl border-2 transition-all duration-300 ${activeLayerId ? 'border-blue-200 shadow-lg' : 'border-gray-100 opacity-50 pointer-events-none'}`}>
-                   <div className="p-3 bg-blue-50/50 border-b border-blue-100 flex justify-between items-center">
-                       <h3 className="text-[10px] font-bold text-blue-800 uppercase tracking-widest flex items-center gap-2">
-                           <Layers size={12}/> Camada Ativa
-                       </h3>
-                       <button onClick={() => setSyncSettings(!syncSettings)} className={`p-1 rounded ${syncSettings ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:text-gray-600'}`} title={syncSettings ? "Configurações sincronizadas em todas as camadas" : "Configuração Individual"}>
-                           {syncSettings ? <Lock size={12}/> : <Unlock size={12}/>}
+              <div className={`bg-white rounded-xl border border-gray-200 transition-all ${activeLayerId ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                   <div className="p-2 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                       <span className="text-[9px] font-bold text-gray-500 uppercase">Ajustes</span>
+                       <button onClick={() => setSyncSettings(!syncSettings)} className="text-gray-400">
+                           {syncSettings ? <Lock size={10}/> : <Unlock size={10}/>}
                        </button>
                    </div>
-
-                   <div className="p-4 space-y-4">
-                       {/* Scale */}
-                       <div className="space-y-1">
-                           <div className="flex justify-between text-[10px] font-bold text-gray-500"><span>ZOOM</span><span>{Math.round(globalScale * 100)}%</span></div>
-                           <input type="range" min="0.1" max="2.5" step="0.05" value={globalScale} onChange={(e) => setGlobalScale(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-600 cursor-pointer"/>
+                   <div className="p-3 space-y-3">
+                       <div className="flex items-center gap-2">
+                           <span className="text-[9px] font-bold text-gray-400 w-8">TAM</span>
+                           <input type="range" min="0.1" max="2.5" step="0.05" value={globalScale} onChange={(e) => setGlobalScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
                        </div>
-
-                       {/* Rotation */}
-                       <div className="space-y-1">
-                           <div className="flex justify-between text-[10px] font-bold text-gray-500"><span>ROTAÇÃO</span><span>{globalRotation}°</span></div>
-                           <input type="range" min="0" max="360" step="1" value={globalRotation} onChange={(e) => setGlobalRotation(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-600 cursor-pointer"/>
+                       <div className="flex items-center gap-2">
+                           <span className="text-[9px] font-bold text-gray-400 w-8">ROT</span>
+                           <input type="range" min="0" max="360" step="1" value={globalRotation} onChange={(e) => setGlobalRotation(parseInt(e.target.value))} className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
                        </div>
-
-                       {/* Flip Actions */}
                        <div className="grid grid-cols-2 gap-2">
-                           <button 
-                             onClick={() => setGlobalFlipX(!globalFlipX)} 
-                             className={`py-2 rounded-lg border text-[10px] font-bold flex items-center justify-center gap-2 transition-colors ${globalFlipX ? 'bg-vingi-900 text-white border-vingi-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                           >
-                               <FlipHorizontal size={12} /> {globalFlipX ? 'ESPELHADO H' : 'FLIP HORIZ'}
-                           </button>
-                           <button 
-                             onClick={() => setGlobalFlipY(!globalFlipY)} 
-                             className={`py-2 rounded-lg border text-[10px] font-bold flex items-center justify-center gap-2 transition-colors ${globalFlipY ? 'bg-vingi-900 text-white border-vingi-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                           >
-                               <FlipVertical size={12} /> {globalFlipY ? 'ESPELHADO V' : 'FLIP VERT'}
-                           </button>
+                           <button onClick={() => setGlobalFlipX(!globalFlipX)} className={`py-1.5 rounded border text-[9px] font-bold flex justify-center gap-1 ${globalFlipX ? 'bg-gray-800 text-white' : 'text-gray-500'}`}><FlipHorizontal size={10} /> HORIZ</button>
+                           <button onClick={() => setGlobalFlipY(!globalFlipY)} className={`py-1.5 rounded border text-[9px] font-bold flex justify-center gap-1 ${globalFlipY ? 'bg-gray-800 text-white' : 'text-gray-500'}`}><FlipVertical size={10} /> VERT</button>
                        </div>
-                       
-                       <button onClick={() => setLayers([])} className="w-full py-2 bg-red-50 text-red-500 border border-red-100 rounded-lg text-[10px] font-bold flex items-center justify-center gap-2 hover:bg-red-100 mt-2">
-                           <Eraser size={12}/> LIMPAR TUDO
-                       </button>
                    </div>
               </div>
-
-              <button onClick={handleDownload} className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-black transition-transform active:scale-95">
-                  <Download size={16}/> EXPORTAR MOCKUP
-              </button>
+              
+              <div className="flex gap-2">
+                  <button onClick={() => setLayers([])} className="flex-1 py-2 bg-red-50 text-red-500 border border-red-100 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1">
+                      <Eraser size={12}/> LIMPAR
+                  </button>
+                  <button onClick={handleDownload} className="flex-[2] py-2 bg-vingi-900 text-white font-bold rounded-lg text-[10px] shadow-lg flex items-center justify-center gap-2">
+                      <Download size={12}/> SALVAR
+                  </button>
+              </div>
           </div>
       </div>
     </div>
