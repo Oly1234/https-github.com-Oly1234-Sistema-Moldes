@@ -12,14 +12,13 @@ import {
 
 // --- MODAL FLUTUANTE 2.0 (DRAGGABLE & RESIZABLE REAL) ---
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
-    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); // Posição inicial segura
+    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); 
     const [size, setSize] = useState(180);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const dragOffset = useRef({ x: 0, y: 0 });
     const modalRef = useRef<HTMLDivElement>(null);
 
-    // Eventos Mouse/Touch para Drag
     const handleStart = (clientX: number, clientY: number) => {
         setIsDragging(true);
         dragOffset.current = { x: clientX - position.x, y: clientY - position.y };
@@ -29,8 +28,6 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
         if (!isDragging) return;
         let newX = clientX - dragOffset.current.x;
         let newY = clientY - dragOffset.current.y;
-
-        // Limites da tela
         const maxX = window.innerWidth - size;
         const maxY = window.innerHeight - (size * 1.5); 
         setPosition({
@@ -73,12 +70,7 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
         <div 
             ref={modalRef}
             className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow"
-            style={{ 
-                left: position.x, 
-                top: position.y, 
-                width: size,
-                touchAction: 'none' // Crucial para drag mobile
-            }}
+            style={{ left: position.x, top: position.y, width: size, touchAction: 'none' }}
         >
             <div 
                 className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-move active:cursor-grabbing"
@@ -91,7 +83,6 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
                     <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
                 </div>
             </div>
-            
             <div className="relative bg-gray-100">
                 <img src={image} className="w-full object-contain bg-white" style={{ maxHeight: size * 1.5 }} draggable={false} />
             </div>
@@ -99,8 +90,6 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     );
 };
 
-// ... Resto do ScannerSystem (Helpers, Actions, Render) mantidos ...
-// Apenas re-exportando o componente principal que usa o modal acima
 const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
@@ -239,12 +228,17 @@ export const ScannerSystem: React.FC = () => {
   const exactMatches = result?.matches?.exact || [];
   const closeMatches = result?.matches?.close || [];
   const vibeMatches = result?.matches?.adventurous || [];
-  const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches].sort((a, b) => b.similarityScore - a.similarityScore);
+  
+  // FILTRAGEM DEFENSIVA: Remove itens nulos ou inválidos para não quebrar o sort/map
+  const allMatches = [...exactMatches, ...closeMatches, ...vibeMatches]
+        .filter(m => m && typeof m === 'object' && m.patternName)
+        .sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0));
+
   const getFilteredMatches = () => {
       switch(activeTab) {
-          case 'EXACT': return exactMatches;
-          case 'CLOSE': return closeMatches;
-          case 'VIBE': return vibeMatches;
+          case 'EXACT': return exactMatches.filter(m => m);
+          case 'CLOSE': return closeMatches.filter(m => m);
+          case 'VIBE': return vibeMatches.filter(m => m);
           default: return allMatches;
       }
   };
@@ -402,7 +396,7 @@ export const ScannerSystem: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {visibleData.map((match, i) => (
-                        <PatternVisualCard key={i} match={match} />
+                        match ? <PatternVisualCard key={i} match={match} /> : null
                     ))}
                 </div>
                 {visibleCount < filteredData.length && (

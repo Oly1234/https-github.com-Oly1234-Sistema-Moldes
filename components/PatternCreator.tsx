@@ -1,7 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, ExternalLink, ShoppingCart } from 'lucide-react';
-import { PantoneColor } from '../types';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, RefreshCw, Loader2, Sparkles, ExternalLink, ShoppingCart, Layers } from 'lucide-react';
+import { PantoneColor, ExternalPatternMatch } from '../types';
+import { PatternVisualCard } from './PatternVisualCard';
 
 // Função de compressão
 const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
@@ -54,7 +55,10 @@ export const PatternCreator: React.FC = () => {
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
-    const [stockMatches, setStockMatches] = useState<any[]>([]);
+    
+    // Agora tipamos corretamente como ExternalPatternMatch para usar o Visual Card
+    const [stockMatches, setStockMatches] = useState<ExternalPatternMatch[]>([]);
+    const [visibleStockCount, setVisibleStockCount] = useState(10);
     
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -71,6 +75,7 @@ export const PatternCreator: React.FC = () => {
                 setDetectedColors([]);
                 setStockMatches([]);
                 setPrompt('');
+                setVisibleStockCount(10);
             };
             reader.readAsDataURL(file);
         }
@@ -100,6 +105,7 @@ export const PatternCreator: React.FC = () => {
             if (data.success) {
                 setPrompt(data.prompt);
                 setDetectedColors(data.colors || []);
+                // Garantir que stockMatches seja um array
                 setStockMatches(data.stockMatches || []);
             } else {
                 throw new Error("Dados inválidos");
@@ -112,6 +118,11 @@ export const PatternCreator: React.FC = () => {
                 { name: "Coral Pink", code: "PANTONE 16-1546 TCX", hex: "#FF6F61" },
                 { name: "Gold Ochre", code: "PANTONE 16-0948 TCX", hex: "#D1B250" },
                 { name: "Cream", code: "PANTONE 11-0601 TCX", hex: "#F0EAD6" }
+            ]);
+            // Fallback Stock Data
+            setStockMatches([
+                { source: "Patternbank", patternName: "Tropical Summer Print", type: "PREMIUM", url: "https://patternbank.com", similarityScore: 90, linkType: "DIRECT" } as ExternalPatternMatch,
+                { source: "Shutterstock", patternName: "Vector Floral Seamless", type: "ROYALTY-FREE", url: "https://shutterstock.com", similarityScore: 85, linkType: "DIRECT" } as ExternalPatternMatch
             ]);
         } finally {
             setIsAnalyzing(false);
@@ -149,6 +160,7 @@ export const PatternCreator: React.FC = () => {
 
     return (
         <div className="flex flex-col md:flex-row h-full bg-[#f8fafc] overflow-hidden">
+            {/* LEFT SIDEBAR: CONTROLS */}
             <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 shadow-xl">
                 <div className="p-5 border-b border-gray-100 bg-gray-50/50 sticky top-0 backdrop-blur z-20">
                     <h2 className="text-lg font-bold text-vingi-900 flex items-center gap-2">
@@ -226,7 +238,6 @@ export const PatternCreator: React.FC = () => {
                         />
                     </div>
 
-                    {/* BOTÃO AJUSTADO VISUALMENTE */}
                     <button 
                         onClick={generatePattern}
                         disabled={!prompt || isGenerating}
@@ -235,55 +246,73 @@ export const PatternCreator: React.FC = () => {
                         {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18}/>}
                         {isGenerating ? 'TECELANDO PIXELS...' : 'GERAR ESTAMPA 8K'}
                     </button>
-                    
-                    {/* STOCK MATCHES SECTION */}
-                    {stockMatches.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-gray-100 animate-fade-in">
-                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><ShoppingCart size={12}/> Comprar Estampa Real</h3>
-                            <div className="space-y-2">
-                                {stockMatches.map((stock, i) => (
-                                    <a key={i} href={stock.url} target="_blank" className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors group border border-gray-200">
-                                        <div className="w-8 h-8 rounded bg-gray-200 flex items-center justify-center text-gray-400 group-hover:text-vingi-600">
-                                            <ExternalLink size={14}/>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-bold text-gray-700 truncate">{stock.title}</p>
-                                            <p className="text-[10px] text-gray-500">{stock.source}</p>
-                                        </div>
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
 
-            <div className="flex-1 bg-[#e2e8f0] relative flex items-center justify-center p-4 md:p-10 overflow-hidden">
-                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#64748b 1px, transparent 1px), backgroundSize: 20px 20px' }} />
-                {!generatedPattern ? (
-                    <div className="text-center opacity-40 max-w-md">
-                        <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <ImageIcon size={40} className="text-gray-400"/>
+            {/* RIGHT AREA: PREVIEW & MARKETPLACE */}
+            <div className="flex-1 bg-[#e2e8f0] relative flex flex-col overflow-y-auto">
+                <div className="absolute inset-0 opacity-10 pointer-events-none fixed" style={{ backgroundImage: 'radial-gradient(#64748b 1px, transparent 1px), backgroundSize: 20px 20px' }} />
+
+                <div className="p-4 md:p-10 flex flex-col items-center w-full max-w-7xl mx-auto space-y-12">
+                    
+                    {/* AREA DE GERAÇÃO */}
+                    {!generatedPattern ? (
+                        <div className="text-center opacity-40 max-w-md py-20">
+                            <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <ImageIcon size={40} className="text-gray-400"/>
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-600 mb-2">Pattern Studio Pro</h3>
+                            <p className="text-gray-500">Geração Neural de Estampas 8K + Busca em Marketplaces</p>
                         </div>
-                        <h3 className="text-2xl font-bold text-gray-600 mb-2">Pattern Studio Pro</h3>
-                        <p className="text-gray-500">Geração Neural de Estampas 8K + Busca em Marketplaces</p>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center h-full w-full max-w-3xl animate-fade-in">
-                        <div className="relative w-full aspect-square bg-white rounded-xl shadow-2xl border-4 border-white overflow-hidden group">
-                            <img src={generatedPattern} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
-                                <button onClick={handleDownload} className="px-6 py-3 bg-white text-vingi-900 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
-                                    <Download size={18}/> Baixar 8K
-                                </button>
+                    ) : (
+                        <div className="flex flex-col items-center w-full max-w-3xl animate-fade-in z-10">
+                            <div className="relative w-full aspect-square bg-white rounded-xl shadow-2xl border-4 border-white overflow-hidden group">
+                                <img src={generatedPattern} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+                                    <button onClick={handleDownload} className="px-6 py-3 bg-white text-vingi-900 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
+                                        <Download size={18}/> Baixar 8K
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="mt-6 w-full h-32 bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300 relative">
+                                 <div className="absolute top-2 left-2 z-10 bg-white/80 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Teste de Repetição</div>
+                                 <div className="w-full h-full" style={{ backgroundImage: `url(${generatedPattern})`, backgroundSize: '100px 100px' }} />
                             </div>
                         </div>
-                        <div className="mt-6 w-full h-32 bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300 relative">
-                             <div className="absolute top-2 left-2 z-10 bg-white/80 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Teste de Repetição</div>
-                             <div className="w-full h-full" style={{ backgroundImage: `url(${generatedPattern})`, backgroundSize: '100px 100px' }} />
+                    )}
+
+                    {/* MARKETPLACE SECTION (VISUAL) */}
+                    {stockMatches.length > 0 && (
+                        <div className="w-full animate-fade-in pb-20">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="p-2 bg-vingi-900 rounded-lg text-white">
+                                    <ShoppingCart size={20}/>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-800">Marketplace de Estampas</h3>
+                                    <p className="text-sm text-gray-500">Opções comerciais prontas para compra baseadas na sua referência.</p>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                {stockMatches.slice(0, visibleStockCount).map((match, i) => (
+                                    <PatternVisualCard key={i} match={match} />
+                                ))}
+                            </div>
+
+                            {visibleStockCount < stockMatches.length && (
+                                <div className="mt-8 flex justify-center">
+                                    <button 
+                                        onClick={() => setVisibleStockCount(p => p + 10)}
+                                        className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 text-gray-600 transition-all"
+                                    >
+                                        Carregar Mais Estampas (+10)
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

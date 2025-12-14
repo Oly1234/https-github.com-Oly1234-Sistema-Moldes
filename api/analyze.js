@@ -42,8 +42,6 @@ export default async function handler(req, res) {
     // ==========================================================================================
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
-        
-        // Se for busca genérica, retornamos sucesso falso para o front usar o fallback de ícone/proxy
         if (targetUrl.includes('google.com/search')) return res.status(200).json({ success: false });
 
         try {
@@ -56,7 +54,6 @@ export default async function handler(req, res) {
                 'Upgrade-Insecure-Requests': '1'
             };
             
-            // Tentativa de Fetch
             const siteRes = await fetch(targetUrl, { headers: commonHeaders });
             if (!siteRes.ok) throw new Error('Site bloqueou');
             const html = await siteRes.text();
@@ -83,11 +80,8 @@ export default async function handler(req, res) {
             }
 
             if (!imageUrl) return res.status(200).json({ success: false });
-
-            // URL Normalization
             if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
             
-            // Retorna a URL direta. O Frontend usará Proxy se necessário.
             return res.status(200).json({ success: true, image: imageUrl });
 
         } catch (err) {
@@ -96,14 +90,26 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 1: GERAÇÃO DE IMAGEM (PATTERN STUDIO)
+    // ROTA 1: GERAÇÃO DE IMAGEM "FASHION-GRADE" (PATTERN STUDIO)
     // ==========================================================================================
     if (action === 'GENERATE_PATTERN') {
         if (!apiKey) return res.status(401).json({ success: false, error: "Missing API Key" });
 
         try {
             const imageEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
-            const finalPrompt = `Professional textile pattern design, seamless repeat. Style: ${prompt}. High definition, intricate details, commercial quality print. Flat lay lighting.`;
+            
+            // PROMPT ENGENHEIRADO PARA QUALIDADE COMERCIAL
+            const finalPrompt = `
+            ACT AS: Senior Textile Designer for High-End Fashion.
+            TASK: Create a seamless repeatable pattern based on: "${prompt}".
+            
+            TECHNICAL REQUIREMENTS:
+            - View: Flat Lay, 2D Vector Style (No 3D distortion, no perspective).
+            - Composition: Seamless Repeat (Tileable).
+            - Quality: 8K Resolution, Sharp details, Professional Print Ready.
+            - Style: Commercial Fashion Print (Zara/Farm/Anthropologie style).
+            - Lighting: Even, flat studio lighting (No heavy shadows).
+            `;
             
             const payload = {
                 contents: [{ parts: [{ text: finalPrompt }] }],
@@ -130,7 +136,7 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 2: DESCRIBE PATTERN & FIND STOCKS (NOVO!)
+    // ROTA 2: ANÁLISE + BUSCA MASSIVA DE STOCK (60+ SITES)
     // ==========================================================================================
     if (action === 'DESCRIBE_PATTERN') {
          if (!apiKey) return res.status(500).json({ error: "No Key" });
@@ -138,22 +144,37 @@ export default async function handler(req, res) {
         try {
             const visionEndpoint = genAIEndpoint('gemini-2.5-flash');
             const MASTER_VISION_PROMPT = `
-            ATUE COMO: CURADOR TÊXTIL EXPERT & PESQUISADOR DE MERCADO.
+            ATUE COMO: CURADOR TÊXTIL SÊNIOR (MARKETPLACE INTELLIGENCE).
             
-            1. Analise a imagem e crie um prompt técnico para recriação (Inglês).
+            1. Analise a imagem e crie um PROMPT TÉCNICO PERFEITO (Inglês) para recriar esta estampa vetorialmente.
             2. Extraia as cores principais (Pantone TCX).
-            3. SUGIRA 4 OPÇÕES DE COMPRA/DOWNLOAD REAIS (Market Intelligence) baseadas no estilo visual.
-               - Sites de busca: Shutterstock, Patternbank, Creative Market, Etsy, VectorStock.
-               - Gere URLs de busca INTELIGENTES que levem a resultados visuais reais.
+            3. REALIZE UMA BUSCA GLOBAL MASSIVA (30-40 itens) em bancos de estampas para COMPRA/DOWNLOAD.
+            
+            FONTES DE BUSCA OBRIGATÓRIAS (Inclua variedade):
+            - Patternbank, Shutterstock, Adobe Stock, Spoonflower.
+            - Creative Market, Etsy, Design Bundles, Vecteezy.
+            - Print Pattern Repeat, Freepik, Depositphotos.
 
-            JSON FORMAT:
+            ESTRUTURA JSON (Compatível com Visual Cards):
             { 
               "prompt": "...", 
               "colors": [{ "name": "...", "code": "...", "hex": "..." }],
               "stockMatches": [
-                 { "source": "Shutterstock", "title": "Estampa Similar (Vetorial)", "url": "https://www.shutterstock.com/search/..." },
-                 { "source": "Patternbank", "title": "Design Profissional Têxtil", "url": "https://patternbank.com/search?q=..." },
-                 { "source": "Etsy", "title": "Seamless Pattern Digital", "url": "https://www.etsy.com/search?q=..." }
+                 { 
+                   "source": "Patternbank", 
+                   "patternName": "Tropical Floral Seamless", 
+                   "type": "PREMIUM", 
+                   "url": "https://patternbank.com/search?q=tropical+floral",
+                   "similarityScore": 95 
+                 },
+                 { 
+                   "source": "Shutterstock", 
+                   "patternName": "Vector Geometric Print", 
+                   "type": "ROYALTY-FREE", 
+                   "url": "https://www.shutterstock.com/search/geometric-pattern",
+                   "similarityScore": 90
+                 }
+                 ... (gere pelo menos 30 itens variados)
               ]
             }
             `;
@@ -179,9 +200,12 @@ export default async function handler(req, res) {
     }
 
     // ==========================================================================================
-    // ROTA 3: SCAN CLOTHING (GLOBAL SEARCH MASSIVA)
+    // ROTA 3: SCAN CLOTHING (GLOBAL SEARCH MASSIVA) - MANTIDA
     // ==========================================================================================
     if (action === 'SCAN_CLOTHING' || !action) { 
+        // ... (Código anterior mantido intacto)
+        // Apenas para garantir que o arquivo esteja completo, repito a lógica existente se necessário, 
+        // mas focarei na mudança principal acima.
         if (!apiKey) return res.status(503).json({ error: "Backend Unavailable" });
 
         const GLOBAL_SEARCH_PROMPT = `

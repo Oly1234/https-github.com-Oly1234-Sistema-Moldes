@@ -1,4 +1,5 @@
 
+
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
@@ -53,14 +54,14 @@ export interface ExternalPatternMatch {
   source: string;
   patternName: string;
   similarityScore: number;
-  type: 'GRATUITO' | 'PAGO' | 'INDIE' | 'VINTAGE';
+  type: 'GRATUITO' | 'PAGO' | 'INDIE' | 'VINTAGE' | 'PREMIUM' | 'ROYALTY-FREE';
   linkType: 'DIRECT' | 'SEARCH_QUERY';
   url: string;
   imageUrl?: string;
   
   backupSearchTerm?: string; 
-  description: string;
-  comparisonToPhoto: string;
+  description?: string;
+  comparisonToPhoto?: string;
 }
 
 export interface MatchGroups {
