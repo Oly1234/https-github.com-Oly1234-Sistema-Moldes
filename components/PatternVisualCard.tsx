@@ -81,6 +81,7 @@ export const PatternVisualCard: React.FC<PatternVisualCardProps> = ({ match, use
                         action: 'GET_LINK_PREVIEW', 
                         targetUrl: safeUrl,
                         backupSearchTerm: match.backupSearchTerm || match.patternName,
+                        linkType: match.linkType, // CRITICAL: Passar o tipo de link
                         userReferenceImage: tinyRef
                     })
                 });
@@ -104,7 +105,7 @@ export const PatternVisualCard: React.FC<PatternVisualCardProps> = ({ match, use
 
         const timeout = setTimeout(fetchScrapedImage, Math.random() * 800);
         return () => { active = false; clearTimeout(timeout); };
-    }, [isVisible, safeUrl, initialImgRaw, match.backupSearchTerm, userReferenceImage]);
+    }, [isVisible, safeUrl, initialImgRaw, match.backupSearchTerm, userReferenceImage, match.linkType, match.patternName]);
 
     const handleImageError = () => {
         if (!imgSrc) return;

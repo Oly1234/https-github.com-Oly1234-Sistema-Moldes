@@ -5,7 +5,7 @@
 
 import { selectVisualTwin } from './curator.js';
 
-export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType = 'CLOTHING') => {
+export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType = 'CLOTHING', linkType = 'DIRECT') => {
     
     const browserHeaders = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
@@ -45,7 +45,7 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
         let match;
         let count = 0;
         
-        while ((match = regex.exec(html)) !== null && count < 15) {
+        while ((match = regex.exec(html)) !== null && count < 25) { // Aumentado limite para ter mais opções
             const url = match[1];
             const title = match[2];
             
@@ -64,39 +64,49 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
     let domain = '';
     try { domain = new URL(targetUrl).hostname; } catch(e) {}
 
-    // 1. TENTATIVA DIRETA (Seletores DOM)
-    const html = await fetchHtml(targetUrl);
-    if (html) {
-        const storeSelectors = [
-            { domain: 'patternbank', regex: /<img[^>]+class="[^"]*design-image[^"]*"[^>]+src="([^"]+)"/i },
-            { domain: 'spoonflower', regex: /<img[^>]+class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i },
-            { domain: 'burdastyle', regex: /<img[^>]+class="product-image-photo[^"]*"[^>]+src="([^"]+)"/i },
-            { domain: 'simplicity', regex: /<img[^>]+class="card-image[^"]*"[^>]+src="([^"]+)"/i },
-            { domain: 'etsy', regex: /v2-listing-card__img[\s\S]*?src="([^"]+)"/i },
-            { domain: '', regex: /<meta property="og:image" content="([^"]+)"/i },
-            { domain: '', regex: /<meta name="twitter:image" content="([^"]+)"/i }
-        ];
+    // LÓGICA 'GOOGLE LENS':
+    // Se for um link de BUSCA (SEARCH_QUERY), não tentamos raspar o site de destino (que é uma lista).
+    // Em vez disso, vamos direto para a Busca Visual usando o termo descritivo.
+    // Isso garante que mostremos uma IMAGEM DO PRODUTO (Modelo/Estampa) e não o logo do site.
+    const shouldSkipDirectScraping = linkType === 'SEARCH_QUERY' || targetUrl.includes('search') || targetUrl.includes('?q=');
 
-        const activeSelector = storeSelectors.find(s => targetUrl.includes(s.domain) && s.domain !== '');
-        if (activeSelector) {
-            const match = html.match(activeSelector.regex);
-            if (match && match[1]) imageUrl = match[1];
-        }
-        
-        if (!imageUrl) {
-             const ogMatch = html.match(storeSelectors.find(s => s.regex.toString().includes('og:image')).regex);
-             if (ogMatch && ogMatch[1]) imageUrl = ogMatch[1];
+    // 1. TENTATIVA DIRETA (Seletores DOM) - Apenas se NÃO for busca
+    if (!shouldSkipDirectScraping) {
+        const html = await fetchHtml(targetUrl);
+        if (html) {
+            const storeSelectors = [
+                { domain: 'patternbank', regex: /<img[^>]+class="[^"]*design-image[^"]*"[^>]+src="([^"]+)"/i },
+                { domain: 'spoonflower', regex: /<img[^>]+class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i },
+                { domain: 'burdastyle', regex: /<img[^>]+class="product-image-photo[^"]*"[^>]+src="([^"]+)"/i },
+                { domain: 'simplicity', regex: /<img[^>]+class="card-image[^"]*"[^>]+src="([^"]+)"/i },
+                { domain: 'etsy', regex: /v2-listing-card__img[\s\S]*?src="([^"]+)"/i },
+                { domain: '', regex: /<meta property="og:image" content="([^"]+)"/i },
+                { domain: '', regex: /<meta name="twitter:image" content="([^"]+)"/i }
+            ];
+
+            const activeSelector = storeSelectors.find(s => targetUrl.includes(s.domain) && s.domain !== '');
+            if (activeSelector) {
+                const match = html.match(activeSelector.regex);
+                if (match && match[1]) imageUrl = match[1];
+            }
+            
+            if (!imageUrl) {
+                const ogMatch = html.match(storeSelectors.find(s => s.regex.toString().includes('og:image')).regex);
+                if (ogMatch && ogMatch[1]) imageUrl = ogMatch[1];
+            }
         }
     }
 
-    // 2. CURADORIA VISUAL
-    if (backupSearchTerm) {
+    // 2. CURADORIA VISUAL (Fallback ou Principal para Busca)
+    if (!imageUrl && backupSearchTerm) {
         let candidates = [];
         
-        if (domain && domain.length > 3 && !domain.includes('google')) {
+        // Se for uma loja específica, tenta filtrar pelo domínio dela no Bing
+        if (domain && domain.length > 3 && !domain.includes('google') && !domain.includes('bing')) {
              candidates = await fetchCandidatesFromBing(backupSearchTerm, domain);
         }
 
+        // Se não achou (ou se é genérico), busca na web aberta
         if (candidates.length === 0) {
              candidates = await fetchCandidatesFromBing(backupSearchTerm, null);
         }
@@ -109,7 +119,7 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
                 // Fallback com Hash para garantir estabilidade visual sem IA
                 let domainHash = 0;
                 try { domainHash = domain.charCodeAt(0); } catch(e) { domainHash = 1; }
-                const diversityOffset = domainHash % Math.min(candidates.length, 3);
+                const diversityOffset = domainHash % Math.min(candidates.length, 5);
                 imageUrl = candidates[diversityOffset].url;
             }
         }

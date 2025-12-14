@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, userReferenceImage } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage } = req.body;
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
 
@@ -36,10 +36,9 @@ export default async function handler(req, res) {
     // 1. LINK PREVIEW & CURADORIA (Bing / Scraper / Curator)
     if (action === 'GET_LINK_PREVIEW') {
         // Detecta o contexto baseado no termo de busca (heurística simples) ou passado pelo front
-        // Se o termo tem "pattern" e não "texture", provavelmente é roupa.
         const contextType = (backupSearchTerm && backupSearchTerm.includes('texture')) ? 'SURFACE' : 'CLOTHING';
         
-        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType);
+        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType, linkType);
         
         if (image) return res.status(200).json({ success: true, image });
         return res.status(200).json({ success: false, message: "No visual found" });

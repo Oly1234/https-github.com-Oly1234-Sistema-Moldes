@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -110,8 +110,8 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
                         </span>
                     )}
                     {color.trendContext && (
-                        <span className="self-start text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1.5 py-0.5 rounded border border-vingi-100 flex items-center gap-1">
-                            <TrendingUp size={8}/> {color.trendContext}
+                        <span className="self-start text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1.5 py-0.5 rounded border border-vingi-100 flex items-center gap-1 leading-tight">
+                            <TrendingUp size={8} className="shrink-0"/> {color.trendContext}
                         </span>
                     )}
                 </div>
@@ -119,6 +119,18 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
         </div>
     );
 };
+
+const SpecBadge: React.FC<{ icon: any, label: string, value: string }> = ({ icon: Icon, label, value }) => (
+    <div className="bg-white border border-gray-100 rounded-lg p-2.5 flex items-center gap-3 shadow-sm">
+        <div className="p-2 bg-gray-50 rounded-full text-vingi-500">
+            <Icon size={14} />
+        </div>
+        <div>
+            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
+            <span className="block text-xs font-bold text-gray-800 capitalize">{value}</span>
+        </div>
+    </div>
+);
 
 export const PatternCreator: React.FC = () => {
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -245,7 +257,7 @@ export const PatternCreator: React.FC = () => {
             </header>
 
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                <div className="w-full md:w-[380px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 custom-scrollbar">
+                <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 custom-scrollbar">
                     <div className="p-6 space-y-8">
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -279,6 +291,16 @@ export const PatternCreator: React.FC = () => {
                         </div>
                         {technicalSpecs && (
                             <div className="animate-fade-in space-y-6">
+                                {/* SPEC BADGES: MOTIVOS, TÉCNICA, TEXTURA */}
+                                {technicalSpecs.motifs && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <SpecBadge icon={Leaf} label="Motivos" value={technicalSpecs.motifs[0] || 'Floral'} />
+                                        <SpecBadge icon={Brush} label="Técnica" value={technicalSpecs.technique || 'Digital'} />
+                                        <SpecBadge icon={Layers} label="Textura" value={technicalSpecs.texture || 'Liso'} />
+                                        <SpecBadge icon={Droplets} label="Vibe" value={technicalSpecs.vibe || 'Modern'} />
+                                    </div>
+                                )}
+
                                 <div>
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                         <Palette size={14}/> Pantone® Trend IQ
