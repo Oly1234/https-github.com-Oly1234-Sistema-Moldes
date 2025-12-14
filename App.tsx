@@ -28,7 +28,7 @@ export default function App() {
 
   // --- AUTO-UPDATE & PWA LOGIC ---
   useEffect(() => {
-    const APP_VERSION = '6.2-CREATOR';
+    const APP_VERSION = '6.3-PERSISTENCE';
     const checkUpdate = async () => {
         try {
             const storedVersion = localStorage.getItem('vingi_app_version');
@@ -81,12 +81,27 @@ export default function App() {
         showInstallButton={!!deferredPrompt && !isMobileBrowser}
       />
       
-      <main className="flex-1 md:ml-20 h-full overflow-y-auto overflow-x-hidden relative touch-pan-y scroll-smooth">
-        {/* Roteamento Modular */}
-        {view === 'HOME' && <ScannerSystem />}
-        {view === 'CREATOR' && <PatternCreator />}
-        {view === 'MOCKUP' && <MockupStudio />}
-        {view === 'HISTORY' && <HistorySystem />}
+      <main className="flex-1 md:ml-20 h-full overflow-hidden relative touch-pan-y">
+        {/* 
+            PERSISTÊNCIA DE ESTADO:
+            Usamos display:none em vez de desmontar o componente.
+            Isso mantém o estado (imagens carregadas, resultados) vivo ao trocar de abas.
+        */}
+        <div style={{ display: view === 'HOME' ? 'block' : 'none', height: '100%' }}>
+            <ScannerSystem />
+        </div>
+        
+        <div style={{ display: view === 'CREATOR' ? 'block' : 'none', height: '100%' }}>
+            <PatternCreator />
+        </div>
+
+        <div style={{ display: view === 'MOCKUP' ? 'block' : 'none', height: '100%' }}>
+            <MockupStudio />
+        </div>
+
+        <div style={{ display: view === 'HISTORY' ? 'block' : 'none', height: '100%', overflowY: 'auto' }}>
+            <HistorySystem />
+        </div>
       </main>
     </div>
   );
