@@ -6,8 +6,86 @@ import { MOCK_LOADING_STEPS } from '../constants';
 import { PatternVisualCard } from '../components/PatternVisualCard';
 import { 
     UploadCloud, RefreshCw, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, 
-    Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine 
+    Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine,
+    Move, Minimize2, Maximize2
 } from 'lucide-react';
+
+// --- COMPONENTE NOVO: MODAL FLUTUANTE DE COMPARAÇÃO ---
+const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
+    const [position, setPosition] = useState({ x: window.innerWidth - 180, y: window.innerHeight - 250 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [size, setSize] = useState(160); // Largura inicial
+    const dragStart = useRef({ x: 0, y: 0 });
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        setIsDragging(true);
+        dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (isDragging) {
+                setPosition({
+                    x: e.clientX - dragStart.current.x,
+                    y: e.clientY - dragStart.current.y
+                });
+            }
+        };
+        const handleMouseUp = () => setIsDragging(false);
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    if (isMinimized) {
+        return (
+            <div 
+                className="fixed bottom-4 right-4 bg-vingi-900 text-white p-3 rounded-full shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform"
+                onClick={() => setIsMinimized(false)}
+                title="Abrir Comparador"
+            >
+                <ImageIcon size={24} />
+            </div>
+        );
+    }
+
+    return (
+        <div 
+            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col"
+            style={{ 
+                left: position.x, 
+                top: position.y, 
+                width: size,
+                transition: isDragging ? 'none' : 'width 0.2s'
+            }}
+        >
+            <div 
+                className="bg-vingi-900 h-8 flex items-center justify-between px-2 cursor-move select-none"
+                onMouseDown={handleMouseDown}
+            >
+                <span className="text-[10px] font-bold text-white flex items-center gap-1"><Move size={10}/> COMPARADOR</span>
+                <button onClick={() => setIsMinimized(true)} className="text-white hover:bg-white/20 rounded p-0.5"><Minimize2 size={12}/></button>
+            </div>
+            
+            <div className="relative group">
+                <img src={image} className="w-full object-cover" style={{ height: size * 1.2 }} draggable={false} />
+                
+                {/* Resize Handle Simplificado */}
+                <div className="absolute bottom-1 right-1 flex gap-1 bg-black/50 rounded-full px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button onClick={() => setSize(s => Math.max(120, s - 20))} className="text-white"><Minimize2 size={12}/></button>
+                     <button onClick={() => setSize(s => Math.min(400, s + 20))} className="text-white"><Maximize2 size={12}/></button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- HELPERS LOCAIS ---
 const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
@@ -53,7 +131,9 @@ export const ScannerSystem: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  const [visibleCount, setVisibleCount] = useState(12);
+  
+  // PAGINAÇÃO
+  const [visibleCount, setVisibleCount] = useState(15); // Começa com 15
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +196,7 @@ export const ScannerSystem: React.FC = () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING);
     setErrorMsg(null);
-    setVisibleCount(12); 
+    setVisibleCount(15); // Reseta para 15
     
     setTimeout(async () => {
         try {
@@ -151,7 +231,7 @@ export const ScannerSystem: React.FC = () => {
     setUploadedImage(null);
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
-    setVisibleCount(12);
+    setVisibleCount(15);
     setErrorMsg(null);
   };
 
@@ -185,11 +265,11 @@ export const ScannerSystem: React.FC = () => {
       }
   };
 
-  const visibleData = getFilteredMatches().slice(0, visibleCount);
+  const filteredData = getFilteredMatches();
+  const visibleData = filteredData.slice(0, visibleCount);
   const strictQuery = result ? `${result.technicalDna.silhouette} ${result.technicalDna.neckline} pattern` : '';
 
-  // --- RENDER FAB (Floating Action Button) ---
-  // Este botão pertencia à Sidebar Global, mas agora vive aqui, pois é específico deste sistema.
+  // --- RENDER FAB ---
   const renderFab = () => {
       let icon = <Camera size={24} className="text-white" />;
       let label: string | null = null;
@@ -221,6 +301,11 @@ export const ScannerSystem: React.FC = () => {
   return (
     <div className="h-full flex flex-col relative" ref={scrollRef}>
         
+        {/* INJEÇÃO DO MODAL FLUTUANTE QUANDO TIVER RESULTADOS */}
+        {state === AppState.SUCCESS && uploadedImage && (
+            <FloatingComparisonModal image={uploadedImage} />
+        )}
+
         {/* HEADER ESPECÍFICO DO SCANNER */}
         {state !== AppState.ANALYZING && state !== AppState.ERROR && (
             <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all shadow-sm">
@@ -361,10 +446,15 @@ export const ScannerSystem: React.FC = () => {
                     ))}
                 </div>
                 
-                {visibleCount < allMatches.length && (
-                    <div className="mt-8 flex justify-center">
-                        <button onClick={() => setVisibleCount(p => p + 12)} className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all transform hover:-translate-y-1">
-                            Carregar Mais Moldes
+                {/* BOTÃO CARREGAR MAIS (PAGINAÇÃO 15 em 15) */}
+                {visibleCount < filteredData.length && (
+                    <div className="mt-8 flex justify-center flex-col items-center">
+                        <p className="text-xs text-gray-400 mb-2">Exibindo {visibleCount} de {filteredData.length} resultados</p>
+                        <button 
+                            onClick={() => setVisibleCount(p => p + 15)} 
+                            className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all transform hover:-translate-y-1"
+                        >
+                            Carregar Mais Moldes (+15)
                         </button>
                     </div>
                 )}
