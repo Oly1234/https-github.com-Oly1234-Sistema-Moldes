@@ -30,14 +30,13 @@ export default async function handler(req, res) {
     // Estratégia: 
     // 1. Tenta extrair metadados da URL oficial (Etsy, Burda, etc).
     // 2. Se falhar (bloqueio 403/Captcha), aciona o "Search Scraper" (Bing Images) usando o termo de busca.
-    // Isso garante que SEMPRE tenhamos uma imagem visual.
     if (action === 'GET_LINK_PREVIEW') {
         if (!targetUrl) return res.status(400).json({ error: 'URL necessária' });
         
-        // Headers que simulam um navegador real para evitar bloqueios simples
+        // Headers atualizados para Chrome v123
         const browserHeaders = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
             'Cache-Control': 'no-cache',
             'Upgrade-Insecure-Requests': '1'
@@ -45,7 +44,7 @@ export default async function handler(req, res) {
 
         const fetchHtml = async (url) => {
             const controller = new AbortController();
-            setTimeout(() => controller.abort(), 8000); // 8s timeout
+            setTimeout(() => controller.abort(), 10000); // 10s timeout
             try {
                 const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -55,21 +54,25 @@ export default async function handler(req, res) {
             }
         };
 
-        // SUB-FUNÇÃO: Scraper de Imagens do Bing (Fallback Visual)
-        // Usado quando o site alvo bloqueia o acesso direto.
+        // SUB-FUNÇÃO: Scraper de Imagens do Bing (Fallback Visual Robusto)
         const fallbackToImageSearch = async (term) => {
             if (!term) return null;
-            const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(term + " sewing pattern official")}&first=1`;
+            // Adiciona parâmetros para tentar obter HTML mais simples
+            const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(term + " sewing pattern")}&first=1&scenario=ImageBasicHover`;
             const html = await fetchHtml(searchUrl);
             if (!html) return null;
             
-            // Extração de URLs de miniaturas do Bing (geralmente .jpg acessíveis)
-            // Procura padroes como murl (media url) ou turl (thumbnail url)
-            const match = html.match(/murl&quot;:&quot;(https?:\/\/[^&]+)&quot;/);
-            if (match) return match[1];
+            // Regex Aprimorados para estrutura do Bing
+            // 1. Tenta encontrar JSON com murl (Media URL)
+            const murlMatch = html.match(/&quot;murl&quot;:&quot;(https?:\/\/[^&]+)&quot;/);
+            if (murlMatch) return murlMatch[1];
             
-            const match2 = html.match(/src="(https:\/\/tse\d\.mm\.bing\.net\/th\?id=[^"]+)"/);
-            if (match2) return match2[1];
+            const murlMatch2 = html.match(/"murl":"(https?:\/\/[^"]+)"/);
+            if (murlMatch2) return murlMatch2[1];
+
+            // 2. Tenta encontrar thumbnails diretos de alta qualidade
+            const imgMatch = html.match(/src="(https:\/\/tse\d\.mm\.bing\.net\/th\?id=[^"]+)"/);
+            if (imgMatch) return imgMatch[1];
 
             return null;
         };
@@ -78,8 +81,8 @@ export default async function handler(req, res) {
             // TENTATIVA 1: Scraping Direto da URL Alvo
             let imageUrl = null;
             
-            // Pular scraping direto para URLs de busca complexas (Google/Bing) pois falham muito
-            // Ir direto para o fallback visual pode ser mais rápido
+            // Sites de busca (Google/Bing/Etsy Search) geralmente bloqueiam bots simples.
+            // Nesses casos, pular direto para o fallback pode ser mais rápido e eficaz.
             const isSearchPage = targetUrl.includes('/search') || targetUrl.includes('google.com') || targetUrl.includes('bing.com');
             
             if (!isSearchPage) {
@@ -109,7 +112,7 @@ export default async function handler(req, res) {
                         if (og) imageUrl = og[1];
                     }
                     
-                    // Fallbacks Específicos
+                    // Fallbacks Específicos Etsy/Burda
                     if (!imageUrl) {
                         if (targetUrl.includes('etsy')) {
                             const etsy = html.match(/src="(https:\/\/i\.etsystatic\.com\/[^"]+il_[^"]+\.jpg)"/i);
@@ -120,9 +123,9 @@ export default async function handler(req, res) {
             }
 
             // TENTATIVA 2: Fallback Inteligente (Bing Image Search)
-            // Se o site bloqueou (html null) ou não achamos imagem, e temos um termo de busca...
+            // Se falhou em pegar a imagem oficial, busca uma imagem visual baseada no nome do molde
             if (!imageUrl && backupSearchTerm) {
-                console.log("Scraping direto falhou ou bloqueado. Tentando busca visual para:", backupSearchTerm);
+                // console.log("Tentando fallback visual para:", backupSearchTerm);
                 imageUrl = await fallbackToImageSearch(backupSearchTerm);
             }
 
@@ -131,7 +134,7 @@ export default async function handler(req, res) {
                 imageUrl = imageUrl.replace(/&amp;/g, '&');
                 if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
                 
-                // Melhoria de qualidade para Etsy
+                // Melhoria de qualidade para Etsy thumbnails
                 if (imageUrl.includes('etsystatic') && imageUrl.includes('340x270')) {
                     imageUrl = imageUrl.replace('340x270', '794xN');
                 }
@@ -147,7 +150,7 @@ export default async function handler(req, res) {
         }
     }
 
-    // --- ROTA DE GERAÇÃO DE ESTAMPA ---
+    // --- ROTA DE GERAÇÃO DE ESTAMPA (CORRIGIDA) ---
     if (action === 'GENERATE_PATTERN') {
         if (!apiKey) return res.status(401).json({ success: false, error: "Missing API Key" });
         try {
@@ -157,16 +160,26 @@ export default async function handler(req, res) {
             
             const payload = {
                 contents: [{ parts: [{ text: finalPrompt }] }],
-                generation_config: { response_mime_type: "image/jpeg", aspect_ratio: "1:1" }
+                // CRITICAL FIX: response_mime_type NÃO é suportado pelo modelo gemini-2.5-flash-image.
+                // Sua inclusão causava erro 400 da API Google.
+                generation_config: { aspect_ratio: "1:1" } 
             };
             
             const googleResponse = await fetch(imageEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const data = await googleResponse.json();
+            
+            // Itera pelas partes para encontrar a imagem (pode vir misturado com texto)
             const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
             
-            if (!imagePart) return res.status(200).json({ success: false });
+            if (!imagePart) {
+                 console.error("GenAI Error:", JSON.stringify(data));
+                 return res.status(200).json({ success: false });
+            }
             return res.status(200).json({ success: true, image: `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}` });
-        } catch (e) { return res.status(200).json({ success: false }); }
+        } catch (e) { 
+            console.error("GenAI Exception:", e);
+            return res.status(200).json({ success: false }); 
+        }
     }
 
     // --- ROTA DE DESCRIÇÃO (Para o Criador de Estampas) ---
@@ -180,7 +193,7 @@ export default async function handler(req, res) {
             TASK: Analyze the PRINT/TEXTURE.
             OUTPUT JSON:
             { 
-              "prompt": "Detailed description of the print pattern", 
+              "prompt": "Detailed description of the print pattern for AI generation", 
               "colors": [{"name": "Name", "hex": "#RRGGBB", "code": "Code"}],
               "stockMatches": [] 
             }
