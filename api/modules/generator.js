@@ -11,7 +11,12 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     // 'styleGuide' substitui 'restoration' para focar em criação
     const { layout = "Corrida", selvedge = "Inferior", width = 140, height = 100, styleGuide = "Clean lines", dpi = 72 } = textileSpecs || {};
     
-    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious colors';
+    // --- MELHORIA DE COR: Injeção de HEX e Pantone ---
+    // A IA entende melhor a cor se passarmos o Hexadecimal junto com o nome.
+    // Isso garante fidelidade ao Pantone detectado.
+    const colorList = colors && colors.length > 0 
+        ? colors.map(c => `${c.name} (Hex: ${c.hex}, Pantone: ${c.code})`).join(', ') 
+        : 'harmonious trend colors';
 
     // LÓGICA DE LAYOUT TÊXTIL (Direção da Arte)
     let layoutInstruction = "";
@@ -51,7 +56,10 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const finalPrompt = `
     Create a professional textile pattern design file.
     Subject: ${prompt}.
-    Colors: ${colorList}.
+    
+    COLOR PALETTE (STRICT ADHERENCE):
+    ${colorList}
+    - INSTRUCTION: Use strictly these colors for the main motifs and background. Ensure faithful reproduction of the Hex codes provided.
     
     Technical Specs:
     ${layoutInstruction}
