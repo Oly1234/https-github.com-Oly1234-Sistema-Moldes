@@ -19,12 +19,13 @@ export const selectVisualTwin = async (apiKey, candidates, userReferenceImage, c
 
         if (contextType === 'CLOTHING') {
             CRITERIA_PROMPT = `
-            CONTEXT: The user is looking for a SEWING PATTERN or GARMENT.
+            CONTEXT: The user needs a VISUAL REFERENCE for a sewing pattern.
             
             STRICT FILTERING RULES (TOLERANCE ZERO):
-            1. ACCEPT ONLY: Photos of a PERSON modeling the clothes, a MANNEQUIN, or a SEWING PATTERN ENVELOPE/DRAWING.
-            2. REJECT HARD: Any image that is just a fabric swatch, a logo, a landscape, or an object that is not clothing.
-            3. GOAL: Find the image that best shows the SILHOUETTE and FIT of the garment referenced.
+            1. SINGLE SUBJECT: Prefer photos with ONE model. Reject crowded magazine covers with multiple people/men unless the reference is men's wear.
+            2. REALISM: Prefer REAL PHOTOS over drawings/sketches/illustrations.
+            3. FULL VIEW: Prefer full-body or torso shots where the garment structure is visible.
+            4. REJECT: Blurry thumbnails, logos, text-heavy images.
             `;
         } else {
             // SURFACE / TEXTURE - REGRAS RÍGIDAS DE FLAT LAY

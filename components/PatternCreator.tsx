@@ -238,7 +238,6 @@ export const PatternCreator: React.FC = () => {
     };
 
     // DEDUPLICAÇÃO DE RESULTADOS
-    // Filtramos por URL para evitar que a mesma loja apareça duas vezes com o mesmo link
     const uniqueMatches = fabricMatches.filter((match, index, self) =>
         index === self.findIndex((m) => (
             m.url === match.url
@@ -256,8 +255,11 @@ export const PatternCreator: React.FC = () => {
                 <h2 className="text-lg font-bold text-gray-800">Pattern Studio <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500 ml-2">BETA</span></h2>
             </header>
 
+            {/* Layout Flex para Mobile (Column) e Desktop (Row) */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                <div className="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-10 custom-scrollbar">
+                
+                {/* SIDEBAR: INPUTS & ANÁLISE (Scrollável no Mobile) */}
+                <div className="w-full md:w-[400px] bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col h-auto md:h-full overflow-y-auto shrink-0 z-10 custom-scrollbar shadow-sm">
                     <div className="p-6 space-y-8">
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -291,7 +293,6 @@ export const PatternCreator: React.FC = () => {
                         </div>
                         {technicalSpecs && (
                             <div className="animate-fade-in space-y-6">
-                                {/* SPEC BADGES: MOTIVOS, TÉCNICA, TEXTURA */}
                                 {technicalSpecs.motifs && (
                                     <div className="grid grid-cols-2 gap-2">
                                         <SpecBadge icon={Leaf} label="Motivos" value={technicalSpecs.motifs[0] || 'Floral'} />
@@ -332,7 +333,7 @@ export const PatternCreator: React.FC = () => {
                     </div>
                 </div>
 
-                {/* COLUNA 2: RESULTADOS VISUAIS */}
+                {/* ÁREA PRINCIPAL: RESULTADOS (Scrollável Independente) */}
                 <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f1f5f9]">
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -371,7 +372,7 @@ export const PatternCreator: React.FC = () => {
                         )}
                     </div>
                     
-                    <div className="p-6 md:p-8">
+                    <div className="p-6 md:p-8 pb-32">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                 <Globe className="text-vingi-600"/> Marketplaces Globais

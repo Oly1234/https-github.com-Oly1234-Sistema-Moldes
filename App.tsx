@@ -81,25 +81,30 @@ export default function App() {
         showInstallButton={!!deferredPrompt && !isMobileBrowser}
       />
       
-      <main className="flex-1 md:ml-20 h-full overflow-hidden relative touch-pan-y">
+      {/* 
+          LAYOUT MOBILE FIX:
+          - 'md:ml-20': Margem esquerda no desktop para sidebar
+          - 'pb-20 md:pb-0': Padding bottom no mobile para não cobrir conteúdo com a barra
+          - 'h-full': Ocupa altura total
+      */}
+      <main className="flex-1 md:ml-20 h-full overflow-hidden relative touch-pan-y flex flex-col">
         {/* 
             PERSISTÊNCIA DE ESTADO:
-            Usamos display:none em vez de desmontar o componente.
-            Isso mantém o estado (imagens carregadas, resultados) vivo ao trocar de abas.
+            Usamos display:none. O container interno tem padding para mobile.
         */}
-        <div style={{ display: view === 'HOME' ? 'block' : 'none', height: '100%' }}>
+        <div style={{ display: view === 'HOME' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             <ScannerSystem />
         </div>
         
-        <div style={{ display: view === 'CREATOR' ? 'block' : 'none', height: '100%' }}>
+        <div style={{ display: view === 'CREATOR' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             <PatternCreator />
         </div>
 
-        <div style={{ display: view === 'MOCKUP' ? 'block' : 'none', height: '100%' }}>
+        <div style={{ display: view === 'MOCKUP' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             <MockupStudio />
         </div>
 
-        <div style={{ display: view === 'HISTORY' ? 'block' : 'none', height: '100%', overflowY: 'auto' }}>
+        <div style={{ display: view === 'HISTORY' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0 overflow-y-auto">
             <HistorySystem />
         </div>
       </main>
