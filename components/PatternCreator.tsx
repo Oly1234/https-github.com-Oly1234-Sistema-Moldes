@@ -256,10 +256,12 @@ export const PatternCreator: React.FC = () => {
             </header>
 
             {/* Layout Flex para Mobile (Column) e Desktop (Row) */}
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+            {/* FIX MOBILE SCROLL: overflow-y-auto no wrapper principal para mobile, md:overflow-hidden para desktop */}
+            <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden overflow-y-auto">
                 
-                {/* SIDEBAR: INPUTS & ANÁLISE (Scrollável no Mobile) */}
-                <div className="w-full md:w-[400px] bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col h-auto md:h-full overflow-y-auto shrink-0 z-10 custom-scrollbar shadow-sm">
+                {/* SIDEBAR: INPUTS & ANÁLISE */}
+                {/* Mobile: h-auto (flow), Desktop: h-full (scroll independent) */}
+                <div className="w-full md:w-[400px] bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col h-auto md:h-full md:overflow-y-auto shrink-0 z-10 custom-scrollbar shadow-sm">
                     <div className="p-6 space-y-8">
                         <div>
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -333,8 +335,9 @@ export const PatternCreator: React.FC = () => {
                     </div>
                 </div>
 
-                {/* ÁREA PRINCIPAL: RESULTADOS (Scrollável Independente) */}
-                <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f1f5f9]">
+                {/* ÁREA PRINCIPAL: RESULTADOS */}
+                {/* Mobile: h-auto (flow), Desktop: h-full (scroll independent) */}
+                <div className="flex-1 flex flex-col h-auto md:h-full md:overflow-y-auto bg-[#f1f5f9]">
                     <div className="p-6 md:p-10 flex flex-col items-center justify-center bg-white border-b border-gray-200 min-h-[400px] relative">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                         {!generatedPattern && !isGenerating ? (

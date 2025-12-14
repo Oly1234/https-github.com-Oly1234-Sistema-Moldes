@@ -1,9 +1,6 @@
 
-// api/modules/scraper.js
-// DEPARTAMENTO: AQUISIÇÃO DE DADOS (O Coletor)
-// RESPONSÁVEL: Vingi Scout Team
-
-import { selectVisualTwin } from './curator.js';
+// DEPARTAMENTO: AQUISIÇÃO DE DADOS (Scraper Rápido)
+// Responsabilidade: Buscar a melhor imagem REPRESENTATIVA para o link, sem bloquear o usuário.
 
 export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType = 'CLOTHING', linkType = 'DIRECT') => {
     
@@ -14,123 +11,100 @@ export const getLinkPreview = async (targetUrl, backupSearchTerm, userReferenceI
 
     const fetchHtml = async (url) => {
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), 8000); // Mais tempo para coleta
+        setTimeout(() => controller.abort(), 5000); // Timeout agressivo (5s) para velocidade
         try {
             const response = await fetch(url, { headers: browserHeaders, signal: controller.signal });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) return null;
             return await response.text();
         } catch (e) { return null; }
     };
 
-    // SUB-ROTINA: Coleta Ampliada no Bing (COM DEDUPLICAÇÃO)
     const fetchCandidatesFromBing = async (term, specificDomain = null) => {
         if (!term) return [];
-        
-        let query = term.replace(/sewing pattern/gi, 'pattern').trim();
-        
-        // Estratégia de Domínio + Visual
-        if (specificDomain) {
-            query += ` site:${specificDomain}`;
-        }
+        let query = term.trim();
+        if (specificDomain) query += ` site:${specificDomain}`;
 
+        // Busca imagens com filtro de aspecto para evitar banners (aspect=Wide/Tall/Square)
+        // Usamos &first=1 para pegar os primeiros resultados
         const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&first=1&scenario=ImageBasicHover`;
         const html = await fetchHtml(searchUrl);
         if (!html) return [];
 
         const candidates = [];
-        const seenUrls = new Set(); // DEDUPLICAÇÃO: Rastreia URLs já vistas
-        
-        // Regex ajustado para pegar thumbnails
+        // Regex para extrair URL da imagem e Título
         const regex = /murl&quot;:&quot;(https?:\/\/[^&]+)&quot;.*?&quot;t&quot;:&quot;([^&]+)&quot;/g;
         let match;
         let count = 0;
         
-        while ((match = regex.exec(html)) !== null && count < 25) { // Aumentado limite para ter mais opções
+        while ((match = regex.exec(html)) !== null && count < 10) { 
             const url = match[1];
             const title = match[2];
+            // Filtros Heurísticos Rápidos (Substitui a IA Lenta)
+            const isLogo = /logo|banner|sprite|icon/i.test(title) || /logo|banner/i.test(url);
+            const isProduct = /dress|pattern|skirt|shirt|top|trousers|fabric|print/i.test(title);
             
-            // Só adiciona se a URL for nova
-            if (!seenUrls.has(url)) {
-                candidates.push({ url, title });
-                seenUrls.add(url);
+            if (!isLogo) {
+                // Pontuação simples
+                let score = 0;
+                if (isProduct) score += 5;
+                if (url.includes('jpg') || url.includes('png')) score += 2;
+                
+                candidates.push({ url, title, score });
                 count++;
             }
         }
-        return candidates;
+        // Ordena por pontuação heurística
+        return candidates.sort((a, b) => b.score - a.score);
     };
 
-    // --- EXECUÇÃO DO PROCESSO ---
+    // --- LÓGICA DE EXECUÇÃO ---
     let imageUrl = null;
     let domain = '';
     try { domain = new URL(targetUrl).hostname; } catch(e) {}
 
-    // LÓGICA 'GOOGLE LENS':
-    // Se for um link de BUSCA (SEARCH_QUERY), não tentamos raspar o site de destino (que é uma lista).
-    // Em vez disso, vamos direto para a Busca Visual usando o termo descritivo.
-    // Isso garante que mostremos uma IMAGEM DO PRODUTO (Modelo/Estampa) e não o logo do site.
-    const shouldSkipDirectScraping = linkType === 'SEARCH_QUERY' || targetUrl.includes('search') || targetUrl.includes('?q=');
-
-    // 1. TENTATIVA DIRETA (Seletores DOM) - Apenas se NÃO for busca
-    if (!shouldSkipDirectScraping) {
+    // 1. SELETORES DIRETOS (Rápido, se funcionar)
+    // Se não for busca genérica, tenta pegar do HTML da loja
+    const shouldScrapeDirect = linkType !== 'SEARCH_QUERY' && !targetUrl.includes('search');
+    
+    if (shouldScrapeDirect) {
         const html = await fetchHtml(targetUrl);
         if (html) {
             const storeSelectors = [
-                { domain: 'patternbank', regex: /<img[^>]+class="[^"]*design-image[^"]*"[^>]+src="([^"]+)"/i },
-                { domain: 'spoonflower', regex: /<img[^>]+class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i },
-                { domain: 'burdastyle', regex: /<img[^>]+class="product-image-photo[^"]*"[^>]+src="([^"]+)"/i },
-                { domain: 'simplicity', regex: /<img[^>]+class="card-image[^"]*"[^>]+src="([^"]+)"/i },
-                { domain: 'etsy', regex: /v2-listing-card__img[\s\S]*?src="([^"]+)"/i },
-                { domain: '', regex: /<meta property="og:image" content="([^"]+)"/i },
-                { domain: '', regex: /<meta name="twitter:image" content="([^"]+)"/i }
+                { regex: /<meta property="og:image" content="([^"]+)"/i },
+                { regex: /<meta name="twitter:image" content="([^"]+)"/i },
+                { regex: /class="[^"]*product-image[^"]*"[^>]+src="([^"]+)"/i }
             ];
-
-            const activeSelector = storeSelectors.find(s => targetUrl.includes(s.domain) && s.domain !== '');
-            if (activeSelector) {
-                const match = html.match(activeSelector.regex);
-                if (match && match[1]) imageUrl = match[1];
-            }
-            
-            if (!imageUrl) {
-                const ogMatch = html.match(storeSelectors.find(s => s.regex.toString().includes('og:image')).regex);
-                if (ogMatch && ogMatch[1]) imageUrl = ogMatch[1];
+            for (const s of storeSelectors) {
+                const match = html.match(s.regex);
+                if (match && match[1]) { imageUrl = match[1]; break; }
             }
         }
     }
 
-    // 2. CURADORIA VISUAL (Fallback ou Principal para Busca)
+    // 2. BUSCA VISUAL NO BING (Backup ou Principal para Busca)
+    // Se o método direto falhou ou se é uma página de busca
     if (!imageUrl && backupSearchTerm) {
+        // Tenta buscar no Bing restringindo ao site da loja (ex: "vestido site:simplicity.com")
         let candidates = [];
-        
-        // Se for uma loja específica, tenta filtrar pelo domínio dela no Bing
-        if (domain && domain.length > 3 && !domain.includes('google') && !domain.includes('bing')) {
+        if (domain && !domain.includes('google')) {
              candidates = await fetchCandidatesFromBing(backupSearchTerm, domain);
         }
-
-        // Se não achou (ou se é genérico), busca na web aberta
+        
+        // Se falhar, busca na web aberta
         if (candidates.length === 0) {
              candidates = await fetchCandidatesFromBing(backupSearchTerm, null);
         }
 
         if (candidates.length > 0) {
-            if (userReferenceImage && apiKey) {
-                // Curador seleciona o melhor candidato
-                imageUrl = await selectVisualTwin(apiKey, candidates, userReferenceImage, contextType);
-            } else {
-                // Fallback com Hash para garantir estabilidade visual sem IA
-                let domainHash = 0;
-                try { domainHash = domain.charCodeAt(0); } catch(e) { domainHash = 1; }
-                const diversityOffset = domainHash % Math.min(candidates.length, 5);
-                imageUrl = candidates[diversityOffset].url;
-            }
+            // Seleciona o melhor candidato baseado na heurística (Top 1)
+            imageUrl = candidates[0].url;
         }
     }
 
-    // 3. HIGIENIZAÇÃO
+    // 3. LIMPEZA FINAL
     if (imageUrl) {
         imageUrl = imageUrl.replace(/&amp;/g, '&');
         if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-        if (imageUrl.includes('etsystatic')) imageUrl = imageUrl.replace('340x270', '794xN');
-        if (imageUrl.includes('cdn.shopify.com') && imageUrl.includes('_small')) imageUrl = imageUrl.replace('_small', '_600x600');
     }
     
     return imageUrl;

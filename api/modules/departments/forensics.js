@@ -1,37 +1,49 @@
 
 // DEPARTAMENTO: FORENSE VISUAL (The Lens)
-// Responsabilidade: Descrever EXATAMENTE o que é visto para fins de busca visual.
+// Responsabilidade: Desmembrar a imagem em dados técnicos puros.
 
 export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson, context = 'TEXTURE') => {
-    // Contexto TEXTURE = Foca na arte (Flat lay)
-    // Contexto GARMENT = Foca na construção (Molde)
-    
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
+        // AB DE CRIADOR: Foco na Arte/Superfície
         SYSTEM_PROMPT = `
-        ACT AS: Surface Design Archivist.
-        TASK: Describe the ARTWORK/TEXTURE only. Ignore any 3D object shape.
+        ACT AS: Surface Design Specialist.
+        TASK: Analyze the ARTWORK style and repetition.
         
         OUTPUT JSON:
-        1. "visualDescription": Precise keywords for a search engine (e.g. "Seamless watercolor tropical floral pattern white background").
+        1. "visualDescription": Precise keywords for the print (e.g. "Seamless watercolor tropical hibiscus pattern").
         2. "technicalSpecs": { 
-            "technique": "Watercolor/Vector/Pixel", 
-            "motifs": ["Hibiscus", "Palm"], 
-            "texture": "Canvas/Silk/Paper" 
+            "technique": "Watercolor/Digital/Vector", 
+            "motifs": ["Flower", "Leaf", "Abstract"], 
+            "complexity": "Simple/Complex" 
         }
         `;
     } else {
+        // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa (Desmembramento)
         SYSTEM_PROMPT = `
-        ACT AS: Technical Fashion Pattern Maker.
-        TASK: Describe the GARMENT CONSTRUCTION.
+        ACT AS: Master Pattern Cutter & Fashion Historian.
+        TASK: "Dismember" the garment in the image into its construction components.
+        
+        ANALYSIS REQUIRED:
+        1. STRUCTURE: Where are the seams? (Princess seams, Darts, Drop shoulder?)
+        2. COMPONENTS: Sleeve type (Raglan, Set-in, Bishop), Collar type.
+        3. FABRIC: Stiff (Denim/Wool) or Drapey (Silk/Rayon)?
         
         OUTPUT JSON:
-        1. "visualDescription": Technical keywords for finding the SEWING PATTERN (e.g. "Bias cut slip dress cowl neck pattern").
-        2. "technicalSpecs": { 
-            "silhouette": "A-Line/Sheath", 
-            "neckline": "Cowl/V-Neck", 
-            "details": "Spaghetti straps" 
+        {
+            "visualDescription": "Technical Name of the Garment" (e.g. "Bias Cut Cowl Neck Slip Dress"),
+            "searchKeywords": [
+                "Primary technical term (e.g. 'Bias cut slip dress pattern')",
+                "Secondary vibe term (e.g. '90s minimalist evening dress sewing pattern')",
+                "Specific detail term (e.g. 'Spaghetti strap midi dress pattern')"
+            ],
+            "technicalSpecs": { 
+                "silhouette": "Defined by the cut (e.g. A-Line, Sheath)", 
+                "neckline": "Specific neckline", 
+                "details": "Key construction details (e.g. Invisible Zipper, French Seams)",
+                "fabric": "Suggested fabric weight"
+            }
         }
         `;
     }
@@ -42,9 +54,19 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         generation_config: { response_mime_type: "application/json" }
     };
 
-    const response = await fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    return JSON.parse(cleanJson(text));
+    try {
+        const response = await fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("Sem resposta visual.");
+        return JSON.parse(cleanJson(text));
+    } catch (e) {
+        console.error("Forensics Dept Error:", e);
+        // Fallback robusto
+        return {
+            visualDescription: "Fashion Garment",
+            searchKeywords: ["Sewing pattern", "Dress pattern"],
+            technicalSpecs: { silhouette: "Unknown", neckline: "Unknown", details: "None", fabric: "Any" }
+        };
+    }
 };
