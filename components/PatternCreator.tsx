@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Box, Maximize2, Feather, AlertCircle, Search, ChevronRight, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2 } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
 
@@ -80,6 +80,12 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
         img.onerror = () => reject(new Error("Load error"));
     });
 };
+
+const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
+    <a href={url} target="_blank" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white transition-transform hover:scale-105 ${colorClass}`}>
+        <Icon size={12} /> {name}
+    </a>
+);
 
 // CARTÃO PANTONE INTERATIVO & TRENDY (ATUALIZADO PARA EXIBIR DADOS DO DEPARTAMENTO DE COR)
 const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
@@ -245,6 +251,9 @@ export const PatternCreator: React.FC = () => {
     );
 
     const visibleData = uniqueMatches.slice(0, visibleMatchesCount);
+    
+    // Helper para links
+    const textureQuery = prompt ? `${prompt} seamless pattern` : 'texture pattern';
 
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden relative">
@@ -410,6 +419,18 @@ export const PatternCreator: React.FC = () => {
                                         </button>
                                     </div>
                                 )}
+
+                                {/* SEÇÃO DE LINKS CONTEXTUAIS EXTERNOS (IGUAL À ABA MOLDES) */}
+                                <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                                    <h4 className="font-bold mb-4 flex items-center gap-2 text-sm text-gray-500 uppercase tracking-widest"><Globe size={14}/> Busca Visual Global</h4>
+                                    <div className="flex gap-2 flex-wrap">
+                                        <ExternalSearchButton name="Google Imagens" url={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(textureQuery)}`} colorClass="bg-blue-600" icon={Globe} />
+                                        <ExternalSearchButton name="Pinterest" url={`https://www.pinterest.com/search/pins/?q=${encodeURIComponent(textureQuery)}`} colorClass="bg-red-600" icon={Share2} />
+                                        <ExternalSearchButton name="Shutterstock" url={`https://www.shutterstock.com/search/${encodeURIComponent(textureQuery)}`} colorClass="bg-red-500" icon={ShoppingBag} />
+                                        <ExternalSearchButton name="Etsy Digital" url={`https://www.etsy.com/search?q=${encodeURIComponent(textureQuery + ' digital paper')}`} colorClass="bg-orange-500" icon={ShoppingBag} />
+                                        <ExternalSearchButton name="Spoonflower" url={`https://www.spoonflower.com/en/shop?on=fabric&q=${encodeURIComponent(textureQuery)}`} colorClass="bg-teal-600" icon={ShoppingBag} />
+                                    </div>
+                                </div>
                             </>
                         )}
                     </div>

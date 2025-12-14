@@ -3,26 +3,24 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração de Estampas)
 
 export const generatePattern = async (apiKey, prompt, colors) => {
-    // 1. Modelo Nano Banana (Imagem)
+    // 1. Definição do Modelo
     const MODEL_NAME = 'gemini-2.5-flash-image';
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    // 2. Construção do Prompt Visual (Simplificado e Direto)
+    // 2. Construção do Prompt Visual
     const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious colors';
     
-    // Prompt focado puramente na textura visual
+    // Prompt otimizado para texturas seamless
     const finalPrompt = `
-    Create a seamless texture pattern.
+    Create a high-quality seamless pattern texture.
     Subject: ${prompt}.
-    Colors: ${colorList}.
-    Style: Professional textile design swatch.
-    View: Top-down, flat, crop.
+    Color Palette: ${colorList}.
+    Style: Professional textile design, flat lay, straight view, detailed, vector-style.
+    Requirements: Seamless tiling, no shadows, no watermarks.
     `;
 
     try {
-        // CORREÇÃO ERRO 400:
-        // 1. Removemos response_mime_type (não suportado para este modelo)
-        // 2. Usamos a estrutura correta de generationConfig para imagem
+        // PAYLOAD ESTRITO (Sem parâmetros de texto como response_mime_type)
         const payload = {
             contents: [{ 
                 parts: [
@@ -30,11 +28,11 @@ export const generatePattern = async (apiKey, prompt, colors) => {
                 ] 
             }],
             generationConfig: {
-                // Configuração específica para modelos de imagem do Gemini
                 imageConfig: {
                     aspectRatio: "1:1",
-                    imageSize: "1K" // Opcional, mas garante qualidade
-                }
+                    imageSize: "1K"
+                },
+                // Importante: Não enviar responseMimeType nem responseSchema para geração de imagem
             }
         };
 
@@ -47,33 +45,27 @@ export const generatePattern = async (apiKey, prompt, colors) => {
         if (!response.ok) {
             const errText = await response.text();
             console.error("Generator API Error Details:", errText);
-            throw new Error(`Erro na API (${response.status}): Verifique se sua chave suporta o modelo Nano Banana.`);
+            throw new Error(`Erro Atelier (${response.status}): A chave de API pode não ter acesso ao modelo de imagem ou o payload foi rejeitado.`);
         }
 
         const data = await response.json();
         
         // 3. Extração da Imagem
+        // A API retorna a imagem em inline_data dentro de parts
         const parts = data.candidates?.[0]?.content?.parts;
-        
-        // Procura por inline_data (Imagem)
         const imagePart = parts?.find(p => p.inline_data);
+        
         if (imagePart) {
              return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         } 
         
-        // Verifica recusa
+        // Verifica recusa por segurança
         const finishReason = data.candidates?.[0]?.finish_reason;
         if (finishReason === 'SAFETY') {
-            throw new Error("Bloqueio de Segurança. Tente um prompt mais simples (ex: 'floral abstrato').");
+            throw new Error("A IA recusou gerar a imagem por motivos de segurança (Safety Filter). Tente um prompt mais neutro.");
         }
 
-        // Se retornou texto, é erro de interpretação
-        const textPart = parts?.find(p => p.text)?.text;
-        if (textPart) {
-            throw new Error("A IA gerou texto. Tente novamente.");
-        }
-
-        throw new Error("O servidor não retornou imagem.");
+        throw new Error("O servidor respondeu, mas não retornou dados de imagem válidos.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);
