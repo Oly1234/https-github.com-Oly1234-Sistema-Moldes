@@ -3,29 +3,34 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração de Estampas)
 
 export const generatePattern = async (apiKey, prompt, colors) => {
-    // Instrução técnica para forçar o modelo a agir como uma impressora têxtil digital
-    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'harmonious colors';
+    // 1. Configuração do Modelo de Imagem (Nano Banana / Gemini Flash Image)
+    // Este modelo é específico para gerar pixels, diferente do Flash de texto.
+    const MODEL_NAME = 'gemini-2.5-flash-image';
+    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+
+    // 2. Construção do Prompt Visual
+    const colorList = colors && colors.length > 0 ? colors.map(c => c.name).join(', ') : 'vibrant harmonious colors';
     
-    // PROMPT SIMPLIFICADO E DIRETO
-    // O erro "AI gerou texto" ocorre quando damos instruções comportamentais ("Do not do this").
-    // A solução é dar APENAS a descrição visual da imagem desejada.
+    // O prompt deve ser descritivo e direto para o modelo de imagem
     const finalPrompt = `
-    A high-quality, professional seamless textile pattern design.
-    Subject: ${prompt}.
-    Colors: ${colorList}.
-    Style: Digital vector art or watercolor illustration.
-    View: Top-down flat lay texture file.
-    No people, no models, no text, no realistic skin. Abstract or floral surface design only.
+    Seamless textile pattern design, top-down flat view.
+    Motif: ${prompt}.
+    Palette: ${colorList}.
+    Style: High-quality professional surface design, repeat pattern.
+    Texture: Fabric texture visible.
+    NO text, NO watermarks, NO realistic human faces.
     `;
 
-    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    
     try {
         const payload = {
-            contents: [{ parts: [{ text: finalPrompt }] }],
+            contents: [{ 
+                parts: [
+                    { text: finalPrompt }
+                ] 
+            }],
             generation_config: { 
-                candidate_count: 1,
-                temperature: 0.7 
+                response_mime_type: "image/jpeg", // Solicita explicitamente imagem
+                aspect_ratio: "1:1"
             }
         };
 
@@ -36,12 +41,15 @@ export const generatePattern = async (apiKey, prompt, colors) => {
         });
         
         if (!response.ok) {
-            throw new Error(`Erro na API (${response.status})`);
+            const errText = await response.text();
+            console.error("Generator API Error:", errText);
+            throw new Error(`Erro na API de Imagem (${response.status})`);
         }
 
         const data = await response.json();
         
-        // Verifica imagem inline
+        // 3. Extração da Imagem (Inline Data)
+        // O modelo Nano Banana retorna a imagem dentro de inline_data
         const parts = data.candidates?.[0]?.content?.parts;
         const imagePart = parts?.find(p => p.inline_data);
         
@@ -49,22 +57,20 @@ export const generatePattern = async (apiKey, prompt, colors) => {
              return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         } 
         
-        // Verifica recusa de segurança
+        // Verificação de Bloqueio de Segurança
         const finishReason = data.candidates?.[0]?.finish_reason;
         if (finishReason === 'SAFETY') {
-            console.warn("Safety Block Triggered. Prompt was:", finalPrompt);
-            throw new Error("Bloqueio de Segurança. Tente termos como 'abstrato', 'floral' ou 'geométrico'.");
+            throw new Error("A IA bloqueou a imagem por segurança. Tente termos mais neutros (ex: 'floral', 'geométrico').");
         }
 
-        // Se retornou texto, é uma falha de "Chat Mode". 
-        // Lançamos erro para o frontend pedir simplificação.
-        const textPart = parts?.[0]?.text;
+        // Fallback: Se o modelo responder com texto (às vezes acontece se ele não entender o pedido de imagem)
+        const textPart = parts?.find(p => p.text)?.text;
         if (textPart) {
-             console.warn("AI returned text instead of image:", textPart);
-             throw new Error("A IA interpretou como conversa. Tente simplificar o prompt (ex: 'flores azuis').");
+            console.warn("AI returned text:", textPart);
+            throw new Error("A IA não gerou imagem. Tente simplificar o pedido.");
         }
 
-        throw new Error("O servidor não retornou dados visuais.");
+        throw new Error("O servidor processou mas não retornou dados visuais.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);

@@ -236,14 +236,15 @@ export const ScannerSystem: React.FC = () => {
     if (state === AppState.IDLE && !uploadedImage) { cameraInputRef.current?.click(); }
   };
 
-  // DEDUPLICAÇÃO DE RESULTADOS
-  // Filtramos por URL para evitar que a mesma loja apareça duas vezes com o mesmo link
+  // DEDUPLICAÇÃO INTELIGENTE
+  // Permite múltiplos resultados do mesmo site SE a URL for diferente (ex: Etsy PDF vs Etsy Vintage)
   const getUniqueMatches = (list: any[]) => {
-      const seen = new Set();
+      const seenUrls = new Set();
       return list.filter(m => {
           if (!m || !m.url) return false;
-          if (seen.has(m.url)) return false;
-          seen.add(m.url);
+          // Se a URL exata já existe, filtra. Se for diferente (query params diferentes), aceita.
+          if (seenUrls.has(m.url)) return false;
+          seenUrls.add(m.url);
           return true;
       });
   };

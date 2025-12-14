@@ -37,20 +37,22 @@ export const analyzeClothingDna = async (apiKey, mainImageBase64, mainMimeType, 
 
 export const getClothingStores = (analysis) => {
     const baseTerm = analysis.patternName;
+    const dna = analysis.technicalDna;
     // CRÍTICO: Força a busca por "Finished Garment" ou "Sewn" para evitar envelopes desenhados
     const visualTerm = `${analysis.patternName} sewn garment model photo`;
 
-    const createLink = (storeName, type, urlBase, visualStyle, boost) => {
+    const createLink = (storeName, type, urlBase, visualStyle, boost, variantSuffix = '') => {
         // A busca de backup agora é extremamente específica para fotografia real
         const highlySpecificSearch = `"${storeName}" ${baseTerm} ${visualStyle} -drawing -illustration -sketch`;
         
         return {
-            source: storeName,
+            source: storeName + (variantSuffix ? ` ${variantSuffix}` : ''),
             patternName: baseTerm, 
             description: visualTerm, 
             type,
             linkType: "SEARCH_QUERY",
-            url: `${urlBase}${encodeURIComponent(baseTerm)}`,
+            // Adiciona sufixo na URL para garantir unicidade se for o mesmo domínio
+            url: `${urlBase}${encodeURIComponent(baseTerm + ' ' + variantSuffix)}`,
             backupSearchTerm: highlySpecificSearch, 
             similarityScore: 90 + boost,
             imageUrl: null
@@ -59,14 +61,18 @@ export const getClothingStores = (analysis) => {
 
     const matches = { exact: [], close: [], adventurous: [] };
 
-    // 1. GIGANTES (Big 4 & Commercial) - Foco em "Model"
+    // 1. GIGANTES (Big 4 & Commercial) - Múltiplas entradas para variedade
     matches.exact.push(createLink("Simplicity", "BIG 4", "https://simplicity.com/search.php?search_query=", "model wearing pattern photo", 3));
     matches.exact.push(createLink("McCall's", "BIG 4", "https://simplicity.com/search.php?search_query=", "finished garment photography", 3));
     matches.exact.push(createLink("Vogue Patterns", "COUTURE", "https://simplicity.com/search.php?search_query=", "runway style photo", 3));
     matches.exact.push(createLink("Burda Style", "EURO", "https://www.burdastyle.com/catalogsearch/result/?q=", "magazine editorial model photo", 3));
     matches.exact.push(createLink("Butterick", "CLASSIC", "https://simplicity.com/search.php?search_query=", "classic dress model photo", 2));
+    
+    // Novas fontes
+    matches.exact.push(createLink("Sew Direct", "UK", "https://www.sewdirect.com/?s=", "sewing pattern model", 2));
+    matches.exact.push(createLink("Something Delightful", "USA", "https://somethingdelightful.com/search.php?search_query=", "fashion pattern photo", 2));
 
-    // 2. INDIE & MODERN (Alta Qualidade Visual) - Foco em "Photoshoot"
+    // 2. INDIE & MODERN (Alta Qualidade Visual)
     matches.close.push(createLink("Closet Core", "PREMIUM", "https://closetcorepatterns.com/search?q=", "indie pattern photoshoot real", 3));
     matches.close.push(createLink("Merchant & Mills", "RUSTIC", "https://merchantandmills.com/?s=", "linen dress photography professional", 2));
     matches.close.push(createLink("The Assembly Line", "SCANDI", "https://theassemblylineshop.com/search?q=", "minimalist fashion photography", 2));
@@ -75,14 +81,22 @@ export const getClothingStores = (analysis) => {
     matches.close.push(createLink("Tilly and the Buttons", "BEGINNER", "https://shop.tillyandthebuttons.com/search?q=", "bright sewing blog photo", 2));
     matches.close.push(createLink("Seamwork", "MAGAZINE", "https://www.seamwork.com/catalog?q=", "lifestyle photography woman", 2));
     matches.close.push(createLink("True Bias", "URBAN", "https://truebias.com/search?q=", "street style sewing photo", 2));
+    matches.close.push(createLink("Vikisews", "TRENDY", "https://vikisews.com/search/?q=", "fashion editorial sewing pattern", 2));
 
-    // 3. MARKETPLACES & ACERVOS GLOBAIS (Volume) - Foco em "Product Shot"
-    matches.adventurous.push(createLink("Etsy", "GLOBAL", "https://www.etsy.com/search?q=", "clothing photography listing", 1));
+    // 3. MARKETPLACES (Volume e Variedade Forçada)
+    // Etsy: Criamos 3 variações para garantir que apareçam opções diferentes
+    matches.adventurous.push(createLink("Etsy", "PDF", "https://www.etsy.com/search?q=", "clothing photography listing downloadable", 1, "PDF"));
+    matches.adventurous.push(createLink("Etsy", "VINTAGE", "https://www.etsy.com/search?q=", "vintage sewing pattern envelope photo", 1, "Vintage"));
+    matches.adventurous.push(createLink("Etsy", "INDIE", "https://www.etsy.com/search?q=", "modern sewing pattern finished garment", 1, "Indie"));
+
     matches.adventurous.push(createLink("The Fold Line", "DATABASE", "https://thefoldline.com/?s=", "pattern review photo user", 1));
     matches.adventurous.push(createLink("Makerist", "EU MKT", "https://www.makerist.com/patterns?q=", "sewing project photo finished", 1));
     matches.adventurous.push(createLink("Mood Fabrics", "FREE", "https://www.moodfabrics.com/blog/?s=", "sewn garment real photo blog", 2));
     matches.adventurous.push(createLink("Amazon Fashion", "RETAIL", "https://www.amazon.com/s?k=", "clothing product shot white background", 1));
     matches.adventurous.push(createLink("Minerva", "COMMUNITY", "https://www.minerva.com/mp?search=", "fabric dress make photo", 1));
+    
+    // eBay para variedade de usados/raros
+    matches.adventurous.push(createLink("eBay", "RESALE", "https://www.ebay.com/sch/i.html?_nkw=", "sewing pattern envelope photo", 1));
 
     return matches;
 };
