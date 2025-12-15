@@ -1,0 +1,185 @@
+
+/*
+ * SYSTEM ARCHITECT: Rafael Rodrigues Alves de Olival
+ * PROJECT: VINGI MOLDES AI
+ * COPYRIGHT 2024 - ALL RIGHTS RESERVED
+ */
+
+import React from 'react';
+import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, MessageCircle, Layers } from 'lucide-react';
+import { ViewState } from '../types';
+
+interface HomePageProps {
+    onNavigate: (view: ViewState) => void;
+}
+
+const ModuleCard: React.FC<{
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    colorClass: string;
+    onClick: () => void;
+    delay?: string;
+    stats?: string;
+}> = ({ title, description, icon, colorClass, onClick, delay = "0ms", stats }) => (
+    <div 
+        onClick={onClick}
+        className={`bg-white rounded-2xl p-6 border border-gray-100 shadow-lg shadow-gray-200/50 hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group relative overflow-hidden animate-fade-in`}
+        style={{ animationDelay: delay }}
+    >
+        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorClass} opacity-10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110`} />
+        
+        <div className="relative z-10">
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorClass} text-white flex items-center justify-center mb-4 shadow-md group-hover:rotate-6 transition-transform`}>
+                {icon}
+            </div>
+            
+            <h3 className="text-lg font-bold text-gray-800 mb-1 group-hover:text-vingi-600 transition-colors flex items-center gap-2">
+                {title} <ArrowRight size={14} className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-gray-400"/>
+            </h3>
+            <p className="text-sm text-gray-500 leading-relaxed mb-4 min-h-[40px]">
+                {description}
+            </p>
+
+            {stats && (
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 rounded text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <Zap size={10} className="fill-gray-400"/> {stats}
+                </div>
+            )}
+        </div>
+    </div>
+);
+
+export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
+    const handleContactClick = () => {
+        const phone = "5519983569940";
+        const text = encodeURIComponent("Olá Rafael, vi o sistema Vingi AI e gostaria de conhecer suas soluções de IA para minha empresa.");
+        window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+    };
+
+    return (
+        <div className="min-h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar">
+            <div className="max-w-6xl mx-auto space-y-10 pb-24">
+                
+                {/* HERO SECTION */}
+                <div className="text-center space-y-4 py-8 animate-fade-in">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-vingi-900/5 rounded-full border border-vingi-900/10 mb-4">
+                        <Sparkles size={12} className="text-vingi-500" />
+                        <span className="text-xs font-bold text-vingi-900 tracking-wide uppercase">Vingi AI Workflow 6.4</span>
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight">
+                        Engenharia de Moda <br className="hidden md:block"/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-vingi-600 to-purple-600">Assistida por Inteligência</span>
+                    </h1>
+                    <p className="text-gray-500 max-w-2xl mx-auto text-lg">
+                        Um ecossistema completo para escanear roupas reais, encontrar moldes técnicos, pesquisar texturas globais e simular resultados em tempo real.
+                    </p>
+                </div>
+
+                {/* MODULES GRID */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <ModuleCard 
+                        title="Scanner de Moldes"
+                        description="Engenharia reversa de roupas. Identifique o DNA técnico e encontre moldes compatíveis."
+                        icon={<ScanLine size={24} />}
+                        colorClass="from-blue-500 to-cyan-400"
+                        onClick={() => onNavigate('SCANNER')}
+                        delay="100ms"
+                        stats="Visão Computacional"
+                    />
+                    
+                    <ModuleCard 
+                        title="Pattern Search"
+                        description="Pesquisa visual de texturas e estampas em bancos de imagens globais e lojas de design."
+                        icon={<Globe size={24} />}
+                        colorClass="from-purple-500 to-pink-400"
+                        onClick={() => onNavigate('CREATOR')}
+                        delay="200ms"
+                        stats="Busca Semântica"
+                    />
+
+                    <ModuleCard 
+                        title="Atelier Generativo"
+                        description="Crie estampas exclusivas do zero ou restaure desenhos antigos em alta resolução."
+                        icon={<Palette size={24} />}
+                        colorClass="from-amber-500 to-orange-400"
+                        onClick={() => onNavigate('ATELIER')}
+                        delay="300ms"
+                        stats="IA Generativa"
+                    />
+
+                    <ModuleCard 
+                        title="Layer Studio"
+                        description="Separe elementos da estampa, remova fundos e edite camadas com inpainting inteligente."
+                        icon={<Layers size={24} />}
+                        colorClass="from-indigo-500 to-violet-400"
+                        onClick={() => onNavigate('LAYER_STUDIO')}
+                        delay="350ms"
+                        stats="Decomposição IA"
+                    />
+
+                    <ModuleCard 
+                        title="Provador Virtual"
+                        description="Aplique estampas em moldes reais instantaneamente com ferramentas de distorção."
+                        icon={<Shirt size={24} />}
+                        colorClass="from-emerald-500 to-teal-400"
+                        onClick={() => onNavigate('MOCKUP')}
+                        delay="400ms"
+                        stats="Simulação Física"
+                    />
+                </div>
+
+                {/* QUICK ACTIONS / FOOTER */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-200">
+                    
+                    {/* ACERVO PESSOAL (Compactado) */}
+                    <div 
+                        className="col-span-1 md:col-span-2 bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-6 text-white relative overflow-hidden group cursor-pointer flex flex-col md:flex-row items-center justify-between gap-4 shadow-md" 
+                        onClick={() => onNavigate('HISTORY')}
+                    >
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-10 -mt-10 blur-3xl group-hover:bg-white/10 transition-colors pointer-events-none"></div>
+                        
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="bg-white/10 p-3 rounded-lg text-vingi-300">
+                                <History size={24}/>
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-lg font-bold">Acervo Pessoal</h3>
+                                <p className="text-gray-400 text-xs mt-0.5">Histórico de escaneamentos e gerações.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-300 group-hover:text-white transition-colors relative z-10">
+                            <span>Acessar Biblioteca</span>
+                            <ArrowRight size={14} />
+                        </div>
+                    </div>
+
+                    {/* ASSINATURA / VERSÃO */}
+                    <div className="bg-white rounded-xl p-6 border border-gray-200 flex flex-col justify-center items-center text-center shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sistema Vingi AI</span>
+                            <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold rounded">v6.4</span>
+                        </div>
+                        
+                        <div className="w-full h-px bg-gray-50 mb-3"></div>
+                        
+                        <div 
+                            className="text-[10px] text-gray-400 font-mono flex flex-col items-center gap-1 cursor-pointer group"
+                            onClick={handleContactClick}
+                            title="Falar com Rafael Olival"
+                        >
+                            <span>Criado por <span className="text-gray-600 font-bold group-hover:text-vingi-600 transition-colors">Rafael Olival</span></span>
+                            <span className="text-gray-300 text-[9px]">para Vingi Indústria Têxtil</span>
+                            
+                            <div className="mt-2 flex items-center gap-1.5 text-vingi-500 bg-vingi-50 px-3 py-1.5 rounded-full opacity-80 group-hover:opacity-100 transition-all transform group-hover:scale-105">
+                                <MessageCircle size={10} />
+                                <span className="font-bold">Quer um sistema assim?</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+};

@@ -1,4 +1,10 @@
 
+/*
+ * DEVELOPER: Rafael Rodrigues Alves de Olival
+ * CONTACT: +55 19 98356-9940
+ * FOR: Vingi Indústria Têxtil
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MockupStudio } from './components/MockupStudio'; 
@@ -6,6 +12,8 @@ import { PatternCreator } from './components/PatternCreator';
 import { AtelierSystem } from './features/AtelierSystem';
 import { ScannerSystem } from './features/ScannerSystem';
 import { HistorySystem } from './features/HistorySystem';
+import { HomePage } from './components/HomePage';
+import { LayerStudio } from './components/LayerStudio';
 import { ViewState } from './types';
 
 // Componente para barrar navegadores não suportados (ex: webview dentro de app social)
@@ -93,7 +101,13 @@ export default function App() {
             PERSISTÊNCIA DE ESTADO:
             Usamos display:none. O container interno tem padding para mobile.
         */}
+        
+        {/* NEW HOME PAGE DASHBOARD */}
         <div style={{ display: view === 'HOME' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+            <HomePage onNavigate={setView} />
+        </div>
+
+        <div style={{ display: view === 'SCANNER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             <ScannerSystem />
         </div>
         
@@ -104,7 +118,14 @@ export default function App() {
 
         <div style={{ display: view === 'ATELIER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             {/* onNavigateToMockup leva do Atelier para o Provador */}
-            <AtelierSystem onNavigateToMockup={() => setView('MOCKUP')} />
+            <AtelierSystem 
+                onNavigateToMockup={() => setView('MOCKUP')} 
+                onNavigateToLayerStudio={() => setView('LAYER_STUDIO')}
+            />
+        </div>
+
+        <div style={{ display: view === 'LAYER_STUDIO' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+            <LayerStudio onNavigateBack={() => setView('ATELIER')} />
         </div>
 
         <div style={{ display: view === 'MOCKUP' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">

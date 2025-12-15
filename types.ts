@@ -1,5 +1,6 @@
 
 
+
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
@@ -105,6 +106,22 @@ export interface PantoneColor {
   trendStatus?: string; // e.g. "COY 2023"
 }
 
+// NOVO TIPO PARA CAMADAS DO STUDIO
+export interface DesignLayer {
+  id: string;
+  type: 'BACKGROUND' | 'ELEMENT';
+  name: string;
+  src: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  visible: boolean;
+  locked: boolean;
+  zIndex: number;
+  originalPrompt?: string; // Para recriação
+}
+
 export enum AppState {
   IDLE = 'IDLE',
   ANALYZING = 'ANALYZING',
@@ -112,4 +129,4 @@ export enum AppState {
   ERROR = 'ERROR'
 }
 
-export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP' | 'CREATOR' | 'ATELIER';
+export type ViewState = 'HOME' | 'SCANNER' | 'HISTORY' | 'MOCKUP' | 'CREATOR' | 'ATELIER' | 'LAYER_STUDIO';

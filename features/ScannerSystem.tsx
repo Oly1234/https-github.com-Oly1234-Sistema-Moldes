@@ -7,7 +7,7 @@ import { PatternVisualCard } from '../components/PatternVisualCard';
 import { 
     UploadCloud, RefreshCw, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, 
     Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine,
-    Move, Minimize2, Maximize2, ZoomIn, Scissors, Ruler, Shirt, Info, MousePointer2
+    Move, Minimize2, Maximize2, ZoomIn, Scissors, Ruler, Shirt, Info, MousePointer2, FileSearch
 } from 'lucide-react';
 
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
@@ -237,12 +237,10 @@ export const ScannerSystem: React.FC = () => {
   };
 
   // DEDUPLICAÇÃO INTELIGENTE
-  // Permite múltiplos resultados do mesmo site SE a URL for diferente (ex: Etsy PDF vs Etsy Vintage)
   const getUniqueMatches = (list: any[]) => {
       const seenUrls = new Set();
       return list.filter(m => {
           if (!m || !m.url) return false;
-          // Se a URL exata já existe, filtra. Se for diferente (query params diferentes), aceita.
           if (seenUrls.has(m.url)) return false;
           seenUrls.add(m.url);
           return true;
@@ -314,16 +312,19 @@ export const ScannerSystem: React.FC = () => {
                 <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
                     <div className="flex-1 p-8 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100">
                         <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
-                            <UploadCloud size={32} className="text-vingi-600" />
+                            <ScanLine size={32} className="text-vingi-600" />
                         </div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-3">Análise Visual 3D</h2>
-                        <p className="text-gray-500 text-sm mb-8 max-w-xs leading-relaxed">Carregue a foto da peça para análise de DNA técnico e busca global de moldes.</p>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Scanner de Moldes</h2>
+                        <p className="text-gray-500 text-sm mb-8 max-w-sm leading-relaxed mx-auto">
+                            Faça a <strong>engenharia reversa</strong> de qualquer roupa. Carregue uma foto para a IA identificar o DNA técnico e encontrar <strong>moldes de costura reais</strong> para compra ou download.
+                        </p>
+                        
                         <input type="file" ref={fileInputRef} onChange={handleMainUpload} accept="image/*" className="hidden" />
                         <input type="file" ref={cameraInputRef} onChange={handleMainUpload} accept="image/*" capture="environment" className="hidden" />
                         {!uploadedImage ? (
                             <div className="flex gap-4 w-full max-w-xs flex-col md:flex-row">
                                 <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 transition-all flex items-center justify-center gap-2">
-                                    <ImageIcon size={18} /> Galeria
+                                    <ImageIcon size={18} /> Carregar Foto
                                 </button>
                                 <button onClick={() => cameraInputRef.current?.click()} className="md:hidden py-4 px-6 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200">
                                     <Camera size={20} />
@@ -333,10 +334,10 @@ export const ScannerSystem: React.FC = () => {
                             <div className="w-full max-w-sm relative group">
                                 <img src={uploadedImage} alt="Preview" className="w-full h-64 object-cover rounded-xl shadow-md" />
                                 <button onClick={() => setUploadedImage(null)} className="absolute top-3 right-3 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"><X size={16} /></button>
-                                <div className="absolute bottom-3 left-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow"><CheckCircle2 size={10} className="inline mr-1"/> IMAGEM OK</div>
+                                <div className="absolute bottom-3 left-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow"><CheckCircle2 size={10} className="inline mr-1"/> PRONTO PARA SCAN</div>
                             </div>
                         )}
-                        <span className="text-[10px] text-gray-300 mt-6 font-mono">SYSTEM v6.1 (Modular)</span>
+                        <span className="text-[10px] text-gray-300 mt-6 font-mono">VINGI VISION v6.4</span>
                     </div>
                     <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center">
                         <div className="flex items-center gap-2 mb-4">
@@ -344,10 +345,10 @@ export const ScannerSystem: React.FC = () => {
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Opcional</h3>
                         </div>
                         <div className="mb-6">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Ângulo Secundário</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Costas / Detalhe</label>
                             <input type="file" ref={secondaryInputRef} onChange={handleSecondaryUpload} accept="image/*" className="hidden" />
                             {!uploadedSecondaryImage ? (
-                                <button onClick={() => secondaryInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:bg-white hover:border-vingi-400 transition-all gap-2"><Plus size={24} className="opacity-50" /><span className="text-xs">Galeria</span></button>
+                                <button onClick={() => secondaryInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:bg-white hover:border-vingi-400 transition-all gap-2"><Plus size={24} className="opacity-50" /><span className="text-xs">Adicionar Foto</span></button>
                             ) : (
                                 <div className="relative group w-full h-32">
                                     <img src={uploadedSecondaryImage} alt="Sec" className="w-full h-full object-cover rounded-xl" />
@@ -356,7 +357,7 @@ export const ScannerSystem: React.FC = () => {
                             )}
                         </div>
                         <button onClick={startAnalysis} disabled={!uploadedImage} className={`hidden md:flex w-full py-4 rounded-xl font-bold text-sm shadow-lg items-center justify-center gap-2 transition-all ${uploadedImage ? 'bg-vingi-900 text-white hover:bg-vingi-800 transform hover:-translate-y-1' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                            <Sparkles size={16} /> INICIAR VARREDURA
+                            <FileSearch size={16} /> INICIAR VARREDURA
                         </button>
                     </div>
                 </div>

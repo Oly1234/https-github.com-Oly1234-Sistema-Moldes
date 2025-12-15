@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ScanLine, History, Shirt, Globe, Palette } from 'lucide-react';
+import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -24,15 +24,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div 
           className="w-10 h-10 bg-gradient-to-br from-vingi-500 to-vingi-accent rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20 cursor-pointer hover:scale-105 transition-transform"
           onClick={() => onViewChange('HOME')}
+          title="Dashboard"
         >
           <span className="text-white font-bold text-xl">V</span>
         </div>
         
         <nav className="flex flex-col gap-6 mt-8">
-          <NavItem 
-            icon={<ScanLine size={24} />} 
+           {/* Ícone Home/Dashboard para Desktop (Opcional se clicar no V já vai, mas bom ter explícito) */}
+           <NavItem 
+            icon={<LayoutGrid size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
+            tooltip="Dashboard Central"
+          />
+
+          <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
+
+          <NavItem 
+            icon={<ScanLine size={24} />} 
+            active={currentView === 'SCANNER'} 
+            onClick={() => onViewChange('SCANNER')}
             tooltip="1. Scanner Visual DNA"
           />
           <NavItem 
@@ -47,12 +58,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onViewChange('ATELIER')}
             tooltip="3. Atelier Generativo"
           />
+           <NavItem 
+            icon={<Layers size={24} />} 
+            active={currentView === 'LAYER_STUDIO'} 
+            onClick={() => onViewChange('LAYER_STUDIO')}
+            tooltip="4. Layer Studio (Pro)"
+          />
           <NavItem 
             icon={<Shirt size={24} />} 
             active={currentView === 'MOCKUP'} 
             onClick={() => onViewChange('MOCKUP')}
-            tooltip="4. Provador Virtual"
+            tooltip="5. Provador Virtual"
           />
+          
+          <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
+
           <NavItem 
             icon={<History size={24} />} 
             active={currentView === 'HISTORY'} 
@@ -65,11 +85,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Nav */}
       <div className="flex md:hidden w-full justify-between items-center px-4">
           <NavItem 
-            icon={<ScanLine size={24} />} 
+            icon={<LayoutGrid size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
             isMobile
           />
+          <NavItem 
+            icon={<ScanLine size={24} />} 
+            active={currentView === 'SCANNER'} 
+            onClick={() => onViewChange('SCANNER')}
+            isMobile
+          />
+          {/* Agrupamento Visual no Mobile se necessário, ou mantemos todos */}
           <NavItem 
             icon={<Globe size={24} />} 
             active={currentView === 'CREATOR'} 
@@ -77,21 +104,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             isMobile
           />
           <NavItem 
-            icon={<Palette size={24} />} 
-            active={currentView === 'ATELIER'} 
-            onClick={() => onViewChange('ATELIER')}
+            icon={<Layers size={24} />} 
+            active={currentView === 'LAYER_STUDIO'} 
+            onClick={() => onViewChange('LAYER_STUDIO')}
             isMobile
           />
            <NavItem 
             icon={<Shirt size={24} />} 
             active={currentView === 'MOCKUP'} 
             onClick={() => onViewChange('MOCKUP')}
-            isMobile
-          />
-          <NavItem 
-            icon={<History size={24} />} 
-            active={currentView === 'HISTORY'} 
-            onClick={() => onViewChange('HISTORY')}
             isMobile
           />
       </div>

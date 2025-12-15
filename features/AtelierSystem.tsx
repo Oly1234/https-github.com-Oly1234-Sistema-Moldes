@@ -7,6 +7,7 @@ import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
 // --- TYPES ---
 interface AtelierSystemProps {
     onNavigateToMockup?: () => void;
+    onNavigateToLayerStudio?: () => void; // NOVO
 }
 
 interface GeneratedAsset {
@@ -58,7 +59,7 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
     );
 };
 
-export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup }) => {
+export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
     // --- STATE ---
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
@@ -194,6 +195,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         onNavigateToMockup();
     };
 
+    const handleTransferToLayerStudio = () => {
+        if (!generatedPattern || !onNavigateToLayerStudio) return;
+        localStorage.setItem('vingi_layer_studio_source', generatedPattern);
+        onNavigateToLayerStudio();
+    };
+
     // --- RENDER ---
     return (
         <div className="h-full bg-[#f8fafc] overflow-y-auto custom-scrollbar flex flex-col items-center">
@@ -202,7 +209,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     <div className="bg-vingi-900 p-2 rounded-lg text-white"><Brush size={20}/></div>
                     <div>
                         <h1 className="text-lg font-bold text-gray-900 leading-tight">Atelier de Criação</h1>
-                        <p className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">IA Generativa Têxtil v2.0</p>
+                        <p className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">IA Generativa Têxtil</p>
                     </div>
                 </div>
                 {referenceImage && !isGenerating && (
@@ -217,14 +224,21 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 {/* 1. UPLOAD AREA (Se vazio) */}
                 {!referenceImage ? (
                     <div className="min-h-[60vh] flex flex-col items-center justify-center animate-fade-in">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 max-w-2xl w-full">
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Atelier Generativo</h2>
+                            <p className="text-gray-500">
+                                Crie estampas exclusivas do zero. Carregue um desenho ou imagem de referência e defina o layout (Corrido, Barrado) para que a IA gere um arquivo de alta resolução pronto para impressão.
+                            </p>
+                        </div>
+
                         <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-2xl h-96 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-6 group shadow-sm hover:shadow-xl">
                              <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
                              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
                                  <UploadCloud size={40} className="text-gray-400 group-hover:text-vingi-500"/>
                              </div>
                              <div className="text-center px-4">
-                                 <h3 className="text-2xl font-bold text-gray-700">Upload de Inspiração</h3>
-                                 <p className="text-gray-400 mt-2 max-w-md mx-auto">Carregue uma imagem base para a IA extrair cores e estilo, ou um desenho para ser renderizado.</p>
+                                 <h3 className="text-2xl font-bold text-gray-700">Carregar Desenho ou Referência</h3>
+                                 <p className="text-gray-400 mt-2 max-w-md mx-auto">A IA extrairá cores e estilo para gerar a nova estampa.</p>
                              </div>
                         </div>
                     </div>
@@ -346,6 +360,22 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                             )}
                                         </div>
                                     </div>
+                                    
+                                    {/* CTA PARA LAYER STUDIO (NOVO) */}
+                                    {onNavigateToLayerStudio && (
+                                        <div onClick={handleTransferToLayerStudio} className="bg-gradient-to-r from-gray-900 to-slate-800 p-4 rounded-xl shadow-lg cursor-pointer group border border-gray-700 hover:border-vingi-500 transition-all">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-vingi-600 p-2 rounded-lg text-white group-hover:scale-110 transition-transform"><Layers size={20}/></div>
+                                                    <div>
+                                                        <h4 className="font-bold text-white text-sm">Separe os Elementos & Altere (Layer Studio)</h4>
+                                                        <p className="text-gray-400 text-xs mt-0.5">IA: Isolamento de fundo e regeneração de camadas.</p>
+                                                    </div>
+                                                </div>
+                                                <ArrowRightToLine size={20} className="text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all"/>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* RESULTADO: PANTONES */}
                                     <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
@@ -359,15 +389,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <div className="mt-4 text-[10px] text-gray-400 italic text-center">
                                             *Clique na cor para visualizar a referência física
                                         </div>
-                                    </div>
-
-                                    {/* RESULTADO: SPECS */}
-                                    <div className="flex gap-4 justify-center text-xs text-gray-400 font-mono">
-                                        <span>{widthCm}x{heightCm}CM</span>
-                                        <span>•</span>
-                                        <span>{dpi} DPI</span>
-                                        <span>•</span>
-                                        <span>{layoutType.toUpperCase()}</span>
                                     </div>
                                     
                                     <button onClick={() => setGeneratedPattern(null)} className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors">

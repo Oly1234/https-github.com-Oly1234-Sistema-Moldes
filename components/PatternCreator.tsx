@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History as HistoryIcon, Trash2, Settings2, Check, Printer, Search, RefreshCw, XCircle, ScanLine, AlertCircle, Info } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
@@ -234,7 +233,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
             {/* HEADER */}
             <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 sticky top-0 z-20 shadow-sm">
                 <div className="flex items-center gap-2">
-                    <Palette className="text-vingi-600" size={20} />
+                    <Globe className="text-vingi-600" size={20} />
                     <h2 className="text-lg font-bold text-gray-800">Pattern Studio <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded ml-2">SEARCH</span></h2>
                 </div>
                 {referenceImage && !isAnalyzing && (
@@ -247,12 +246,28 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
                 
+                {/* INTRO HEADER / ONBOARDING */}
+                {!referenceImage && (
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 flex flex-col md:flex-row items-center gap-6 animate-fade-in">
+                        <div className="bg-blue-50 p-4 rounded-full text-vingi-600">
+                            <Globe size={32} />
+                        </div>
+                        <div className="flex-1 text-center md:text-left">
+                            <h1 className="text-2xl font-bold text-gray-900">Pesquisa de Mercado & Texturas</h1>
+                            <p className="text-gray-500 mt-1 max-w-xl">
+                                Carregue uma amostra de tecido, papel de parede ou referência visual. 
+                                Nossa IA analisa o padrão e busca texturas similares em bancos de imagens globais e lojas de design.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* 1. ESTADO INICIAL: DRAG & DROP */}
                 {!referenceImage ? (
-                    <div className="min-h-[60vh] flex flex-col items-center justify-center animate-fade-in">
-                        <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-2xl h-80 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/50 transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group">
+                    <div className="min-h-[50vh] flex flex-col items-center justify-center animate-fade-in">
+                        <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-2xl h-80 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/50 transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group shadow-sm">
                              <input type="file" ref={fileInputRef} onChange={handleReferenceUpload} accept="image/*" className="hidden" />
-                             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
                                  <UploadCloud size={32} className="text-gray-400 group-hover:text-vingi-500"/>
                              </div>
                              <div className="text-center">

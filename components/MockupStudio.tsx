@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, RotateCw, ZoomIn, Eraser, Download, Wand2, MonitorPlay, X, Target, FlipHorizontal, FlipVertical, Lock, Unlock, Layers, Zap, MousePointer2, CheckCircle2, Sparkles, Move, Maximize } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, RotateCw, ZoomIn, Eraser, Download, Wand2, MonitorPlay, X, Target, FlipHorizontal, FlipVertical, Lock, Unlock, Layers, Zap, MousePointer2, CheckCircle2, Sparkles, Move, Maximize, Shirt } from 'lucide-react';
 
 // --- TYPES ---
 interface AppliedLayer {
@@ -519,9 +519,16 @@ export const MockupStudio: React.FC = () => {
       <div className="order-2 md:order-1 w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-2xl z-20 h-[35vh] md:h-full overflow-y-auto custom-scrollbar">
           <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center sticky top-0 z-10 backdrop-blur">
               <h2 className="text-sm font-bold text-vingi-900 flex items-center gap-2">
-                  <Wand2 className="text-vingi-600" size={16} /> Studio
+                  <Shirt className="text-vingi-600" size={16} /> Provador Virtual
               </h2>
               {activeLayerId && <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><CheckCircle2 size={10}/> ATIVA</span>}
+          </div>
+            
+          {/* GUIA DE USO (Novo Header da Sidebar) */}
+          <div className="p-4 bg-blue-50 border-b border-blue-100">
+               <p className="text-[10px] text-vingi-700 leading-relaxed">
+                   <strong>Como usar:</strong> Carregue a foto do molde em branco e a estampa. Use a ferramenta <strong>Selecionar</strong> (Varinha) para clicar na área do molde onde a estampa deve ser aplicada.
+               </p>
           </div>
 
           <div className="p-3 space-y-4 pb-24 md:pb-5">

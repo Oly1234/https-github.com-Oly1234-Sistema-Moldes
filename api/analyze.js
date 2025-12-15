@@ -1,10 +1,13 @@
 
+
+
 import { analyzeColorTrend } from './modules/departments/color.js';
 import { createTextileDesign } from './modules/departments/atelier.js';
 import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern } from './modules/generator.js'; // Importando o novo generator corrigido
+import { generateElement, decomposePattern } from './modules/departments/layerLab.js'; // NOVO MÓDULO
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -42,13 +45,23 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, image });
     }
 
-    // 2. ABA CRIADOR (Atelier + Forense de Superfície)
+    // 2. ABA LAYER STUDIO (NOVO)
+    if (action === 'DECOMPOSE_PATTERN') {
+        // Separação inteligente de fundo e elementos
+        const result = await decomposePattern(apiKey, mainImageBase64);
+        return res.status(200).json({ success: true, ...result });
+    }
+
+    if (action === 'GENERATE_ELEMENT') {
+        // Geração de elemento isolado (Magic Edit)
+        const image = await generateElement(apiKey, prompt);
+        return res.status(200).json({ success: true, element: image });
+    }
+
+    // 3. ABA CRIADOR (Atelier + Forense de Superfície)
     if (action === 'GENERATE_PATTERN') {
         // Dept: Atelier (Geração de Imagem com Restauração)
-        // Se textileSpecs foi enviado pelo frontend, usamos ele.
-        // Caso contrário, mantemos compatibilidade (fallback básico).
         const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
-        
         const image = await generatePattern(apiKey, prompt, colors, specs);
         return res.status(200).json({ success: true, image });
     }
@@ -56,10 +69,7 @@ export default async function handler(req, res) {
     if (action === 'DESCRIBE_PATTERN') {
         // Dept: Colorimetria + Forense (Modo Textura) + Mercado (Modo Textura)
         const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson);
-        
-        // Passa as userHints para a análise forense
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE', userHints);
-        
         const matches = generateMarketLinks(visualData, 'TEXTURE');
 
         return res.status(200).json({ 
@@ -71,15 +81,10 @@ export default async function handler(req, res) {
         });
     }
 
-    // 3. ABA SCANNER (Forense de Roupa + Mercado de Moldes)
+    // 4. ABA SCANNER (Forense de Roupa + Mercado de Moldes)
     if (action === 'SCAN_CLOTHING' || !action) { 
-        // Dept: Forense (Modo Desmembramento de Roupa)
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'GARMENT');
-        
-        // Dept: Mercado (Usa os termos ricos para criar links variados)
         const matches = generateMarketLinks(visualData, 'GARMENT');
-        
-        // Agrupamento para UI
         const matchesGrouped = {
             exact: matches.filter(m => m.similarityScore >= 93),
             close: matches.filter(m => m.similarityScore >= 92 && m.similarityScore < 93),
