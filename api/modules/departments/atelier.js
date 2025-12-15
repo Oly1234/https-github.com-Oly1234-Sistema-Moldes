@@ -1,9 +1,8 @@
 
 // DEPARTAMENTO: ATELIER DIGITAL
-// Responsabilidade: Geração de Imagens (Estampas) usando Gemini Flash
+// Responsabilidade: Geração de Imagens (Estampas) via Prompt Direto
 
 export const createTextileDesign = async (apiKey, prompt, colors) => {
-    // Correção: Uso do modelo Flash Image estável
     const MODEL_NAME = 'gemini-2.5-flash-image';
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
@@ -21,7 +20,6 @@ export const createTextileDesign = async (apiKey, prompt, colors) => {
 
     const payload = {
         contents: [{ parts: [{ text: ENGINEERING_PROMPT }] }]
-        // Removido generationConfig complexo que causava incompatibilidade
     };
 
     try {
@@ -37,13 +35,15 @@ export const createTextileDesign = async (apiKey, prompt, colors) => {
         }
 
         const data = await response.json();
-        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+        const candidate = data.candidates?.[0]?.content?.parts;
+        const imagePart = candidate?.find(p => p.inline_data);
         
         if (imagePart) {
             return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         }
         
-        throw new Error("O Atelier não conseguiu renderizar a imagem visual.");
+        const textPart = candidate?.find(p => p.text);
+        throw new Error(textPart ? `Recusa da IA: ${textPart.text}` : "O Atelier não conseguiu renderizar a imagem visual.");
 
     } catch (e) {
         console.error("Atelier Dept Exception:", e);
