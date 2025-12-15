@@ -481,6 +481,12 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                 <div className="p-4 bg-[#0f172a] border-b border-gray-700 space-y-4">
                     <h2 className="font-bold flex items-center gap-2"><Layers size={18} className="text-vingi-500"/> Camadas</h2>
                     
+                    {/* Botão de Upload na Sidebar */}
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                    <button onClick={() => fileInputRef.current?.click()} className="w-full py-2 bg-gray-800 text-gray-300 border border-gray-600 rounded-lg hover:bg-gray-700 hover:text-white transition-colors text-xs font-bold flex items-center justify-center gap-2">
+                        <UploadCloud size={14}/> CARREGAR IMAGEM
+                    </button>
+                    
                     <div className="flex bg-gray-800 p-1 rounded-lg">
                         <button onClick={() => setTool('MOVE')} className={`flex-1 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 ${tool==='MOVE' ? 'bg-vingi-600 shadow' : 'text-gray-400'}`}><Move size={14}/> Mover</button>
                         <button onClick={() => setTool('MAGIC_WAND')} className={`flex-1 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 ${tool==='MAGIC_WAND' ? 'bg-purple-600 shadow' : 'text-gray-400'}`}><Wand2 size={14}/> Varinha</button>

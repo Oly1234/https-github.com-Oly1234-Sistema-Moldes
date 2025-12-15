@@ -195,14 +195,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     const handleTransferToMockup = () => {
         if (!generatedPattern || !onNavigateToMockup) return;
-        triggerDownload(generatedPattern); // Auto-save for user
+        // REMOVIDO: triggerDownload(generatedPattern); 
+        // Agora transfere apenas internamente para UX fluida
         localStorage.setItem('vingi_mockup_pattern', generatedPattern);
         onNavigateToMockup();
     };
 
     const handleTransferToLayerStudio = () => {
         if (!generatedPattern || !onNavigateToLayerStudio) return;
-        triggerDownload(generatedPattern); // Auto-save for user
+        // REMOVIDO: triggerDownload(generatedPattern);
+        // Agora transfere apenas internamente
         localStorage.setItem('vingi_layer_studio_source', generatedPattern);
         onNavigateToLayerStudio();
     };
