@@ -15,75 +15,89 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
-    // LÓGICA DE LAYOUT TÊXTIL (Direção da Arte baseada em Ourela/Trama)
-    // Se altura (Urdume) > Largura, favorecer layout vertical.
+    // LÓGICA DE ENGENHARIA TÊXTIL (Context-Aware Layout)
     let layoutInstruction = "";
     const isVertical = height > width;
     
     if (layout === 'Barrada') {
-        layoutInstruction = `
-        LAYOUT: ENGINEERED BORDER PRINT (BARRADO).
-        - CANVAS: ${width}cm (Weft) x ${height}cm (Warp).
-        - DIRECTION: The border motifs must run along the ${isVertical ? 'vertical' : 'horizontal'} edge.
-        - GRAVITY: Heavy motifs at the bottom/edge, fading to solid color.
-        `;
+        // LÓGICA DE LARGURA ÚTIL PARA BARRADOS
+        // Se largura < 80cm: Provável meio-painel para espelhamento.
+        // Se largura > 130cm: Painel inteiro.
+        
+        if (width < 80) {
+            layoutInstruction = `
+            LAYOUT: HALF-WIDTH ENGINEERED BORDER (Meio-Painel).
+            - CANVAS: ${width}cm (Weft) x ${height}cm (Warp).
+            - COMPOSITION: Design a heavy border on ONE SIDE only. The other side should fade into open space/solid color.
+            - LOGIC: This design is intended to be MIRRORED later to create a full gown. Focus detail on the border edge.
+            - ORIENTATION: ${isVertical ? 'Vertical flow' : 'Horizontal flow'}.
+            `;
+        } else {
+            layoutInstruction = `
+            LAYOUT: FULL-WIDTH ENGINEERED BORDER (Painel Completo).
+            - CANVAS: ${width}cm (Weft) x ${height}cm (Warp).
+            - COMPOSITION: Complete dress panel. Heavy borders at the hem (bottom), graduating to lighter motifs/solid color towards the top/center.
+            - LOGIC: Ready-to-print panel for a full skirt or dress.
+            `;
+        }
     } else if (layout === 'Localizada') {
         layoutInstruction = `
-        LAYOUT: PLACEMENT PRINT (LOCALIZADA).
+        LAYOUT: PLACEMENT PRINT (LOCALIZADA - PANEL).
         - CANVAS: ${width}cm x ${height}cm.
-        - COMPOSITION: Single central element, perfectly centered.
-        - BACKGROUND: Clean or subtle texture, suitable for a t-shirt chest or scarf panel.
+        - COMPOSITION: Centralized artwork. Focus on symmetry and balance within the bounding box.
+        - USAGE: T-shirt placement, Scarf center, or Cushion.
         `;
     } else {
-        // Corrida (Default)
-        // LÓGICA DE MAESTRIA PARA MEIO-SALTO (HALF-DROP)
-        // Para que o meio-salto funcione em um tile único gerado por IA, 
-        // solicitamos que a disposição interna dos motivos seja "Diamante" ou "Diagonal".
-        // Assim, visualmente não cria linhas (avenidas), simulando o efeito de cilindro.
-        
+        // Corrida (Seamless)
         let repeatLogic = "";
         if (repeat === 'Half-Drop') {
-             repeatLogic = "REPEAT STYLE: VISUAL HALF-DROP (MEIO-SALTO). Arrange motifs in a Diamond/Diagonal grid to avoid vertical striping. Fluid distribution.";
+             repeatLogic = "REPEAT STYLE: VISUAL HALF-DROP. Arrange motifs in a Diamond grid. Fluid, non-linear distribution to avoid striping.";
         } else if (repeat === 'Mirror') {
-             repeatLogic = "REPEAT STYLE: KALEIDOSCOPIC MIRROR SYMMETRY. Center focused, reflecting outwards.";
+             repeatLogic = "REPEAT STYLE: MIRROR SYMMETRY. Kaleidoscopic reflection.";
         } else {
-             repeatLogic = "REPEAT STYLE: STANDARD STRAIGHT GRID (CORRIDO). Aligned motif distribution.";
+             repeatLogic = "REPEAT STYLE: STANDARD SEAMLESS GRID.";
         }
 
         layoutInstruction = `
         LAYOUT: SEAMLESS REPEAT (ALL-OVER).
-        - REPEAT SIZE: ${width}cm (Weft) x ${height}cm (Warp).
+        - TILE SIZE: ${width}cm x ${height}cm.
         - ${repeatLogic}
-        - TILING: Must be a perfect seamless tile. Edges must match perfectly on all sides.
-        - ORIENTATION: ${isVertical ? 'Vertical flow (Waterfall)' : 'Multi-directional'}.
+        - CONTINUITY: Edges must match perfectly for infinite tiling.
         `;
     }
 
-    // AJUSTE DE QUALIDADE BASEADO EM DPI (PRO MODE)
-    // DPI alto força estilo vetorial "plano" para facilitar vetorização posterior.
-    // DPI baixo (72) permite mais "ruído" artístico.
-    let qualityPrompt = "";
+    // AJUSTE DE ESTILO (RICH VS STIFF)
+    // O usuário reclamou de "dureza". Adicionamos profundidade e nuance.
+    let artisticVibe = "";
     if (dpi >= 300) {
-        qualityPrompt = "Style: VECTOR ILLUSTRATION, Flat Colors, Sharp Edges, No Blur, No JPEG Artifacts. Optimized for Screen Printing Separation.";
+        artisticVibe = `
+        STYLE: HIGH-FIDELITY VECTOR AESTHETIC with PAINTERLY DEPTH.
+        - Do NOT make it look flat or stiff. Use "Tone-on-Tone" shading.
+        - Include subtle gradients, fabric texture simulation, and rich color nuances.
+        - Maintain sharp edges for printing, but simulate organic flow within the shapes.
+        - If floral/organic: Use watercolor bleeds or etching details.
+        `;
     } else {
-        qualityPrompt = "Style: Digital Textile Print, High Definition, Rich Texture.";
+        artisticVibe = "Style: Digital Textile Print, Rich Texture, Painterly details.";
     }
 
-    // Prompt Otimizado
     const finalPrompt = `
-    Create a professional textile pattern design file.
+    Create a professional textile pattern design file (Digital Print Ready).
     Subject: ${prompt}.
     
-    COLOR PALETTE (STRICT ADHERENCE):
+    COLOR PALETTE:
     ${colorList}
     
     TECHNICAL SPECS:
     ${layoutInstruction}
     
-    QUALITY STANDARDS:
-    - ${styleGuide}
-    - ${qualityPrompt}
-    - Output: A single high-quality texture tile.
+    ARTISTIC DIRECTION:
+    ${styleGuide}
+    ${artisticVibe}
+    
+    CRITICAL:
+    - Ensure the design looks like a high-end fabric scan, not a simple clipart.
+    - Incorporate depth, shadows, and highlights based on the original reference style.
     `;
 
     try {
@@ -91,7 +105,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
             contents: [{ parts: [{ text: finalPrompt }] }],
             generationConfig: {
                 imageConfig: {
-                    aspectRatio: "1:1" // Mantemos 1:1 pois o modelo ainda não suporta custom aspect ratio arbitrário confiavelmente, o corte é feito no layout.
+                    aspectRatio: "1:1" // Mantém 1:1 por limitação atual do modelo, corte feito no layout UI
                 }
             }
         };
@@ -104,7 +118,6 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         
         if (!response.ok) {
             const errText = await response.text();
-            console.error("Generator API Error Details:", errText);
             throw new Error(`Erro Atelier (${response.status}): O servidor rejeitou a solicitação.`);
         }
 

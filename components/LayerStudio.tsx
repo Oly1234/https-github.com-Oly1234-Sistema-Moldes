@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles } from 'lucide-react';
+import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard } from 'lucide-react';
 import { DesignLayer } from '../types';
 import { ModuleHeader } from './Shared';
 
@@ -134,6 +134,10 @@ interface LayerStudioProps {
 }
 
 export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavigateToMockup }) => {
+    // History State
+    const [history, setHistory] = useState<DesignLayer[][]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    
     const [layers, setLayers] = useState<DesignLayer[]>([]);
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
     const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 1000 });
@@ -143,6 +147,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     const [isProcessing, setIsProcessing] = useState(false);
     const [processStatus, setProcessStatus] = useState('');
     const [incomingImage, setIncomingImage] = useState<string | null>(null);
+    const [showShortcuts, setShowShortcuts] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Transformation Logic
@@ -163,9 +168,84 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         window.addEventListener('vingi_transfer', (e: any) => { if (e.detail?.module === 'LAYER') checkStorage(); });
     }, []);
 
-    const updateLayer = (id: string, updates: Partial<DesignLayer>) => {
-        setLayers(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+    // --- HISTORY MANAGEMENT ---
+    const addToHistory = useCallback((newLayers: DesignLayer[]) => {
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(newLayers);
+        // Limit history to 20 steps
+        if (newHistory.length > 20) newHistory.shift();
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+        setLayers(newLayers);
+    }, [history, historyIndex]);
+
+    const undo = useCallback(() => {
+        if (historyIndex > 0) {
+            setHistoryIndex(prev => prev - 1);
+            setLayers(history[historyIndex - 1]);
+        }
+    }, [history, historyIndex]);
+
+    const redo = useCallback(() => {
+        if (historyIndex < history.length - 1) {
+            setHistoryIndex(prev => prev + 1);
+            setLayers(history[historyIndex + 1]);
+        }
+    }, [history, historyIndex]);
+
+    // Initial History Push
+    useEffect(() => {
+        if (history.length === 0 && layers.length > 0) {
+            setHistory([layers]);
+            setHistoryIndex(0);
+        }
+    }, []); // Run once on mount if layers exist, or handled in startSession
+
+    const updateLayersWithHistory = (newLayers: DesignLayer[]) => {
+        addToHistory(newLayers);
     };
+
+    const updateLayer = (id: string, updates: Partial<DesignLayer>) => {
+        const newLayers = layers.map(l => l.id === id ? { ...l, ...updates } : l);
+        // For dragging/continuous updates, we might not want to push history every pixel.
+        // For now, simpler to just setLayers for continuous, and push history on mouse up.
+        // BUT, for simple property toggles (visible, flip), we push history.
+        if ('x' in updates || 'y' in updates || 'scale' in updates || 'rotation' in updates) {
+            setLayers(newLayers);
+        } else {
+            addToHistory(newLayers);
+        }
+    };
+
+    // --- KEYBOARD SHORTCUTS ---
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            // Undo/Redo
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) redo();
+                else undo();
+                return;
+            }
+
+            // Tools
+            if (e.key.toLowerCase() === 'v') setTool('MOVE');
+            if (e.key.toLowerCase() === 'w') setTool('SMART_EXTRACT');
+            if (e.key.toLowerCase() === 'h') setTool('HAND');
+
+            // Layer Actions
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedLayerId) transformSelected('DEL');
+            }
+            if (e.key === ']') transformSelected('FRONT');
+            if (e.key === '[') transformSelected('BACK');
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [layers, selectedLayerId, history, historyIndex, undo, redo]); // Deps needed for closure
 
     const startSession = (img: string) => {
         const image = new Image(); image.src = img;
@@ -177,14 +257,19 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                 if (image.width > image.height) { finalW = maxDim; finalH = maxDim / ratio; } else { finalH = maxDim; finalW = maxDim * ratio; }
             }
             setCanvasSize({ w: finalW, h: finalH });
-            setLayers([
+            const initialLayers: DesignLayer[] = [
                 { id: 'layer-base', type: 'BACKGROUND', name: 'Original', src: img, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: false, zIndex: 0 }
-            ]);
+            ];
+            setLayers(initialLayers);
+            setHistory([initialLayers]);
+            setHistoryIndex(0);
+
             setIncomingImage(null); setTool('SMART_EXTRACT');
             setView({ x: 0, y: 0, k: 500 / finalW }); // Auto fit
         };
     };
 
+    // ... (handleFileUpload remains same) ...
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -198,8 +283,6 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     const executeSmartExtraction = async (clickX: number, clickY: number) => {
         if (tool !== 'SMART_EXTRACT') return;
         
-        // Find top-most visible layer at click position to extract from
-        // Simplified: extracting from Base Layer or Selected Layer
         const targetId = selectedLayerId || (layers.length > 0 ? layers[0].id : null);
         if (!targetId) return;
 
@@ -208,19 +291,12 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
 
         setIsProcessing(true); setProcessStatus('Detecting Object...');
 
-        // 1. Prepare Canvas for Analysis
         const img = new Image(); img.src = targetLayer.src; img.crossOrigin = "anonymous";
         await new Promise(r => img.onload = r);
 
         const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0);
 
-        // Adjust click coordinates relative to layer (inverse transform)
-        // Note: For simplicity in this demo, assuming base layer is at 0,0 unscaled. 
-        // Real implementation requires matrix inversion for transformed layers.
-        // We will assume user is clicking on the "Base" for extraction mainly.
-        
-        // 2. Compute Mask
         const { mask, bounds, hasPixels } = getSmartObjectMask(ctx, canvas.width, canvas.height, Math.floor(clickX), Math.floor(clickY));
         
         if (!hasPixels || !bounds) {
@@ -230,35 +306,23 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
 
         setProcessStatus('Extracting & Healing...');
 
-        // 3. Create New Object Image
         const objCanvas = document.createElement('canvas'); objCanvas.width = bounds.w; objCanvas.height = bounds.h;
         const objCtx = objCanvas.getContext('2d')!;
         const srcData = ctx.getImageData(bounds.x, bounds.y, bounds.w, bounds.h);
         
-        // Apply mask alpha to object
         for (let i=0; i < bounds.w * bounds.h; i++) {
             const gIdx = (bounds.y + Math.floor(i/bounds.w)) * canvas.width + (bounds.x + (i%bounds.w));
-            if (mask[gIdx] === 0) srcData.data[i*4+3] = 0; // Transparent if not in mask
+            if (mask[gIdx] === 0) srcData.data[i*4+3] = 0; 
         }
         objCtx.putImageData(srcData, 0, 0);
         const newObjSrc = objCanvas.toDataURL();
 
-        // 4. Heal Background (In-place on original canvas)
         healBackground(ctx, canvas.width, canvas.height, mask);
         const healedSrc = canvas.toDataURL();
 
-        // 5. Update State
         const newLayerId = `element-${Date.now()}`;
-        
-        // Update original layer (healed)
-        setLayers(prev => prev.map(l => l.id === targetLayer.id ? { ...l, src: healedSrc } : l));
-
-        // Add new layer (extracted)
-        // CRITICAL: Position exact match
         const centerX = bounds.x + bounds.w / 2;
         const centerY = bounds.y + bounds.h / 2;
-        
-        // Adjust for canvas center coordinate system used in rendering
         const canvasCenterX = canvas.width / 2;
         const canvasCenterY = canvas.height / 2;
         
@@ -267,7 +331,6 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             type: 'ELEMENT',
             name: 'Elemento Separado',
             src: newObjSrc,
-            // Position relative to center
             x: centerX - canvasCenterX,
             y: centerY - canvasCenterY,
             scale: 1,
@@ -279,13 +342,17 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             zIndex: layers.length + 10
         };
 
-        setLayers(prev => [...prev, newLayer]);
+        const updatedLayers = layers.map(l => l.id === targetLayer.id ? { ...l, src: healedSrc } : l);
+        updatedLayers.push(newLayer);
+        
+        addToHistory(updatedLayers); // Save to history
         setSelectedLayerId(newLayerId);
-        setTool('MOVE'); // Switch to move tool automatically
+        setTool('MOVE'); 
         setIsProcessing(false); setProcessStatus('');
     };
 
-    // --- RENDERER ---
+    // ... (sendToMockup, getPointerCoords, handlePointerDown remain similar) ...
+
     const sendToMockup = async () => {
         if (!onNavigateToMockup) return;
         setIsProcessing(true); setProcessStatus('Compositing...');
@@ -309,12 +376,10 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         onNavigateToMockup();
     };
 
-    // --- INTERACTION HANDLERS ---
     const getPointerCoords = (e: React.PointerEvent) => {
         const rect = containerRef.current!.getBoundingClientRect();
         const centerX = rect.left + rect.width/2;
         const centerY = rect.top + rect.height/2;
-        // Apply inverse view transform
         const x = (e.clientX - centerX - view.x) / view.k;
         const y = (e.clientY - centerY - view.y) / view.k;
         return { x, y };
@@ -326,12 +391,8 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             transformStartRef.current = { x: e.clientX, y: e.clientY, w:0, h:0, r:0, scale:0, angle:0 }; 
             return;
         }
-
         const { x, y } = getPointerCoords(e);
-
-        // Smart Extract Logic
         if (tool === 'SMART_EXTRACT') {
-            // Need pixel coords relative to canvas top-left
             const pixelX = x + canvasSize.w / 2;
             const pixelY = y + canvasSize.h / 2;
             if (pixelX >= 0 && pixelX <= canvasSize.w && pixelY >= 0 && pixelY <= canvasSize.h) {
@@ -339,8 +400,6 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             }
             return;
         }
-
-        // Move/Transform Logic
         if (tool === 'MOVE' && selectedLayerId) {
             setIsTransforming('DRAG');
             transformStartRef.current = { x: e.clientX, y: e.clientY, w:0, h:0, r:0, scale:0, angle:0 }; 
@@ -359,18 +418,25 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             const dy = (e.clientY - transformStartRef.current.y) / view.k;
             const layer = layers.find(l => l.id === selectedLayerId);
             if (layer) {
-                updateLayer(selectedLayerId, { x: layer.x + dx, y: layer.y + dy });
+                // We update state directly for smooth drag, but don't push history yet
+                setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, x: layer.x + dx, y: layer.y + dy } : l));
             }
             transformStartRef.current = { x: e.clientX, y: e.clientY, w:0,h:0,r:0,scale:0,angle:0 };
         }
     };
 
+    const handlePointerUp = () => {
+        if (isTransforming !== 'NONE') {
+            // Drag finished, save state to history
+            addToHistory(layers);
+        }
+        setIsTransforming('NONE'); 
+        setTransformMode('IDLE'); 
+    };
+
     const handleWheel = (e: React.WheelEvent) => {
         const zoomDelta = -e.deltaY * 0.001;
-        setView(prev => ({
-            ...prev,
-            k: Math.min(Math.max(0.1, prev.k + zoomDelta), 5)
-        }));
+        setView(prev => ({ ...prev, k: Math.min(Math.max(0.1, prev.k + zoomDelta), 5) }));
     };
 
     // --- TOOLBAR ACTIONS ---
@@ -379,20 +445,29 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         const l = layers.find(x => x.id === selectedLayerId);
         if (!l) return;
 
+        let newLayers = [...layers];
         switch(action) {
-            case 'FLIP_H': updateLayer(selectedLayerId, { flipX: !l.flipX }); break;
-            case 'FLIP_V': updateLayer(selectedLayerId, { flipY: !l.flipY }); break;
-            case 'ROT_90': updateLayer(selectedLayerId, { rotation: (l.rotation + 90) % 360 }); break;
+            case 'FLIP_H': newLayers = layers.map(x => x.id === selectedLayerId ? { ...x, flipX: !x.flipX } : x); break;
+            case 'FLIP_V': newLayers = layers.map(x => x.id === selectedLayerId ? { ...x, flipY: !x.flipY } : x); break;
+            case 'ROT_90': newLayers = layers.map(x => x.id === selectedLayerId ? { ...x, rotation: (x.rotation + 90) % 360 } : x); break;
             case 'DUP': 
                 const dup = { ...l, id: `copy-${Date.now()}`, x: l.x + 20, y: l.y + 20, name: l.name + ' (Cópia)', zIndex: layers.length + 10 };
-                setLayers(p => [...p, dup]); setSelectedLayerId(dup.id);
+                newLayers = [...layers, dup];
+                setSelectedLayerId(dup.id);
                 break;
             case 'DEL': 
-                if (!l.locked) { setLayers(p => p.filter(x => x.id !== selectedLayerId)); setSelectedLayerId(null); }
+                if (!l.locked) { newLayers = layers.filter(x => x.id !== selectedLayerId); setSelectedLayerId(null); }
                 break;
-            case 'FRONT': updateLayer(selectedLayerId, { zIndex: Math.max(...layers.map(x=>x.zIndex)) + 1 }); break;
-            case 'BACK': updateLayer(selectedLayerId, { zIndex: Math.min(...layers.map(x=>x.zIndex)) - 1 }); break;
+            case 'FRONT': 
+                const maxZ = Math.max(...layers.map(x=>x.zIndex));
+                newLayers = layers.map(x => x.id === selectedLayerId ? { ...x, zIndex: maxZ + 1 } : x); 
+                break;
+            case 'BACK': 
+                const minZ = Math.min(...layers.map(x=>x.zIndex));
+                newLayers = layers.map(x => x.id === selectedLayerId ? { ...x, zIndex: minZ - 1 } : x); 
+                break;
         }
+        addToHistory(newLayers);
     };
 
     const handleRefineEdge = async () => {
@@ -402,9 +477,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
 
         setIsProcessing(true); setProcessStatus('Refining Edges with AI...');
         try {
-            // Remove background format
             const cropBase64 = layer.src.split(',')[1];
-            // Call backend reconstruction to get a cleaner version
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -412,7 +485,8 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             });
             const data = await res.json();
             if (data.success && data.src) {
-                updateLayer(selectedLayerId, { src: data.src });
+                const updated = layers.map(l => l.id === selectedLayerId ? { ...l, src: data.src } : l);
+                addToHistory(updated);
             }
         } catch(e) {}
         setIsProcessing(false);
@@ -436,39 +510,70 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     return (
         <div className="flex flex-col h-full w-full bg-[#1e293b] text-white overflow-hidden" 
              onPointerMove={handlePointerMove} 
-             onPointerUp={() => { setIsTransforming('NONE'); setTransformMode('IDLE'); }}
+             onPointerUp={handlePointerUp}
              onWheel={handleWheel}>
             
             <ModuleHeader icon={Layers} title="Layer Studio" subtitle="Composição & Edição" />
             
-            {/* TOOLBAR SUPERIOR (PHOTOSHOP STYLE) */}
-            <div className="h-12 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-2 z-30">
-                {/* Tools */}
-                <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
-                    <button onClick={() => setTool('MOVE')} className={`p-1.5 rounded ${tool==='MOVE' ? 'bg-vingi-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Mover (V)"><Move size={16}/></button>
-                    <button onClick={() => setTool('SMART_EXTRACT')} className={`p-1.5 rounded ${tool==='SMART_EXTRACT' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Extração Inteligente (W)"><Scissors size={16}/></button>
-                    <button onClick={() => setTool('HAND')} className={`p-1.5 rounded ${tool==='HAND' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Pan (H)"><Hand size={16}/></button>
-                </div>
-                
-                <div className="w-px h-6 bg-gray-700 mx-2"></div>
-
-                {/* Transform Controls (Only visible if layer selected) */}
-                {selectedLayerId && (
-                    <div className="flex items-center gap-2 animate-fade-in">
-                        <button onClick={() => transformSelected('FLIP_H')} className="p-1.5 hover:bg-gray-700 rounded text-gray-300" title="Espelhar H"><FlipHorizontal size={16}/></button>
-                        <button onClick={() => transformSelected('FLIP_V')} className="p-1.5 hover:bg-gray-700 rounded text-gray-300" title="Espelhar V"><FlipVertical size={16}/></button>
-                        <button onClick={() => transformSelected('ROT_90')} className="p-1.5 hover:bg-gray-700 rounded text-gray-300" title="Girar 90°"><RotateCw size={16}/></button>
-                        <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                        <button onClick={() => transformSelected('FRONT')} className="p-1.5 hover:bg-gray-700 rounded text-gray-300" title="Trazer p/ Frente"><ArrowUp size={16}/></button>
-                        <button onClick={() => transformSelected('BACK')} className="p-1.5 hover:bg-gray-700 rounded text-gray-300" title="Enviar p/ Trás"><ArrowDown size={16}/></button>
-                        <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                        <button onClick={() => transformSelected('DUP')} className="p-1.5 hover:bg-gray-700 rounded text-gray-300" title="Duplicar"><Copy size={16}/></button>
-                        <button onClick={() => transformSelected('DEL')} className="p-1.5 hover:bg-red-900/50 text-red-400 rounded" title="Deletar"><Trash2 size={16}/></button>
-                        
-                        <button onClick={handleRefineEdge} className="ml-4 px-3 py-1 bg-purple-900/50 border border-purple-500/50 text-purple-300 rounded text-xs font-bold flex items-center gap-2 hover:bg-purple-900"><Sparkles size={12}/> REFINAR (IA)</button>
+            {/* TOOLBAR SUPERIOR */}
+            <div className="h-14 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-3 z-30 justify-between overflow-x-auto">
+                <div className="flex items-center gap-3">
+                    {/* Tools */}
+                    <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
+                        <button onClick={() => setTool('MOVE')} className={`p-2 rounded-md ${tool==='MOVE' ? 'bg-vingi-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Mover (V)"><Move size={18}/></button>
+                        <button onClick={() => setTool('SMART_EXTRACT')} className={`p-2 rounded-md ${tool==='SMART_EXTRACT' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Extração Inteligente (W)"><Scissors size={18}/></button>
+                        <button onClick={() => setTool('HAND')} className={`p-2 rounded-md ${tool==='HAND' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Pan (H)"><Hand size={18}/></button>
                     </div>
-                )}
+                    
+                    <div className="w-px h-8 bg-gray-700"></div>
+
+                    {/* History */}
+                    <div className="flex items-center gap-1">
+                        <button onClick={undo} disabled={historyIndex <= 0} className="p-2 hover:bg-gray-700 rounded-md text-gray-300 disabled:opacity-30 disabled:hover:bg-transparent" title="Desfazer (Ctrl+Z)">
+                            <Undo2 size={18}/>
+                        </button>
+                        <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 hover:bg-gray-700 rounded-md text-gray-300 disabled:opacity-30 disabled:hover:bg-transparent" title="Refazer (Ctrl+Shift+Z)">
+                            <Redo2 size={18}/>
+                        </button>
+                    </div>
+
+                    <div className="w-px h-8 bg-gray-700"></div>
+
+                    {/* Transform Controls */}
+                    {selectedLayerId && (
+                        <div className="flex items-center gap-1 animate-fade-in">
+                            <button onClick={() => transformSelected('FLIP_H')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300" title="Espelhar H"><FlipHorizontal size={18}/></button>
+                            <button onClick={() => transformSelected('FLIP_V')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300" title="Espelhar V"><FlipVertical size={18}/></button>
+                            <button onClick={() => transformSelected('ROT_90')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300" title="Girar 90°"><RotateCw size={18}/></button>
+                            <button onClick={() => transformSelected('FRONT')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300" title="Trazer p/ Frente"><ArrowUp size={18}/></button>
+                            <button onClick={() => transformSelected('BACK')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300" title="Enviar p/ Trás"><ArrowDown size={18}/></button>
+                            <button onClick={() => transformSelected('DUP')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300" title="Duplicar"><Copy size={18}/></button>
+                            <button onClick={() => transformSelected('DEL')} className="p-2 hover:bg-red-900/50 text-red-400 rounded-md" title="Deletar (Del)"><Trash2 size={18}/></button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                     <button onClick={handleRefineEdge} disabled={!selectedLayerId} className="hidden md:flex px-3 py-1.5 bg-purple-900/50 border border-purple-500/50 text-purple-300 rounded text-xs font-bold items-center gap-2 hover:bg-purple-900 disabled:opacity-50"><Sparkles size={14}/> REFINAR (IA)</button>
+                     <button onClick={() => setShowShortcuts(!showShortcuts)} className="p-2 text-gray-500 hover:text-white"><Keyboard size={20}/></button>
+                </div>
             </div>
+
+            {/* SHORTCUTS MODAL */}
+            {showShortcuts && (
+                <div className="absolute top-16 right-4 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-4 z-50 animate-fade-in">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Atalhos de Teclado</h4>
+                    <div className="space-y-2 text-xs text-gray-300">
+                        <div className="flex justify-between"><span>Mover</span> <span className="font-mono bg-gray-900 px-1 rounded">V</span></div>
+                        <div className="flex justify-between"><span>Varinha</span> <span className="font-mono bg-gray-900 px-1 rounded">W</span></div>
+                        <div className="flex justify-between"><span>Pan</span> <span className="font-mono bg-gray-900 px-1 rounded">H</span></div>
+                        <div className="flex justify-between"><span>Desfazer</span> <span className="font-mono bg-gray-900 px-1 rounded">Ctrl+Z</span></div>
+                        <div className="flex justify-between"><span>Refazer</span> <span className="font-mono bg-gray-900 px-1 rounded">Ctrl+Shift+Z</span></div>
+                        <div className="flex justify-between"><span>Deletar</span> <span className="font-mono bg-gray-900 px-1 rounded">Del</span></div>
+                        <div className="flex justify-between"><span>Ordem</span> <span className="font-mono bg-gray-900 px-1 rounded">[ ]</span></div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-1 overflow-hidden">
                 {/* CANVAS AREA */}
@@ -478,9 +583,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                     <div className="absolute inset-0 opacity-10 bg-[linear-gradient(45deg,#808080_25%,transparent_25%,transparent_75%,#808080_75%,#808080),linear-gradient(45deg,#808080_25%,transparent_25%,transparent_75%,#808080_75%,#808080)]" style={{ backgroundSize: '20px 20px', backgroundPosition: '0 0, 10px 10px' }} />
 
                     <div className="relative shadow-2xl" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center', transition: 'transform 0.05s linear' }}>
-                        {/* White Artboard Base */}
                         <div className="absolute inset-0 bg-white" />
-                        
                         {layers.map(l => l.visible && (
                             <div key={l.id} 
                                  className={`absolute select-none pointer-events-none ${selectedLayerId===l.id ? 'z-[999]' : ''}`} 
@@ -489,18 +592,13 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                                      transform: `translate(calc(-50% + ${l.x}px), calc(-50% + ${l.y}px)) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, 
                                      zIndex: l.zIndex 
                                  }}>
-                                
                                 <img src={l.src} className={`max-w-none ${l.id.includes('base') ? 'w-full h-full' : ''} ${selectedLayerId===l.id ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''}`} draggable={false} />
-                                
-                                {/* BOUNDING BOX & HANDLES (Visual Only) */}
                                 {selectedLayerId === l.id && tool === 'MOVE' && (
                                     <div className="absolute -inset-1 border border-blue-500 pointer-events-none">
-                                        {/* Corners */}
                                         <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
                                         <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
                                         <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
                                         <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
-                                        {/* Rotation Handle */}
                                         <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-0.5 h-8 bg-blue-500"></div>
                                         <div className="absolute -top-9 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-500 rounded-full cursor-pointer pointer-events-auto shadow-sm"></div>
                                     </div>
@@ -508,10 +606,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                             </div>
                         ))}
                     </div>
-
-                    {isProcessing && <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[1000]"><div className="text-xl font-bold text-white animate-pulse">{processStatus}</div><div className="mt-2 text-xs text-gray-400">Usando Processamento de Pixel & IA</div></div>}
-                    
-                    {/* Overlay Info */}
+                    {isProcessing && <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[1000]"><div className="text-xl font-bold text-white animate-pulse">{processStatus}</div></div>}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-gray-900/80 rounded-full text-[10px] text-gray-400 font-mono pointer-events-none backdrop-blur border border-gray-700">
                         {Math.round(view.k * 100)}% | {canvasSize.w}x{canvasSize.h}px
                     </div>
@@ -532,9 +627,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                             <div key={l.id} 
                                  onClick={() => !l.locked && setSelectedLayerId(l.id)} 
                                  className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer border transition-all ${selectedLayerId===l.id ? 'bg-blue-900/30 border-blue-500/50' : 'bg-transparent border-transparent hover:bg-gray-800'}`}>
-                                
                                 <button onClick={(e)=>{e.stopPropagation(); updateLayer(l.id, {visible: !l.visible})}} className={`p-1 rounded ${l.visible?'text-gray-400':'text-gray-600'}`}>{l.visible?<Eye size={12}/>:<EyeOff size={12}/>}</button>
-                                
                                 <div className="w-8 h-8 bg-gray-700 rounded border border-gray-600 overflow-hidden shrink-0">
                                     <img src={l.src} className="w-full h-full object-contain" />
                                 </div>

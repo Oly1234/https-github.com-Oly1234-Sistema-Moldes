@@ -28,12 +28,12 @@ const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => (
     </div>
 );
 
-// --- PRESETS DE INDÚSTRIA ---
+// --- PRESETS DE INDÚSTRIA (DIGITAL & SUBLIMAÇÃO) ---
 const SIZE_PRESETS = [
-    { label: "Rapport 32", w: 32, h: 32, desc: "Cilindro Pequeno" },
-    { label: "Rotativa 64", w: 64, h: 64, desc: "Cilindro Padrão" },
-    { label: "Digital 140", w: 140, h: 100, desc: "Largura Útil" },
-    { label: "Lenço/Canga", w: 100, h: 140, desc: "Painel Localizado" }
+    { label: "Rapport 64", w: 64, h: 64, desc: "Padrão Indústria (Sem emenda)" },
+    { label: "Rapport 32", w: 32, h: 32, desc: "Mini-Rapport (Fluido)" },
+    { label: "Digital 145", w: 145, h: 100, desc: "Largura Útil (Sublimação)" },
+    { label: "Painel Localizado", w: 100, h: 140, desc: "Canga/Lenço (Sem repetição)" }
 ];
 
 // --- ATELIER SYSTEM ---
@@ -44,10 +44,10 @@ interface AtelierSystemProps {
 
 const GENERATION_STEPS = [
     "Inicializando Atelier Digital...",
-    "Calculando Rapport e Encaixe...",
-    "Definindo Estrutura de Trama (Weft)...",
+    "Calculando Encaixe de RIP...",
+    "Otimizando para Impressão Digital...",
     "Aplicando Textura Vetorial 4K...",
-    "Calibrando Cores Pantone...",
+    "Calibrando Cores (CMYK/RGB)...",
     "Finalizando Renderização..."
 ];
 
@@ -211,7 +211,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             <ModuleHeader 
                 icon={Palette} 
                 title="Atelier Generativo" 
-                subtitle="Engenharia Têxtil & Estamparia"
+                subtitle="Impressão Digital & Estamparia"
                 referenceImage={referenceImage}
                 actionLabel={referenceImage ? "Nova Criação" : undefined}
                 onAction={() => { setReferenceImage(null); setGeneratedPattern(null); }}
@@ -230,8 +230,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             <UploadCloud size={32} className="text-gray-400 group-hover:text-vingi-500"/>
                         </div>
                         <div className="text-center px-8">
-                            <h3 className="text-xl font-bold text-gray-700">Atelier Têxtil</h3>
-                            <p className="text-sm text-gray-400 mt-2">Carregue um desenho ou moodboard. A IA irá vetorizar, colorir e criar o rapport técnico.</p>
+                            <h3 className="text-xl font-bold text-gray-700">Atelier Têxtil Digital</h3>
+                            <p className="text-sm text-gray-400 mt-2">Carregue um desenho ou moodboard. A IA irá criar o rapport digital em alta resolução.</p>
                         </div>
                     </div>
                 </div>
@@ -246,7 +246,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             {/* SECTION 1: DIMENSÕES & SUBSTRATO */}
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Ruler size={14} className="text-vingi-500"/> Dimensões & Ourela
+                                    <Ruler size={14} className="text-vingi-500"/> Dimensões Digitais
                                 </h3>
                                 
                                 {/* Info Ourela */}
@@ -254,7 +254,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     <div className="mb-3 p-2 bg-blue-50 border border-blue-100 rounded text-[10px] text-blue-700 flex items-start gap-2">
                                         <Info size={14} className="shrink-0 mt-0.5"/>
                                         <div>
-                                            <strong>Nota Técnica:</strong> Altura = Urdume. Largura = Trama.
+                                            <strong>Digital:</strong> Altura = Sentido do Rolo. Largura = Largura Útil da Impressora.
                                         </div>
                                         <button onClick={() => setSelvedgeInfo(false)} className="ml-auto"><Settings2 size={12}/></button>
                                     </div>
@@ -264,7 +264,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group">
                                         <span className="text-[9px] text-gray-400 font-bold block flex items-center gap-1">
-                                            LARGURA (TRAMA) <ArrowDownToLine size={8} className="-rotate-90"/>
+                                            LARGURA ÚTIL <ArrowDownToLine size={8} className="-rotate-90"/>
                                         </span>
                                         <div className="flex items-end gap-1">
                                             <input type="number" value={widthCm} onChange={e => setWidthCm(Number(e.target.value))} className="w-full bg-transparent font-bold text-lg outline-none text-gray-800"/>
@@ -274,7 +274,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     
                                     <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group">
                                         <span className="text-[9px] text-gray-400 font-bold block flex items-center gap-1">
-                                            ALTURA (URDUME) <ArrowDownToLine size={8}/>
+                                            ALTURA RAPPORT <ArrowDownToLine size={8}/>
                                         </span>
                                         <div className="flex items-end gap-1">
                                             <input type="number" value={heightCm} onChange={e => setHeightCm(Number(e.target.value))} className="w-full bg-transparent font-bold text-lg outline-none text-gray-800"/>
@@ -300,7 +300,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 {/* ENCAIXE & RESOLUÇÃO */}
                                 <div className="space-y-3">
                                     <div>
-                                        <span className="text-[9px] font-bold text-gray-400 block mb-1">TIPO DE ENCAIXE (RAPPORT)</span>
+                                        <span className="text-[9px] font-bold text-gray-400 block mb-1">TIPO DE ENCAIXE (RAPPORT DIGITAL)</span>
                                         <div className="flex bg-white rounded-lg border border-gray-200 p-1">
                                             <button 
                                                 onClick={() => setRepeatType('Straight')}
@@ -331,9 +331,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                 onChange={(e) => setDpi(Number(e.target.value) as any)}
                                                 className="w-full bg-white border border-gray-200 rounded-lg text-xs font-bold p-2 outline-none"
                                             >
-                                                <option value={72}>72 dpi (Web)</option>
-                                                <option value={150}>150 dpi (Digital)</option>
-                                                <option value={300}>300 dpi (Fine Art)</option>
+                                                <option value={150}>150 dpi (Padrão)</option>
+                                                <option value={300}>300 dpi (Alta)</option>
+                                                <option value={72}>72 dpi (Draft)</option>
                                             </select>
                                         </div>
                                         <div>
@@ -344,9 +344,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                 className="w-full bg-white border border-gray-200 rounded-lg text-xs font-bold p-2 outline-none"
                                             >
                                                 <option value="None">Nenhum</option>
-                                                <option value="Cotton">Algodão</option>
-                                                <option value="Linen">Linho</option>
-                                                <option value="Silk">Seda</option>
+                                                <option value="Cotton">Algodão (DTF)</option>
+                                                <option value="Linen">Linho (Sub)</option>
+                                                <option value="Silk">Seda (Digital)</option>
                                             </select>
                                         </div>
                                     </div>
@@ -408,7 +408,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     <div className="p-3 bg-green-50 border border-green-100 rounded-lg flex items-center gap-3 mb-2">
                                         <Check size={16} className="text-green-600"/>
                                         <div className="text-[10px] text-green-800">
-                                            <strong>Pronto para Impressão:</strong><br/>
+                                            <strong>Pronto para RIP (Digital):</strong><br/>
                                             {widthCm}x{heightCm}cm @ {dpi}dpi ({repeatType})
                                         </div>
                                     </div>
@@ -422,7 +422,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = 'vingi-pattern-master.png'; l.click(); }}
                                         className="w-full py-3 bg-gray-900 text-white border border-black rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-gray-800 transition-colors"
                                     >
-                                        <Download size={14}/> BAIXAR MASTER (TIFF/PNG)
+                                        <Download size={14}/> BAIXAR ARQUIVO TIFF
                                     </button>
                                 </div>
                             )}
@@ -438,7 +438,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                              <div className="text-center relative z-10 p-8 max-w-sm">
                                  <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-6"/>
                                  <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">{GENERATION_STEPS[genStep]}</h2>
-                                 <p className="text-slate-400 text-sm">A GPU está calculando os vetores da estampa...</p>
+                                 <p className="text-slate-400 text-sm">A GPU está gerando o arquivo digital...</p>
                                  <div className="mt-8 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
                                      <div className="h-full bg-vingi-500 animate-progress-indeterminate"></div>
                                  </div>
