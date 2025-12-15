@@ -3,9 +3,10 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
 
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
-    // 1. Definição do Modelo (Imagen 3 para Alta Fidelidade Têxtil)
-    const MODEL_NAME = 'imagen-3.0-generate-001'; 
-    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:predict?key=${apiKey}`;
+    // 1. Definição do Modelo (VOLTANDO PARA GEMINI 2.5 FLASH - ESTÁVEL)
+    // O modelo 'imagen-3.0' causou erro 404/503 pois requer whitelist Vertex AI.
+    const MODEL_NAME = 'gemini-2.5-flash-image'; 
+    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     // 2. Desconstrução das Specs
     const { layout = "Corrida", repeat = "Straight", width = 64, height = 64, styleGuide = "Clean lines", dpi = 300 } = textileSpecs || {};
@@ -15,85 +16,37 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
-    // LÓGICA DE ENGENHARIA TÊXTIL (Context-Aware Layout)
+    // LÓGICA DE ENGENHARIA TÊXTIL
     let layoutInstruction = "";
-    
     if (layout === 'Barrada') {
-        if (width < 80) {
-            layoutInstruction = `
-            TYPE: ENGINEERED BORDER PRINT (BARRADO).
-            - COMPOSITION: Asymmetrical. Heavy artistic details on the BOTTOM edge, fading upwards into negative space or smaller motifs.
-            - USAGE: Hemline of a dress.
-            `;
-        } else {
-            layoutInstruction = `
-            TYPE: DOUBLE BORDER PANEL.
-            - COMPOSITION: Rich details at bottom and top edges. Center is lighter.
-            `;
-        }
+        layoutInstruction = "TYPE: ENGINEERED BORDER PRINT. Asymmetrical composition with heavy details at the bottom edge.";
     } else if (layout === 'Localizada') {
-        layoutInstruction = `
-        TYPE: PLACEMENT PRINT (ENGINEERED PANEL).
-        - COMPOSITION: One single, magnificent central artwork. Perfectly centered.
-        - NO REPEAT. This is a chest print or scarf panel.
-        `;
+        layoutInstruction = "TYPE: PLACEMENT PRINT. Single central artwork, centered, no repeat. Suitable for t-shirt chest print.";
     } else {
-        // Corrida (Seamless) - REFORÇO DE CONTINUIDADE
-        let repeatLogic = "";
-        if (repeat === 'Half-Drop') {
-             repeatLogic = "REPEAT: HALF-DROP (Diamond Layout). Fluid diagonal flow.";
-        } else if (repeat === 'Mirror') {
-             repeatLogic = "REPEAT: KALEIDOSCOPIC MIRROR. Symmetrical reflection from center.";
-        } else {
-             repeatLogic = "REPEAT: SQUARE GRID (Straight).";
-        }
-
-        layoutInstruction = `
-        TYPE: SEAMLESS REPEAT PATTERN (ALL-OVER).
-        - ${repeatLogic}
-        - EDGES: Must match perfectly left-to-right and top-to-bottom.
-        `;
+        layoutInstruction = `TYPE: SEAMLESS REPEAT PATTERN. ${repeat === 'Half-Drop' ? 'Half-drop repeat' : 'Grid repeat'}. Edges must match perfectly for continuous printing.`;
     }
 
-    // AJUSTE DE ESTILO: RAW ARTWORK vs GARMENT SILHOUETTE
+    // AJUSTE DE ESTILO
     const RAW_DIGITAL_PROMPT = `
-    FORMAT: RECTANGULAR TEXTURE SWATCH (FULL BLEED).
-    
-    NEGATIVE CONSTRAINTS (DO NOT DRAW):
-    - DO NOT DRAW A DRESS, T-SHIRT, MANNEQUIN, OR MODEL.
-    - DO NOT DRAW NECKLINES, SLEEVES, OR SEAMS.
-    - DO NOT LEAVE WHITE BORDERS. FILL THE ENTIRE CANVAS.
-    
-    ARTISTIC DIRECTION:
-    - STYLE: ${styleGuide}
-    - FLUIDITY: Create ORGANIC FLOW and NATURAL MOVEMENT. Avoid stiff, rigid, or overly geometric layouts unless requested.
-    - DETAILS: High-Fidelity, Painterly, Intricate. Use rich gradients, tone-on-tone depth, and volumetric shading to give life to elements.
-    - SURFACE: Flat Digital Artwork (for printing). 
-    - TEXTURE NOTE: Do NOT render fabric grain (weave/threads). Keep the base flat for printing, but make the ARTWORK itself look rich and dimensional.
-    `;
-
-    const finalPrompt = `
-    Create a professional high-end textile design file.
-    Subject: ${prompt}.
-    
-    COLOR PALETTE:
-    ${colorList}
+    TASK: Generate a high-quality textile pattern file.
+    SUBJECT: ${prompt}.
+    PALETTE: ${colorList}.
     
     TECHNICAL SPECS:
-    ${layoutInstruction}
-    
-    ${RAW_DIGITAL_PROMPT}
+    - ${layoutInstruction}
+    - STYLE: ${styleGuide}.
+    - RESOLUTION TARGET: ${dpi} DPI look & feel.
+    - VIEW: Flat, top-down 2D texture swatch. NO perspective, NO shadows, NO fabric grain/weave.
+    - QUALITY: Vector-like crispness, high contrast, professional print file ready.
+    - NEGATIVE PROMPT: Do not render a dress, t-shirt, mannequin, furniture, or room. Render ONLY the artwork/pattern square.
     `;
 
     try {
-        // Payload específico para Imagen (Predict API)
         const payload = {
-            instances: [
-                { prompt: finalPrompt }
-            ],
-            parameters: {
-                sampleCount: 1,
-                aspectRatio: "1:1"
+            contents: [{ parts: [{ text: RAW_DIGITAL_PROMPT }] }],
+            // 'gemini-2.5-flash-image' usa generationConfig padrão, sem 'imageSize' que quebrava o request anterior
+            generationConfig: {
+                // Removemos configurações incompatíveis com o modelo Flash
             }
         };
 
@@ -110,15 +63,14 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
 
         const data = await response.json();
         
-        // Estrutura de resposta do Imagen
-        const prediction = data.predictions?.[0];
+        // Estrutura de resposta do Gemini (generateContent)
+        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
         
-        if (prediction?.bytesBase64Encoded) {
-            const mime = prediction.mimeType || 'image/png';
-            return `data:${mime};base64,${prediction.bytesBase64Encoded}`;
+        if (imagePart) {
+            return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         }
         
-        throw new Error("A IA processou o pedido mas não retornou a imagem (Formato inesperado).");
+        throw new Error("A IA processou o pedido mas não retornou a imagem (Bloqueio de segurança ou falha interna).");
 
     } catch (e) {
         console.error("Generator Module Error:", e);

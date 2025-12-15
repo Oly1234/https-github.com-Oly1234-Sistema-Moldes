@@ -1,8 +1,9 @@
 
 // DEPARTAMENTO: ATELIER DIGITAL
-// Responsabilidade: Geração de Imagens (Estampas) usando Gemini Nano Banana
+// Responsabilidade: Geração de Imagens (Estampas) usando Gemini Flash
 
 export const createTextileDesign = async (apiKey, prompt, colors) => {
+    // Correção: Uso do modelo Flash Image estável
     const MODEL_NAME = 'gemini-2.5-flash-image';
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
@@ -10,7 +11,6 @@ export const createTextileDesign = async (apiKey, prompt, colors) => {
         ? colors.map(c => c.name).join(', ') 
         : 'harmonious trend colors';
 
-    // Prompt de Engenharia Têxtil
     const ENGINEERING_PROMPT = `
     Design a professional seamless textile pattern.
     Subject: ${prompt}.
@@ -20,13 +20,8 @@ export const createTextileDesign = async (apiKey, prompt, colors) => {
     `;
 
     const payload = {
-        contents: [{ parts: [{ text: ENGINEERING_PROMPT }] }],
-        generationConfig: {
-            imageConfig: {
-                aspectRatio: "1:1",
-                imageSize: "1K"
-            }
-        }
+        contents: [{ parts: [{ text: ENGINEERING_PROMPT }] }]
+        // Removido generationConfig complexo que causava incompatibilidade
     };
 
     try {
@@ -38,7 +33,7 @@ export const createTextileDesign = async (apiKey, prompt, colors) => {
 
         if (!response.ok) {
             const err = await response.text();
-            throw new Error(`Atelier Error (${response.status}): Verifique permissões do modelo de imagem.`);
+            throw new Error(`Atelier Error (${response.status}): ${err}`);
         }
 
         const data = await response.json();
