@@ -3,19 +3,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History as HistoryIcon, Trash2, Settings2, Check, Printer, Search, RefreshCw, XCircle, ScanLine, AlertCircle, Info, RotateCcw } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
+import { ModuleLandingPage } from './Shared';
 
-// --- COMPONENTE SMART VIEWER REUTILIZADO (SIMPLIFICADO PARA VISUALIZAÇÃO) ---
+// --- COMPONENTE SMART VIEWER REUTILIZADO ---
 const SmartImageViewer: React.FC<{ src: string }> = ({ src }) => {
     const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
     const [isPinching, setIsPinching] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const lastDist = useRef<number>(0);
-    const lastCenter = useRef<{x: number, y: number}>({x: 0, y: 0});
     const lastPos = useRef<{x: number, y: number}>({x: 0, y: 0});
     const isDragging = useRef(false);
 
     const getDist = (t1: React.Touch, t2: React.Touch) => Math.sqrt((t1.clientX-t2.clientX)**2 + (t1.clientY-t2.clientY)**2);
-    const getCenter = (t1: React.Touch, t2: React.Touch) => ({ x: (t1.clientX+t2.clientX)/2, y: (t1.clientY+t2.clientY)/2 });
 
     const handleWheel = (e: React.WheelEvent) => {
         e.preventDefault();
@@ -28,7 +27,6 @@ const SmartImageViewer: React.FC<{ src: string }> = ({ src }) => {
         if ('touches' in e && e.touches.length === 2) {
             setIsPinching(true);
             lastDist.current = getDist(e.touches[0], e.touches[1]);
-            lastCenter.current = getCenter(e.touches[0], e.touches[1]);
         } else {
             isDragging.current = true;
             const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
@@ -43,7 +41,7 @@ const SmartImageViewer: React.FC<{ src: string }> = ({ src }) => {
             const dist = getDist(e.touches[0], e.touches[1]);
             const zoomFactor = dist / lastDist.current;
             const newScale = Math.min(Math.max(transform.k * zoomFactor, 0.5), 5);
-            setTransform(p => ({ ...p, k: newScale })); // Simplificado o pan no pinch para estabilidade
+            setTransform(p => ({ ...p, k: newScale }));
             lastDist.current = dist;
         } else if (isDragging.current) {
             const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
@@ -95,16 +93,11 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
 
     const handlePointerMove = (e: React.PointerEvent) => {
         if (!isDragging.current) return;
-        
         const newX = e.clientX - dragOffset.current.x;
         const newY = e.clientY - dragOffset.current.y;
-        
-        const maxX = window.innerWidth - size;
-        const maxY = window.innerHeight - 50; 
-        
         setPosition({
-            x: Math.max(0, Math.min(newX, maxX)),
-            y: Math.max(0, Math.min(newY, maxY))
+            x: Math.max(0, Math.min(newX, window.innerWidth - size)),
+            y: Math.max(0, Math.min(newY, window.innerHeight - 50))
         });
     };
 
@@ -293,35 +286,66 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
             )}
 
             {/* HEADER */}
-            <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-30 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <Globe className="text-vingi-600" size={18} />
-                    <h2 className="text-sm font-bold text-gray-800">Pattern Studio <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1">SEARCH</span></h2>
+            <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-30 shadow-sm shrink-0">
+                <div className="flex items-center gap-2 md:hidden">
+                    <div className="bg-vingi-900 p-2 rounded-lg text-white shadow-md">
+                        <Globe size={18} />
+                    </div>
                 </div>
-                {referenceImage && !isAnalyzing && (
-                    <button onClick={() => fileInputRef.current?.click()} className="text-xs font-bold text-vingi-600 bg-vingi-50 px-3 py-1.5 rounded-lg hover:bg-vingi-100 flex items-center gap-2">
-                        <RefreshCw size={12}/> Nova Imagem
-                    </button>
-                )}
+                
+                {/* Centralized Title */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+                    <div className="hidden md:flex items-center gap-2 justify-center mb-0.5">
+                        <div className="bg-vingi-900 p-1.5 rounded text-white shadow-sm">
+                            <Globe size={14}/>
+                        </div>
+                        <h2 className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">Pattern Search</h2>
+                    </div>
+                    <h2 className="md:hidden text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">Pattern Search</h2>
+                    <p className="text-[10px] text-gray-500 font-medium hidden md:block">Buscador Global de Estampas</p>
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                    {referenceImage && !isAnalyzing && (
+                        <button onClick={() => fileInputRef.current?.click()} className="text-xs font-bold text-vingi-600 bg-vingi-50 px-3 py-1.5 rounded-lg hover:bg-vingi-100 flex items-center gap-2">
+                            <RefreshCw size={12}/> <span className="hidden md:inline">Nova Imagem</span>
+                        </button>
+                    )}
+                </div>
             </header>
 
             {/* MAIN CONTENT AREA */}
-            <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+            <div className="flex-1 p-4 md:p-8 max-w-[1800px] mx-auto w-full">
+                <input type="file" ref={fileInputRef} onChange={handleReferenceUpload} accept="image/*" className="hidden" />
                 
-                {/* 1. UPLOAD (VAZIO) */}
+                {/* 1. UPLOAD (VAZIO) - USING UNIFIED LANDING PAGE */}
                 {!referenceImage && (
-                    <div className="min-h-[50vh] flex flex-col items-center justify-center animate-fade-in">
-                        <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-xl h-72 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/50 transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group shadow-sm">
-                             <input type="file" ref={fileInputRef} onChange={handleReferenceUpload} accept="image/*" className="hidden" />
-                             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
-                                 <UploadCloud size={28} className="text-gray-400 group-hover:text-vingi-500"/>
-                             </div>
-                             <div className="text-center">
-                                 <h3 className="text-lg font-bold text-gray-700">Carregar Amostra</h3>
-                                 <p className="text-xs text-gray-400 mt-1">Arraste ou clique para iniciar a Análise</p>
-                             </div>
-                        </div>
-                    </div>
+                    <ModuleLandingPage 
+                        icon={Globe}
+                        title="Scanner de Estampas"
+                        description="Encontre fornecedores globais para qualquer textura ou estampa. A IA identifica o padrão e busca arquivos digitais para compra em bancos de imagem e estúdios."
+                        primaryActionLabel="Carregar Amostra"
+                        onPrimaryAction={() => fileInputRef.current?.click()}
+                        features={["Shutterstock", "Patternbank", "Adobe Stock", "Spoonflower"]}
+                        secondaryAction={
+                            <div className="h-full flex flex-col justify-center">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="w-2 h-2 rounded-full bg-vingi-500"></span>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dica Profissional</h3>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Busca Visual</h4>
+                                        <p className="text-xs text-gray-500">Use fotos de roupas, tecidos ou papel de parede. A IA isola o motivo.</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Paleta Pantone</h4>
+                                        <p className="text-xs text-gray-500">O sistema extrai automaticamente os códigos TCX das cores dominantes.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    />
                 )}
 
                 {/* 2. FLUXO PRINCIPAL (COM IMAGEM) */}

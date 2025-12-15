@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize } from 'lucide-react';
-import { ModuleHeader } from './Shared';
+import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 // --- TYPES ---
 interface AppliedLayer {
@@ -318,18 +318,43 @@ export const MockupStudio: React.FC = () => {
           onAction={() => setPatternImage(null)}
       />
 
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        {/* WORKSPACE */}
-        <div className="order-1 md:order-2 flex-1 relative bg-gray-200/50 flex items-center justify-center overflow-hidden touch-none h-[65vh] md:h-full">
-            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-            
-            {!moldImage ? (
-               <div className="text-center opacity-50 px-4">
-                   <UploadCloud size={48} className="mx-auto mb-2 text-gray-400"/>
-                   <h2 className="text-lg font-bold text-gray-500">Área de Trabalho</h2>
-                   <p className="text-xs text-gray-400">Carregue um molde para começar</p>
-               </div>
-           ) : (
+      {/* CONDITIONAL RENDER: EMPTY VS WORKSPACE */}
+      {!moldImage ? (
+          <div className="flex-1 overflow-y-auto">
+              <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
+              <ModuleLandingPage 
+                  icon={Shirt}
+                  title="Provador Virtual"
+                  description="Aplique estampas em moldes reais instantaneamente. A simulação física respeita sombras e dobras para um resultado ultra-realista."
+                  primaryActionLabel="Carregar Molde (Base)"
+                  onPrimaryAction={() => moldInputRef.current?.click()}
+                  features={["Warping", "Shadow Match", "3D Drape", "Export"]}
+                  secondaryAction={
+                      <div className="h-full flex flex-col justify-center">
+                          <div className="flex items-center gap-2 mb-4">
+                              <span className="w-2 h-2 rounded-full bg-vingi-500"></span>
+                              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dica Profissional</h3>
+                          </div>
+                          <div className="space-y-4">
+                              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                  <h4 className="text-sm font-bold text-gray-800 mb-1">Base de Contraste</h4>
+                                  <p className="text-xs text-gray-500">Prefira fotos de bases brancas ou cinzas para preservar as sombras originais.</p>
+                              </div>
+                              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                  <h4 className="text-sm font-bold text-gray-800 mb-1">Mistura Realista</h4>
+                                  <p className="text-xs text-gray-500">O modo 'Multiply' é aplicado automaticamente para integrar a estampa ao tecido.</p>
+                              </div>
+                          </div>
+                      </div>
+                  }
+              />
+          </div>
+      ) : (
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            {/* WORKSPACE */}
+            <div className="order-1 md:order-2 flex-1 relative bg-gray-200/50 flex items-center justify-center overflow-hidden touch-none h-[65vh] md:h-full">
+                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+                
                 <div 
                     ref={viewportRef}
                     className="relative w-full h-full flex items-center justify-center p-0 md:p-8 overflow-hidden"
@@ -348,60 +373,60 @@ export const MockupStudio: React.FC = () => {
                         />
                     </div>
                 </div>
-           )}
-        </div>
-
-        {/* CONTROLS */}
-        <div className="order-2 md:order-1 w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-2xl z-20 h-[35vh] md:h-full overflow-y-auto custom-scrollbar">
-            <div className="p-4 bg-blue-50 border-b border-blue-100">
-               <p className="text-[10px] text-vingi-700">
-                   <strong>Como usar:</strong> 1. Carregue molde e estampa. 2. Use a Varinha para clicar nas partes do molde. 3. Ajuste escala e rotação.
-               </p>
             </div>
 
-            <div className="p-4 space-y-4 pb-20">
-                <div className="grid grid-cols-2 gap-2">
-                      <div onClick={() => moldInputRef.current?.click()} className={`relative h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${moldImage ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-vingi-400'}`}>
-                          <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
-                          {moldImage ? <img src={moldImage} className="w-full h-full object-contain p-1"/> : <UploadCloud size={20} className="text-gray-300"/>}
-                          <span className="text-[9px] font-bold text-gray-500 mt-1">BASE/MOLDE</span>
-                      </div>
-                      <div onClick={() => patternInputRef.current?.click()} className={`relative h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${patternImage ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-vingi-400'}`}>
-                          <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
-                          {patternImage ? <img src={patternImage} className="w-full h-full object-cover rounded-lg"/> : <ImageIcon size={20} className="text-gray-300"/>}
-                          <span className="text-[9px] font-bold text-gray-500 mt-1">ESTAMPA</span>
-                      </div>
+            {/* CONTROLS */}
+            <div className="order-2 md:order-1 w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-2xl z-20 h-[35vh] md:h-full overflow-y-auto custom-scrollbar">
+                <div className="p-4 bg-blue-50 border-b border-blue-100">
+                <p className="text-[10px] text-vingi-700">
+                    <strong>Como usar:</strong> 1. Carregue molde e estampa. 2. Use a Varinha para clicar nas partes do molde. 3. Ajuste escala e rotação.
+                </p>
                 </div>
 
-                <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
-                    <button onClick={() => setTool('WAND')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'WAND' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Zap size={14}/> SELECIONAR</button>
-                    <button onClick={() => setTool('MOVE')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'MOVE' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Move size={14}/> MOVER</button>
-                </div>
+                <div className="p-4 space-y-4 pb-20">
+                    <div className="grid grid-cols-2 gap-2">
+                        <div onClick={() => moldInputRef.current?.click()} className={`relative h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${moldImage ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-vingi-400'}`}>
+                            <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
+                            {moldImage ? <img src={moldImage} className="w-full h-full object-contain p-1"/> : <UploadCloud size={20} className="text-gray-300"/>}
+                            <span className="text-[9px] font-bold text-gray-500 mt-1">BASE/MOLDE</span>
+                        </div>
+                        <div onClick={() => patternInputRef.current?.click()} className={`relative h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${patternImage ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-vingi-400'}`}>
+                            <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
+                            {patternImage ? <img src={patternImage} className="w-full h-full object-cover rounded-lg"/> : <ImageIcon size={20} className="text-gray-300"/>}
+                            <span className="text-[9px] font-bold text-gray-500 mt-1">ESTAMPA</span>
+                        </div>
+                    </div>
 
-                <div className={`space-y-3 ${activeLayerId ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                   <h4 className="text-[10px] font-bold text-gray-400 uppercase">Propriedades</h4>
-                   <div className="space-y-3">
-                       <div className="flex items-center gap-2">
-                           <span className="text-[9px] font-bold text-gray-400 w-8">ESC</span>
-                           <input type="range" min="0.1" max="2.5" step="0.05" value={globalScale} onChange={(e) => setGlobalScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
-                       </div>
-                       <div className="flex items-center gap-2">
-                           <span className="text-[9px] font-bold text-gray-400 w-8">ROT</span>
-                           <input type="range" min="0" max="360" step="1" value={globalRotation} onChange={(e) => setGlobalRotation(parseInt(e.target.value))} className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
-                       </div>
-                       <div className="grid grid-cols-2 gap-2">
-                           <button onClick={() => setGlobalFlipX(!globalFlipX)} className={`py-1.5 rounded border text-[9px] font-bold flex justify-center gap-1 ${globalFlipX ? 'bg-gray-800 text-white' : 'text-gray-500'}`}><FlipHorizontal size={12} /> Espelhar H</button>
-                           <button onClick={() => setGlobalFlipY(!globalFlipY)} className={`py-1.5 rounded border text-[9px] font-bold flex justify-center gap-1 ${globalFlipY ? 'bg-gray-800 text-white' : 'text-gray-500'}`}><FlipVertical size={12} /> Espelhar V</button>
-                       </div>
-                   </div>
-                </div>
+                    <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
+                        <button onClick={() => setTool('WAND')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'WAND' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Zap size={14}/> SELECIONAR</button>
+                        <button onClick={() => setTool('MOVE')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'MOVE' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Move size={14}/> MOVER</button>
+                    </div>
 
-                <button onClick={handleDownload} className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 mt-4">
-                      <Download size={14}/> EXPORTAR MOCKUP
-                </button>
+                    <div className={`space-y-3 ${activeLayerId ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase">Propriedades</h4>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold text-gray-400 w-8">ESC</span>
+                            <input type="range" min="0.1" max="2.5" step="0.05" value={globalScale} onChange={(e) => setGlobalScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold text-gray-400 w-8">ROT</span>
+                            <input type="range" min="0" max="360" step="1" value={globalRotation} onChange={(e) => setGlobalRotation(parseInt(e.target.value))} className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setGlobalFlipX(!globalFlipX)} className={`py-1.5 rounded border text-[9px] font-bold flex justify-center gap-1 ${globalFlipX ? 'bg-gray-800 text-white' : 'text-gray-500'}`}><FlipHorizontal size={12} /> Espelhar H</button>
+                            <button onClick={() => setGlobalFlipY(!globalFlipY)} className={`py-1.5 rounded border text-[9px] font-bold flex justify-center gap-1 ${globalFlipY ? 'bg-gray-800 text-white' : 'text-gray-500'}`}><FlipVertical size={12} /> Espelhar V</button>
+                        </div>
+                    </div>
+                    </div>
+
+                    <button onClick={handleDownload} className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 mt-4">
+                        <Download size={14}/> EXPORTAR MOCKUP
+                    </button>
+                </div>
             </div>
-        </div>
-      </div>
+          </div>
+      )}
     </div>
   );
 };

@@ -17,61 +17,64 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
 
     // LÓGICA DE ENGENHARIA TÊXTIL (Context-Aware Layout)
     let layoutInstruction = "";
-    const isVertical = height > width;
     
     if (layout === 'Barrada') {
         if (width < 80) {
             layoutInstruction = `
-            LAYOUT: HALF-WIDTH ENGINEERED BORDER (Meio-Painel).
-            - CANVAS: ${width}cm (Weft) x ${height}cm (Warp).
-            - COMPOSITION: Heavy border on ONE SIDE only, fading into open space.
-            - LOGIC: Designed to be MIRRORED.
+            TYPE: ENGINEERED BORDER PRINT (BARRADO).
+            - COMPOSITION: Asymmetrical. Heavy artistic details on the BOTTOM edge, fading upwards into negative space or smaller motifs.
+            - USAGE: Hemline of a dress.
             `;
         } else {
             layoutInstruction = `
-            LAYOUT: FULL-WIDTH ENGINEERED BORDER (Painel Completo).
-            - CANVAS: ${width}cm (Weft) x ${height}cm (Warp).
-            - COMPOSITION: Dress panel. Heavy borders at the hem, lighter towards top.
+            TYPE: DOUBLE BORDER PANEL.
+            - COMPOSITION: Rich details at bottom and top edges. Center is lighter.
             `;
         }
     } else if (layout === 'Localizada') {
         layoutInstruction = `
-        LAYOUT: PLACEMENT PRINT (LOCALIZADA - PANEL).
-        - CANVAS: ${width}cm x ${height}cm.
-        - COMPOSITION: Centralized artwork. Symmetrical or balanced.
+        TYPE: PLACEMENT PRINT (ENGINEERED PANEL).
+        - COMPOSITION: One single, magnificent central artwork. Perfectly centered.
+        - NO REPEAT. This is a chest print or scarf panel.
         `;
     } else {
-        // Corrida (Seamless)
+        // Corrida (Seamless) - REFORÇO DE CONTINUIDADE
         let repeatLogic = "";
         if (repeat === 'Half-Drop') {
-             repeatLogic = "REPEAT STYLE: VISUAL HALF-DROP (Diamond grid).";
+             repeatLogic = "REPEAT: HALF-DROP (Diamond Layout). Fluid diagonal flow.";
         } else if (repeat === 'Mirror') {
-             repeatLogic = "REPEAT STYLE: MIRROR SYMMETRY (Kaleidoscopic).";
+             repeatLogic = "REPEAT: KALEIDOSCOPIC MIRROR. Symmetrical reflection from center.";
         } else {
-             repeatLogic = "REPEAT STYLE: STANDARD SEAMLESS GRID.";
+             repeatLogic = "REPEAT: SQUARE GRID (Straight).";
         }
 
         layoutInstruction = `
-        LAYOUT: SEAMLESS REPEAT (ALL-OVER).
-        - TILE SIZE: ${width}cm x ${height}cm.
+        TYPE: SEAMLESS REPEAT PATTERN (ALL-OVER).
         - ${repeatLogic}
-        - CONTINUITY: Perfect edge matching.
+        - EDGES: Must match perfectly left-to-right and top-to-bottom.
         `;
     }
 
-    // AJUSTE DE ESTILO: RAW DIGITAL vs TEXTURE
-    // O usuário solicitou explicitamente REMOVER a trama do tecido para aplicar depois.
+    // AJUSTE DE ESTILO: RAW ARTWORK vs GARMENT SILHOUETTE
+    // Correção Crítica: O usuário não quer ver um vestido, quer ver a ARTE.
     const RAW_DIGITAL_PROMPT = `
-    STYLE: RAW DIGITAL ARTWORK (FLAT VECTOR STYLE).
-    - CRITICAL: DO NOT RENDER FABRIC WEAVE, TEXTURE, OR GRAIN.
-    - CRITICAL: The output must look like a digital file from Illustrator/Photoshop, NOT a photo of fabric.
-    - Surface: Perfectly smooth, flat colors, clean gradients.
-    - This allows the user to apply their own fabric texture overlay later.
-    - High contrast, sharp edges, "Print Ready" file.
+    FORMAT: RECTANGULAR TEXTURE SWATCH (FULL BLEED).
+    
+    NEGATIVE CONSTRAINTS (DO NOT DRAW):
+    - DO NOT DRAW A DRESS, T-SHIRT, MANNEQUIN, OR MODEL.
+    - DO NOT DRAW NECKLINES, SLEEVES, OR SEAMS.
+    - DO NOT LEAVE WHITE BORDERS. FILL THE ENTIRE CANVAS.
+    
+    ARTISTIC DIRECTION:
+    - STYLE: ${styleGuide}
+    - FLUIDITY: Create ORGANIC FLOW and NATURAL MOVEMENT. Avoid stiff, rigid, or overly geometric layouts unless requested.
+    - DETAILS: High-Fidelity, Painterly, Intricate. Use rich gradients, tone-on-tone depth, and volumetric shading to give life to elements.
+    - SURFACE: Flat Digital Artwork (for printing). 
+    - TEXTURE NOTE: Do NOT render fabric grain (weave/threads). Keep the base flat for printing, but make the ARTWORK itself look rich and dimensional.
     `;
 
     const finalPrompt = `
-    Create a professional textile pattern design file.
+    Create a professional high-end textile design file.
     Subject: ${prompt}.
     
     COLOR PALETTE:
@@ -80,13 +83,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     TECHNICAL SPECS:
     ${layoutInstruction}
     
-    ARTISTIC DIRECTION:
-    ${styleGuide}
     ${RAW_DIGITAL_PROMPT}
-    
-    CRITICAL:
-    - Eliminate all noise, blur, and realistic fabric imperfections.
-    - Focus on the ARTWORK, not the substrate.
     `;
 
     try {

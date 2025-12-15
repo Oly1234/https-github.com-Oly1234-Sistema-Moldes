@@ -4,12 +4,14 @@ import { analyzeClothingImage } from '../services/geminiService';
 import { AppState, PatternAnalysisResult, ScanHistoryItem } from '../types';
 import { MOCK_LOADING_STEPS } from '../constants';
 import { PatternVisualCard } from '../components/PatternVisualCard';
+import { ModuleLandingPage, ModuleHeader } from '../components/Shared';
 import { 
     UploadCloud, RefreshCw, Image as ImageIcon, CheckCircle2, Globe, Layers, Sparkles, 
     Share2, BookOpen, ShoppingBag, ExternalLink, Camera, X, Plus, AlertTriangle, Loader2, ScanLine,
     Move, Minimize2, Maximize2, ZoomIn, Scissors, Ruler, Shirt, Info, MousePointer2, FileSearch
 } from 'lucide-react';
 
+// --- MODAL FLUTUANTE DE COMPARAÇÃO (REUTILIZADA) ---
 const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); 
     const [size, setSize] = useState(180);
@@ -29,16 +31,11 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
 
     const handlePointerMove = (e: React.PointerEvent) => {
         if (!isDragging.current) return;
-        
         const newX = e.clientX - dragOffset.current.x;
         const newY = e.clientY - dragOffset.current.y;
-        
-        const maxX = window.innerWidth - size;
-        const maxY = window.innerHeight - 50; 
-        
         setPosition({
-            x: Math.max(0, Math.min(newX, maxX)),
-            y: Math.max(0, Math.min(newY, maxY))
+            x: Math.max(0, Math.min(newX, window.innerWidth - size)),
+            y: Math.max(0, Math.min(newY, window.innerHeight - 50))
         });
     };
 
@@ -61,12 +58,7 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
     return (
         <div 
             className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow shadow-md"
-            style={{ 
-                left: position.x, 
-                top: position.y, 
-                width: size,
-                touchAction: 'none' 
-            }}
+            style={{ left: position.x, top: position.y, width: size, touchAction: 'none' }}
         >
             <div 
                 className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none"
@@ -76,10 +68,7 @@ const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
                 onPointerCancel={handlePointerUp}
             >
                 <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Ref</span>
-                <div 
-                    className="flex items-center gap-1" 
-                    onPointerDown={(e) => e.stopPropagation()} 
-                >
+                <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
                     <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
                     <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
                 </div>
@@ -236,7 +225,6 @@ export const ScannerSystem: React.FC = () => {
     if (state === AppState.IDLE && !uploadedImage) { cameraInputRef.current?.click(); }
   };
 
-  // DEDUPLICAÇÃO INTELIGENTE
   const getUniqueMatches = (list: any[]) => {
       const seenUrls = new Set();
       return list.filter(m => {
@@ -250,7 +238,6 @@ export const ScannerSystem: React.FC = () => {
   const exactMatches = getUniqueMatches(result?.matches?.exact || []);
   const closeMatches = getUniqueMatches(result?.matches?.close || []);
   const vibeMatches = getUniqueMatches(result?.matches?.adventurous || []);
-  
   const allMatches = getUniqueMatches([...exactMatches, ...closeMatches, ...vibeMatches]);
 
   const getFilteredMatches = () => {
@@ -265,6 +252,7 @@ export const ScannerSystem: React.FC = () => {
   const visibleData = filteredData.slice(0, visibleCount);
   const strictQuery = result ? `${result.technicalDna.silhouette} ${result.technicalDna.neckline} pattern` : '';
 
+  // --- RENDERIZADORES ---
   const renderFab = () => {
       let icon = <Camera size={24} className="text-white" />;
       let label: string | null = null;
@@ -293,78 +281,72 @@ export const ScannerSystem: React.FC = () => {
   };
 
   return (
-    <div 
-        className="h-full flex flex-col relative overflow-y-auto overflow-x-hidden touch-pan-y" 
-        ref={scrollRef}
-    >
+    <div className="h-full flex flex-col relative overflow-y-auto overflow-x-hidden touch-pan-y" ref={scrollRef}>
         {state === AppState.SUCCESS && uploadedImage && ( <FloatingComparisonModal image={uploadedImage} /> )}
+        
         {state !== AppState.ANALYZING && state !== AppState.ERROR && (
-            <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex justify-between items-center transition-all shadow-sm">
-                <h1 className="text-lg font-bold tracking-tight text-vingi-900">VINGI <span className="text-vingi-500">AI</span></h1>
-                {state === AppState.SUCCESS && (
-                    <button onClick={resetApp} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><RefreshCw size={18}/></button>
-                )}
-            </header>
+            <ModuleHeader 
+                icon={ScanLine} 
+                title="Scanner de Moldes" 
+                subtitle="Engenharia Reversa"
+                onAction={state === AppState.SUCCESS ? resetApp : undefined}
+                actionLabel="Nova Busca"
+            />
         )}
+
         <div className="max-w-[1800px] mx-auto p-4 md:p-6 min-h-full flex flex-col w-full">
-            {state === AppState.IDLE && (
-                <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
-                <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
-                    <div className="flex-1 p-8 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100">
-                        <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6">
-                            <ScanLine size={32} className="text-vingi-600" />
+            <input type="file" ref={fileInputRef} onChange={handleMainUpload} accept="image/*" className="hidden" />
+            <input type="file" ref={cameraInputRef} onChange={handleMainUpload} accept="image/*" capture="environment" className="hidden" />
+            <input type="file" ref={secondaryInputRef} onChange={handleSecondaryUpload} accept="image/*" className="hidden" />
+
+            {state === AppState.IDLE && !uploadedImage && (
+                <ModuleLandingPage 
+                    icon={ScanLine}
+                    title="Scanner de Moldes"
+                    description="Faça a engenharia reversa de qualquer roupa. Carregue uma foto para a IA identificar o DNA técnico e encontrar moldes de costura reais para compra ou download."
+                    primaryActionLabel="Carregar Foto"
+                    onPrimaryAction={() => fileInputRef.current?.click()}
+                    features={["DNA Técnico", "Burda Style", "Etsy", "Mood Fabrics"]}
+                    secondaryAction={
+                        <div className="h-full flex flex-col justify-center">
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="w-2 h-2 rounded-full bg-vingi-500"></span>
+                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Opcional</h3>
+                            </div>
+                            <button onClick={() => secondaryInputRef.current?.click()} className="w-full h-40 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:bg-white hover:border-vingi-400 transition-all gap-2 bg-white">
+                                <Plus size={24} className="opacity-50" />
+                                <span className="text-xs font-bold">Adicionar Costas/Detalhe</span>
+                            </button>
                         </div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Scanner de Moldes</h2>
-                        <p className="text-gray-500 text-sm mb-8 max-w-sm leading-relaxed mx-auto">
-                            Faça a <strong>engenharia reversa</strong> de qualquer roupa. Carregue uma foto para a IA identificar o DNA técnico e encontrar <strong>moldes de costura reais</strong> para compra ou download.
-                        </p>
+                    }
+                />
+            )}
+
+            {state === AppState.IDLE && uploadedImage && (
+                // PREVIEW STATE (Ready to Scan)
+                <div className="min-h-[80vh] flex flex-col items-center justify-center animate-fade-in">
+                    <div className="w-full max-w-lg bg-white p-6 rounded-2xl shadow-xl border border-gray-100 text-center">
+                        <div className="relative group mb-6 inline-block w-full">
+                            <img src={uploadedImage} alt="Preview" className="w-full h-80 object-contain rounded-xl bg-gray-50 border border-gray-100" />
+                            <button onClick={() => setUploadedImage(null)} className="absolute top-3 right-3 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"><X size={16} /></button>
+                            <div className="absolute bottom-3 left-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow"><CheckCircle2 size={10} className="inline mr-1"/> PRONTO PARA SCAN</div>
+                        </div>
                         
-                        <input type="file" ref={fileInputRef} onChange={handleMainUpload} accept="image/*" className="hidden" />
-                        <input type="file" ref={cameraInputRef} onChange={handleMainUpload} accept="image/*" capture="environment" className="hidden" />
-                        {!uploadedImage ? (
-                            <div className="flex gap-4 w-full max-w-xs flex-col md:flex-row">
-                                <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 transition-all flex items-center justify-center gap-2">
-                                    <ImageIcon size={18} /> Carregar Foto
-                                </button>
-                                <button onClick={() => cameraInputRef.current?.click()} className="md:hidden py-4 px-6 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200">
-                                    <Camera size={20} />
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="w-full max-w-sm relative group">
-                                <img src={uploadedImage} alt="Preview" className="w-full h-64 object-cover rounded-xl shadow-md" />
-                                <button onClick={() => setUploadedImage(null)} className="absolute top-3 right-3 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"><X size={16} /></button>
-                                <div className="absolute bottom-3 left-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow"><CheckCircle2 size={10} className="inline mr-1"/> PRONTO PARA SCAN</div>
-                            </div>
-                        )}
-                        <span className="text-[10px] text-gray-300 mt-6 font-mono">VINGI VISION v6.4</span>
-                    </div>
-                    <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center">
-                        <div className="flex items-center gap-2 mb-4">
-                            <span className="w-2 h-2 rounded-full bg-gray-300"></span>
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Opcional</h3>
+                        <div className="flex justify-center gap-4">
+                            <button onClick={() => secondaryInputRef.current?.click()} className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-colors flex items-center gap-2">
+                                {uploadedSecondaryImage ? <CheckCircle2 size={14} className="text-green-500"/> : <Plus size={14}/>} 
+                                {uploadedSecondaryImage ? 'Foto Secundária OK' : 'Add Foto Extra'}
+                            </button>
+                            <button onClick={startAnalysis} className="flex-1 py-3 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 transition-all flex items-center justify-center gap-2">
+                                <FileSearch size={16} /> INICIAR VARREDURA
+                            </button>
                         </div>
-                        <div className="mb-6">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Costas / Detalhe</label>
-                            <input type="file" ref={secondaryInputRef} onChange={handleSecondaryUpload} accept="image/*" className="hidden" />
-                            {!uploadedSecondaryImage ? (
-                                <button onClick={() => secondaryInputRef.current?.click()} className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:bg-white hover:border-vingi-400 transition-all gap-2"><Plus size={24} className="opacity-50" /><span className="text-xs">Adicionar Foto</span></button>
-                            ) : (
-                                <div className="relative group w-full h-32">
-                                    <img src={uploadedSecondaryImage} alt="Sec" className="w-full h-full object-cover rounded-xl" />
-                                    <button onClick={() => setUploadedSecondaryImage(null)} className="absolute top-2 right-2 bg-black/50 text-white rounded-full"><X size={14} /></button>
-                                </div>
-                            )}
-                        </div>
-                        <button onClick={startAnalysis} disabled={!uploadedImage} className={`hidden md:flex w-full py-4 rounded-xl font-bold text-sm shadow-lg items-center justify-center gap-2 transition-all ${uploadedImage ? 'bg-vingi-900 text-white hover:bg-vingi-800 transform hover:-translate-y-1' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-                            <FileSearch size={16} /> INICIAR VARREDURA
-                        </button>
                     </div>
-                </div>
                 </div>
             )}
+
             {state === AppState.ANALYZING && (
-                <div className="flex flex-col items-center justify-center h-[90vh] w-full p-6 animate-fade-in">
+                <div className="flex flex-col items-center justify-center h-[70vh] w-full p-6 animate-fade-in">
                      <div className="relative w-full max-w-sm aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-200 bg-slate-900">
                         <img src={uploadedImage || ''} className="w-full h-full object-cover opacity-60 blur-[2px]" />
                         <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,100,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
@@ -381,6 +363,7 @@ export const ScannerSystem: React.FC = () => {
                      </div>
                 </div>
             )}
+
             {state === AppState.ERROR && (
                 <div className="flex flex-col items-center justify-center h-[80vh] text-center max-w-lg mx-auto">
                     <div className="bg-red-50 p-6 rounded-full mb-6">
@@ -394,6 +377,7 @@ export const ScannerSystem: React.FC = () => {
                     </div>
                 </div>
             )}
+
             {state === AppState.SUCCESS && result && (
                 <div className="animate-fade-in space-y-8 pb-20">
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden flex flex-col md:flex-row">

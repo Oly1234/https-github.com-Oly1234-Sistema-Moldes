@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info } from 'lucide-react';
+import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus } from 'lucide-react';
 
 // --- TIPO DE PROPRIEDADES DO CABEÇALHO ---
 interface ModuleHeaderProps {
@@ -19,18 +19,28 @@ export const ModuleHeader: React.FC<ModuleHeaderProps> = ({
     const [showPreview, setShowPreview] = useState(false);
 
     return (
-        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shrink-0 z-40 shadow-sm relative">
-            <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shrink-0 z-40 shadow-sm relative h-16">
+            {/* Lado Esquerdo (Ícone e Títulos - Mobile) */}
+            <div className="flex items-center gap-3 md:hidden">
                 <div className="bg-vingi-900 p-2 rounded-lg text-white shadow-md">
                     <Icon size={18}/>
                 </div>
-                <div>
-                    <h1 className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">{title}</h1>
-                    {subtitle && <p className="text-[10px] text-gray-500 font-medium">{subtitle}</p>}
-                </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Centro (Títulos - Desktop & Mobile Absolute Center) */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center flex flex-col items-center">
+                <div className="hidden md:flex items-center gap-2 mb-0.5">
+                    <div className="bg-vingi-900 p-1.5 rounded text-white shadow-sm">
+                        <Icon size={14}/>
+                    </div>
+                    <h1 className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">{title}</h1>
+                </div>
+                <h1 className="md:hidden text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">{title}</h1>
+                {subtitle && <p className="text-[10px] text-gray-500 font-medium hidden md:block">{subtitle}</p>}
+            </div>
+
+            {/* Lado Direito (Ações) */}
+            <div className="flex items-center gap-3 ml-auto">
                 {/* Miniatura de Referência no Header */}
                 {referenceImage && (
                     <div 
@@ -56,13 +66,81 @@ export const ModuleHeader: React.FC<ModuleHeaderProps> = ({
                         onClick={onAction} 
                         className="text-xs font-bold text-gray-500 hover:text-red-500 flex items-center gap-1 bg-gray-50 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors border border-gray-200"
                     >
-                        <X size={12}/> {actionLabel}
+                        <X size={12}/> <span className="hidden md:inline">{actionLabel}</span>
                     </button>
                 )}
             </div>
         </header>
     );
 };
+
+// --- NOVO COMPONENTE DE LANDING PAGE PADRONIZADA ---
+interface ModuleLandingPageProps {
+    icon: React.ElementType;
+    title: string;
+    description: string;
+    primaryActionLabel: string;
+    onPrimaryAction: () => void;
+    secondaryAction?: React.ReactNode; // Conteúdo da direita
+    versionLabel?: string;
+    features?: string[];
+}
+
+export const ModuleLandingPage: React.FC<ModuleLandingPageProps> = ({
+    icon: Icon, title, description, primaryActionLabel, onPrimaryAction, secondaryAction, versionLabel = "VINGI SYSTEM v6.4", features
+}) => {
+    return (
+        <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
+            <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
+                {/* Lado Esquerdo: Ação Principal */}
+                <div className="flex-1 p-8 md:p-12 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100 relative">
+                    <div className="absolute top-4 left-4 flex gap-1">
+                        <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                    </div>
+
+                    <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
+                        <Icon size={40} className="text-vingi-600" />
+                    </div>
+                    
+                    <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 tracking-tight">{title}</h2>
+                    <p className="text-gray-500 text-sm md:text-base mb-8 max-w-md leading-relaxed mx-auto">
+                        {description}
+                    </p>
+                    
+                    <button 
+                        onClick={onPrimaryAction} 
+                        className="w-full max-w-xs py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 hover:scale-105 transition-all flex items-center justify-center gap-3"
+                    >
+                        <ImageIcon size={20} /> {primaryActionLabel}
+                    </button>
+
+                    <div className="mt-8 flex gap-4 text-gray-400">
+                        {features?.map((feat, i) => (
+                            <span key={i} className="text-[10px] uppercase font-bold tracking-widest bg-gray-50 px-2 py-1 rounded border border-gray-100">{feat}</span>
+                        ))}
+                    </div>
+
+                    <span className="text-[10px] text-gray-300 mt-8 font-mono absolute bottom-4">{versionLabel}</span>
+                </div>
+
+                {/* Lado Direito: Secundário ou Decorativo */}
+                <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center border-l border-gray-100">
+                    {secondaryAction ? (
+                        secondaryAction
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-50 space-y-4">
+                            <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl"></div>
+                            <div className="w-full h-20 border-2 border-dashed border-gray-300 rounded-xl"></div>
+                            <span className="text-xs font-bold uppercase">Área de Trabalho</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // --- MODAL FLUTUANTE DE COMPARAÇÃO ---
 export const FloatingReference: React.FC<{ image: string, label?: string }> = ({ image, label = "Referência" }) => {

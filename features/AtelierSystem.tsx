@@ -2,12 +2,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Check, Printer, Brush, Info, Settings2, Ruler, Scroll, Maximize, FileWarning, Zap, Grip, AlignVerticalSpaceAround, Spline, RefreshCw, Droplets, Sun, Moon, Contrast } from 'lucide-react';
 import { PantoneColor } from '../types';
-import { ModuleHeader, FloatingReference } from '../components/Shared';
+import { ModuleHeader, FloatingReference, ModuleLandingPage } from '../components/Shared';
 
 // --- HELPERS ---
-const triggerTransfer = (targetModule: string, imageData: string) => {
-    if (targetModule === 'MOCKUP') localStorage.setItem('vingi_mockup_pattern', imageData);
-    if (targetModule === 'LAYER') localStorage.setItem('vingi_layer_studio_source', imageData);
+const triggerTransfer = (targetModule: string, imageData: string, textureData?: any) => {
+    if (targetModule === 'MOCKUP') {
+        localStorage.setItem('vingi_mockup_pattern', imageData);
+    }
+    if (targetModule === 'LAYER') {
+        const payload = {
+            mainImage: imageData,
+            texture: textureData
+        };
+        localStorage.setItem('vingi_layer_studio_data', JSON.stringify(payload));
+    }
     window.dispatchEvent(new CustomEvent('vingi_transfer', { 
         detail: { module: targetModule, timestamp: Date.now() } 
     }));
@@ -42,10 +50,10 @@ interface AtelierSystemProps {
 const GENERATION_STEPS = [
     "Inicializando Atelier Digital...",
     "Calculando Encaixe de RIP...",
-    "Desativando Texturas (Modo Vetorial)...",
-    "Otimizando Traços 4K...",
+    "Aplicando Estética Vetorial Rica...",
+    "Renderizando Detalhes Artísticos...",
     "Calibrando Cores...",
-    "Finalizando Renderização..."
+    "Finalizando Arquivo..."
 ];
 
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
@@ -56,6 +64,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     // Data
     const [colorData, setColorData] = useState<{ harmony: string, suggestion: string, colors: PantoneColor[] } | null>(null);
     const [technicalPrompt, setTechnicalPrompt] = useState<string>('');
+    const [activeColorMode, setActiveColorMode] = useState<'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK'>('NATURAL');
     
     // Engenharia
     const [layoutType, setLayoutType] = useState<'Corrida' | 'Barrada' | 'Localizada'>('Corrida');
@@ -102,15 +111,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     }, [isGenerating]);
 
     // Independent Color Analysis
-    const analyzeColors = async (imgBase64: string, variation: 'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK' = 'NATURAL') => {
+    const analyzeColors = async (imgBase64: string, variation: 'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK') => {
         setIsAnalyzingColors(true);
+        setActiveColorMode(variation); 
         try {
             const compressedBase64 = imgBase64.split(',')[1];
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    action: 'DESCRIBE_PATTERN', // Uses same endpoint but we extract color only logic
+                    action: 'DESCRIBE_PATTERN', 
                     mainImageBase64: compressedBase64, 
                     mainMimeType: 'image/jpeg',
                     userHints: variation === 'NATURAL' ? '' : `VARIATION: ${variation}`
@@ -118,7 +128,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             });
             const data = await res.json();
             if (data.success && data.colors) {
-                // If it's a re-analysis, we only update colors, keep prompt
                 setColorData({ 
                     colors: data.colors, 
                     harmony: variation === 'NATURAL' ? "Paleta Original" : `Variação: ${variation}`, 
@@ -159,7 +168,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         abortControllerRef.current = controller;
 
         try {
-            // Using existing prompt and color data
             const finalPrompt = userInstruction 
                 ? `${userInstruction}. Visual Base: ${technicalPrompt}` 
                 : technicalPrompt;
@@ -177,7 +185,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         width: widthCm, 
                         height: heightCm, 
                         dpi: dpi,
-                        styleGuide: "VECTOR FLAT ART, NO TEXTURE", // Enforced in Generator
+                        styleGuide: "RICH DIGITAL ART, FLAT SURFACE, NO WEAVE", 
                     }
                 }),
                 signal: controller.signal
@@ -200,21 +208,34 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     const handleTransfer = (target: 'MOCKUP' | 'LAYER') => {
         if (!generatedPattern) return;
-        triggerTransfer(target, generatedPattern);
+        
+        let textureData = null;
+        if (target === 'LAYER' && textureType !== 'None') {
+            textureData = {
+                type: textureType,
+                opacity: textureOpacity,
+                blend: textureBlend,
+                url: getTextureUrl(textureType)
+            };
+        }
+
+        triggerTransfer(target, generatedPattern, textureData);
         if (target === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
         if (target === 'LAYER' && onNavigateToLayerStudio) onNavigateToLayerStudio();
     };
 
+    const getTextureUrl = (type: string) => {
+        if (type === 'Cotton') return 'https://www.transparenttextures.com/patterns/canvas-orange.png';
+        if (type === 'Linen') return 'https://www.transparenttextures.com/patterns/black-linen.png';
+        if (type === 'Silk') return 'https://www.transparenttextures.com/patterns/shattered-island.png';
+        if (type === 'Canvas') return 'https://www.transparenttextures.com/patterns/rough-cloth-light.png';
+        return '';
+    };
+
     const getTextureStyle = () => {
         if (textureType === 'None') return {};
-        let url = '';
-        if (textureType === 'Cotton') url = 'https://www.transparenttextures.com/patterns/canvas-orange.png';
-        if (textureType === 'Linen') url = 'https://www.transparenttextures.com/patterns/black-linen.png';
-        if (textureType === 'Silk') url = 'https://www.transparenttextures.com/patterns/shattered-island.png';
-        if (textureType === 'Canvas') url = 'https://www.transparenttextures.com/patterns/rough-cloth-light.png';
-        
         return {
-            backgroundImage: `url("${url}")`,
+            backgroundImage: `url("${getTextureUrl(textureType)}")`,
             opacity: textureOpacity,
             mixBlendMode: textureBlend
         };
@@ -236,25 +257,42 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             )}
 
             {!referenceImage ? (
-                // EMPTY STATE
-                <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
-                    <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-lg h-80 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/50 transition-all cursor-pointer flex flex-col items-center justify-center gap-6 group shadow-sm hover:shadow-xl">
-                        <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
-                        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
-                            <UploadCloud size={32} className="text-gray-400 group-hover:text-vingi-500"/>
-                        </div>
-                        <div className="text-center px-8">
-                            <h3 className="text-xl font-bold text-gray-700">Atelier Têxtil Digital</h3>
-                            <p className="text-sm text-gray-400 mt-2">Carregue um desenho ou moodboard. A IA irá criar o rapport digital em alta resolução.</p>
-                        </div>
-                    </div>
-                </div>
+                // EMPTY STATE (UNIFIED LANDING)
+                <>
+                    <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
+                    <ModuleLandingPage 
+                        icon={Palette}
+                        title="Atelier Têxtil Digital"
+                        description="Carregue um desenho ou moodboard. A IA irá criar o rapport digital em alta resolução, com engenharia têxtil aplicada (Half-Drop, Mirror, Barrado)."
+                        primaryActionLabel="Iniciar Criação"
+                        onPrimaryAction={() => fileInputRef.current?.click()}
+                        features={["Vector Like", "4K Resolution", "Seamless", "Color Lab"]}
+                        secondaryAction={
+                            <div className="h-full flex flex-col justify-center">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="w-2 h-2 rounded-full bg-vingi-500"></span>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dica Profissional</h3>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Prompt Criativo</h4>
+                                        <p className="text-xs text-gray-500">Descreva técnicas artísticas (ex: 'Aquarela', 'Óleo sobre tela') para guiar a IA.</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Rapport Automático</h4>
+                                        <p className="text-xs text-gray-500">O sistema garante que a estampa se repita perfeitamente em todas as direções.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    />
+                </>
             ) : (
-                // WORKSPACE
+                // WORKSPACE (REMOVED: KEEP EXISTING WORKSPACE AS IS)
                 <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
                     
                     {/* LEFT PANEL: ENGINEERING CONTROLS */}
-                    <div className="w-full lg:w-[400px] bg-white border-r border-gray-200 flex flex-col z-20 shadow-xl lg:h-full overflow-y-auto custom-scrollbar">
+                    <div className="w-full lg:w-[400px] bg-white border-r border-gray-200 flex flex-col z-20 shadow-xl h-[40vh] lg:h-full overflow-y-auto custom-scrollbar shrink-0">
                         <div className="p-5 space-y-6 pb-20">
                             
                             {/* SECTION 1: DIMENSÕES & SUBSTRATO */}
@@ -311,15 +349,19 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <div className="space-y-3">
                                     <div>
                                         <span className="text-[9px] font-bold text-gray-400 block mb-1">TIPO DE ENCAIXE</span>
-                                        <div className="flex bg-white rounded-lg border border-gray-200 p-1">
-                                            {['Straight', 'Half-Drop', 'Mirror'].map(t => (
+                                        <div className="flex bg-white rounded-lg border border-gray-200 p-1 gap-1">
+                                            {[
+                                                { id: 'Straight', label: 'Alinhado', icon: Grid3X3 },
+                                                { id: 'Half-Drop', label: 'Meio-Salto', icon: AlignVerticalSpaceAround },
+                                                { id: 'Mirror', label: 'Espelhado', icon: Spline }
+                                            ].map(t => (
                                                 <button 
-                                                    key={t}
-                                                    onClick={() => setRepeatType(t as any)}
-                                                    className={`flex-1 py-1.5 rounded text-[10px] font-bold flex flex-col items-center gap-1 ${repeatType === t ? 'bg-vingi-900 text-white shadow' : 'text-gray-400 hover:bg-gray-50'}`}
+                                                    key={t.id}
+                                                    onClick={() => setRepeatType(t.id as any)}
+                                                    className={`flex-1 py-2 rounded-md text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${repeatType === t.id ? 'bg-vingi-900 text-white shadow-md ring-2 ring-offset-1 ring-vingi-900' : 'text-gray-500 hover:bg-gray-100'}`}
                                                 >
-                                                    {t === 'Straight' ? <Grid3X3 size={14}/> : t === 'Half-Drop' ? <AlignVerticalSpaceAround size={14}/> : <Spline size={14}/>}
-                                                    {t}
+                                                    <t.icon size={14}/>
+                                                    {t.label}
                                                 </button>
                                             ))}
                                         </div>
@@ -338,7 +380,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <button 
                                             key={type}
                                             onClick={() => setLayoutType(type as any)}
-                                            className={`flex-1 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${layoutType === type ? 'bg-vingi-900 text-white border-vingi-900' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                            className={`flex-1 py-2 rounded-lg border text-[10px] font-bold transition-all ${layoutType === type ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
                                         >
                                             {type}
                                         </button>
@@ -358,10 +400,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1"><Droplets size={10}/> Calibração de Cor</span>
                                         {isAnalyzingColors && <Loader2 size={10} className="animate-spin text-vingi-500"/>}
                                     </div>
-                                    <div className="flex gap-2 mb-3">
-                                         <button onClick={() => referenceImage && analyzeColors(referenceImage, 'VIVID')} className="flex-1 py-1.5 bg-white border border-gray-200 rounded text-[10px] font-bold hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all flex justify-center gap-1"><Sun size={10}/> Mais Vivo</button>
-                                         <button onClick={() => referenceImage && analyzeColors(referenceImage, 'PASTEL')} className="flex-1 py-1.5 bg-white border border-gray-200 rounded text-[10px] font-bold hover:bg-pink-50 hover:text-pink-600 hover:border-pink-200 transition-all flex justify-center gap-1"><Brush size={10}/> Pastel</button>
-                                         <button onClick={() => referenceImage && analyzeColors(referenceImage, 'DARK')} className="flex-1 py-1.5 bg-white border border-gray-200 rounded text-[10px] font-bold hover:bg-gray-800 hover:text-white transition-all flex justify-center gap-1"><Moon size={10}/> Escuro</button>
+                                    <div className="grid grid-cols-3 gap-2 mb-3">
+                                         <button onClick={() => referenceImage && analyzeColors(referenceImage, 'VIVID')} className={`py-2 border rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${activeColorMode === 'VIVID' ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-offset-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>
+                                             <Sun size={12}/> Mais Vivo
+                                         </button>
+                                         <button onClick={() => referenceImage && analyzeColors(referenceImage, 'PASTEL')} className={`py-2 border rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${activeColorMode === 'PASTEL' ? 'bg-pink-500 text-white border-pink-600 shadow-md ring-2 ring-offset-1 ring-pink-400' : 'bg-white border-gray-200 text-gray-600 hover:bg-pink-50 hover:text-pink-600'}`}>
+                                             <Brush size={12}/> Pastel
+                                         </button>
+                                         <button onClick={() => referenceImage && analyzeColors(referenceImage, 'DARK')} className={`py-2 border rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${activeColorMode === 'DARK' ? 'bg-gray-800 text-white border-gray-900 shadow-md ring-2 ring-offset-1 ring-gray-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
+                                             <Moon size={12}/> Escuro
+                                         </button>
                                     </div>
                                     
                                     {colorData && (
@@ -404,7 +452,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     </div>
 
                     {/* RIGHT PANEL: VISUALIZATION */}
-                    <div className="flex-1 bg-slate-900 relative flex items-center justify-center overflow-hidden">
+                    <div className="flex-1 bg-slate-900 relative flex items-center justify-center overflow-hidden min-w-0">
                          <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#ffffff_1px,transparent_1px),linear-gradient(90deg,#ffffff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
 
                          {isGenerating ? (
@@ -420,8 +468,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                              generatedPattern ? (
                                 <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
                                      {/* IMAGE CONTAINER */}
-                                     <div className="relative shadow-2xl rounded-sm border border-white/10 max-w-full max-h-full overflow-hidden group">
-                                         <img src={generatedPattern} className="max-w-full max-h-full object-contain block bg-white" />
+                                     {/* Shrink-wrapped container to match image dimensions, preventing texture bleed and distortion */}
+                                     <div className="relative shadow-2xl rounded-sm border border-white/10 overflow-hidden group flex justify-center items-center" 
+                                          style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}>
+                                         
+                                         {/* Image naturally preserves aspect ratio with w-auto h-auto */}
+                                         <img src={generatedPattern} className="block w-auto h-auto max-w-full max-h-[85vh] bg-white" style={{ objectFit: 'contain' }} />
                                          
                                          {/* TEXTURE OVERLAY LAYER */}
                                          {textureType !== 'None' && (
@@ -433,7 +485,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                      </div>
                                      
                                      {/* TEXTURE CONTROLS (FLOATING) */}
-                                     <div className="absolute bottom-4 bg-gray-900/90 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-700 flex items-center gap-4 animate-slide-up">
+                                     <div className="absolute bottom-4 bg-gray-900/90 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-700 flex items-center gap-4 animate-slide-up z-50">
                                          <div className="flex flex-col gap-1">
                                              <span className="text-[9px] font-bold text-gray-400 uppercase">Acabamento Têxtil</span>
                                              <div className="flex gap-1">
@@ -441,7 +493,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                     <button 
                                                         key={t}
                                                         onClick={() => setTextureType(t as any)}
-                                                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${textureType === t ? 'bg-vingi-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                                                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${textureType === t ? 'bg-vingi-500 text-white shadow-sm' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
                                                     >
                                                         {t}
                                                     </button>
@@ -468,7 +520,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                          )}
                                      </div>
 
-                                     <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-mono border border-white/10">
+                                     <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-mono border border-white/10 z-30">
                                          {widthCm}x{heightCm}cm | {dpi} DPI
                                      </div>
                                 </div>
@@ -481,7 +533,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                          )}
 
                          {error && (
-                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold flex items-center gap-2 animate-bounce-subtle">
+                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold flex items-center gap-2 animate-bounce-subtle z-50">
                                  <FileWarning size={14}/> {error}
                              </div>
                          )}
