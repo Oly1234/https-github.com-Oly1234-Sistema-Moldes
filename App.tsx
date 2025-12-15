@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MockupStudio } from './components/MockupStudio'; 
 import { PatternCreator } from './components/PatternCreator';
+import { AtelierSystem } from './features/AtelierSystem';
 import { ScannerSystem } from './features/ScannerSystem';
 import { HistorySystem } from './features/HistorySystem';
 import { ViewState } from './types';
@@ -98,6 +99,10 @@ export default function App() {
         
         <div style={{ display: view === 'CREATOR' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             <PatternCreator />
+        </div>
+
+        <div style={{ display: view === 'ATELIER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+            <AtelierSystem />
         </div>
 
         <div style={{ display: view === 'MOCKUP' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">

@@ -1,8 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2, Settings2, Check, Printer, Search, RefreshCw, XCircle, ScanLine, AlertCircle } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History, Trash2, Settings2, Check, Printer, Search, RefreshCw, XCircle, ScanLine, AlertCircle, Info } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
+import { SelvedgeTool, SelvedgePosition } from './SelvedgeTool';
 
 // --- CONSTANTES LOCAIS DE ANIMAÇÃO ---
 const LOADING_STEPS = [
@@ -158,7 +159,7 @@ export const PatternCreator: React.FC = () => {
     
     // Configurações de Engenharia
     const [layoutType, setLayoutType] = useState<'Corrida' | 'Barrada' | 'Localizada'>('Corrida');
-    const [selvedgePos, setSelvedgePos] = useState<'Inferior' | 'Superior' | 'Esquerda' | 'Direita'>('Inferior');
+    const [selvedgePos, setSelvedgePos] = useState<SelvedgePosition>('Inferior');
     const [widthCm, setWidthCm] = useState<number>(140);
     const [heightCm, setHeightCm] = useState<number>(100);
     const [dpi, setDpi] = useState<number>(72); 
@@ -360,29 +361,37 @@ export const PatternCreator: React.FC = () => {
                         </div>
                         <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                             
-                            {/* 1. Preview da Ourela */}
-                            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <div className="w-16 h-16 bg-white border border-gray-300 rounded relative overflow-hidden flex items-center justify-center">
-                                    <span className="text-[8px] text-gray-400">CANVAS</span>
-                                    {/* Indicador Visual da Ourela */}
-                                    {layoutType === 'Barrada' && (
-                                        <div className={`absolute bg-vingi-500/20 border-vingi-500 border-dashed text-[6px] flex items-center justify-center font-bold text-vingi-700
-                                            ${selvedgePos === 'Inferior' ? 'bottom-0 left-0 right-0 h-4 border-t' : ''}
-                                            ${selvedgePos === 'Superior' ? 'top-0 left-0 right-0 h-4 border-b' : ''}
-                                            ${selvedgePos === 'Esquerda' ? 'left-0 top-0 bottom-0 w-4 border-r' : ''}
-                                            ${selvedgePos === 'Direita' ? 'right-0 top-0 bottom-0 w-4 border-l' : ''}
-                                        `}>
-                                            OURELA
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="text-xs font-bold text-gray-800 uppercase">Configuração do Arquivo</h4>
-                                    <p className="text-[10px] text-gray-500">Defina onde está a barra/ourela na imagem de referência para que a IA oriente os motivos corretamente.</p>
-                                </div>
+                            {/* 1. Preview da Ourela & Layout */}
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Estrutura e Orientação</label>
+                                {/* Nova Ferramenta Visual */}
+                                <SelvedgeTool 
+                                    image={referenceImage || ''} 
+                                    selectedPos={selvedgePos} 
+                                    onSelect={setSelvedgePos} 
+                                    active={layoutType === 'Barrada'}
+                                />
+                                {layoutType === 'Barrada' && (
+                                    <p className="text-[10px] text-vingi-500 mt-2 font-bold text-center flex items-center justify-center gap-1">
+                                        <Info size={12}/> Clique na imagem para alterar a posição da ourela
+                                    </p>
+                                )}
                             </div>
 
-                            {/* 2. Dimensões */}
+                            {/* 2. Seleção de Layout */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <button onClick={() => setLayoutType('Corrida')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <Grid3X3 size={16}/> CORRIDA
+                                </button>
+                                <button onClick={() => setLayoutType('Barrada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <ArrowDownToLine size={16}/> BARRADA
+                                </button>
+                                <button onClick={() => setLayoutType('Localizada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <Target size={16}/> LOCAL
+                                </button>
+                            </div>
+
+                            {/* 3. Dimensões */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Largura (cm)</label>
@@ -400,7 +409,7 @@ export const PatternCreator: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 3. Resolução (DPI) */}
+                            {/* 4. Resolução (DPI) */}
                             <div>
                                 <div className="flex justify-between items-end mb-2">
                                     <label className="block text-xs font-bold text-gray-500 uppercase">Resolução de Saída</label>
@@ -418,35 +427,6 @@ export const PatternCreator: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-
-                            {/* 4. Layout */}
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Estrutura do Layout</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <button onClick={() => setLayoutType('Corrida')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                        <Grid3X3 size={16}/> CORRIDA
-                                    </button>
-                                    <button onClick={() => setLayoutType('Barrada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                        <ArrowDownToLine size={16}/> BARRADA
-                                    </button>
-                                    <button onClick={() => setLayoutType('Localizada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                        <Target size={16}/> LOCAL
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Ourela Control (Aparece só se for Barrada) */}
-                            {layoutType === 'Barrada' && (
-                                <div className="animate-fade-in bg-orange-50 p-3 rounded-lg border border-orange-100">
-                                    <label className="block text-[10px] font-bold text-orange-600 uppercase mb-2">Posição da Barra na Imagem</label>
-                                    <div className="grid grid-cols-4 gap-2">
-                                            <button onClick={() => setSelvedgePos('Inferior')} className={`py-2 rounded border flex justify-center ${selvedgePos === 'Inferior' ? 'bg-orange-200 border-orange-300' : 'bg-white border-gray-200'}`}><ArrowDownToLine size={16}/></button>
-                                            <button onClick={() => setSelvedgePos('Superior')} className={`py-2 rounded border flex justify-center ${selvedgePos === 'Superior' ? 'bg-orange-200 border-orange-300' : 'bg-white border-gray-200'}`}><ArrowDownToLine size={16} className="rotate-180"/></button>
-                                            <button onClick={() => setSelvedgePos('Esquerda')} className={`py-2 rounded border flex justify-center ${selvedgePos === 'Esquerda' ? 'bg-orange-200 border-orange-300' : 'bg-white border-gray-200'}`}><ArrowRightToLine size={16} className="rotate-180"/></button>
-                                            <button onClick={() => setSelvedgePos('Direita')} className={`py-2 rounded border flex justify-center ${selvedgePos === 'Direita' ? 'bg-orange-200 border-orange-300' : 'bg-white border-gray-200'}`}><ArrowRightToLine size={16}/></button>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* 5. Texto Opcional */}
                             <div>

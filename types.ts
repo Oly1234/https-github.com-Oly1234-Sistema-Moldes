@@ -1,4 +1,5 @@
 
+
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
@@ -111,4 +112,4 @@ export enum AppState {
   ERROR = 'ERROR'
 }
 
-export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP' | 'CREATOR';
+export type ViewState = 'HOME' | 'HISTORY' | 'MOCKUP' | 'CREATOR' | 'ATELIER';

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, History, PenTool, Download, Palette } from 'lucide-react';
+import { LayoutDashboard, History, PenTool, Download, Palette, Brush } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -39,7 +39,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<Palette size={24} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
-            tooltip="Pattern Studio"
+            tooltip="Pattern Studio (Search)"
+          />
+          <NavItem 
+            icon={<Brush size={24} />} 
+            active={currentView === 'ATELIER'} 
+            onClick={() => onViewChange('ATELIER')}
+            tooltip="Atelier (Create)"
           />
           <NavItem 
             icon={<PenTool size={24} />} 
@@ -68,6 +74,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<Palette size={24} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
+            isMobile
+          />
+          <NavItem 
+            icon={<Brush size={24} />} 
+            active={currentView === 'ATELIER'} 
+            onClick={() => onViewChange('ATELIER')}
             isMobile
           />
            <NavItem 
