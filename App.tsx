@@ -125,7 +125,10 @@ export default function App() {
         </div>
 
         <div style={{ display: view === 'LAYER_STUDIO' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
-            <LayerStudio onNavigateBack={() => setView('ATELIER')} />
+            <LayerStudio 
+                onNavigateBack={() => setView('ATELIER')} 
+                onNavigateToMockup={() => setView('MOCKUP')}
+            />
         </div>
 
         <div style={{ display: view === 'MOCKUP' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">

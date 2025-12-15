@@ -57,10 +57,11 @@ export const MockupStudio: React.FC = () => {
 
   // --- INITIALIZATION ---
   useEffect(() => {
-    // Check for transferred pattern from Atelier
+    // CRUCIAL: Check for transferred pattern from Atelier or Layer Studio
     const transferredPattern = localStorage.getItem('vingi_mockup_pattern');
     if (transferredPattern) {
         setPatternImage(transferredPattern);
+        // Clear it to avoid reloading old pattern on refresh
         localStorage.removeItem('vingi_mockup_pattern');
     }
   }, []);
