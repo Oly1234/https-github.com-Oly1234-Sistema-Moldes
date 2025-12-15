@@ -75,6 +75,89 @@ const SmartImageViewer: React.FC<{ src: string }> = ({ src }) => {
     );
 };
 
+// --- COMPONENTE MODAL FLUTUANTE DE COMPARAÇÃO ---
+const FloatingComparisonModal: React.FC<{ image: string }> = ({ image }) => {
+    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 300 }); 
+    const [size, setSize] = useState(180);
+    const [isMinimized, setIsMinimized] = useState(false);
+    
+    const dragOffset = useRef({ x: 0, y: 0 });
+    const isDragging = useRef(false);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        isDragging.current = true;
+        dragOffset.current = { 
+            x: e.clientX - position.x, 
+            y: e.clientY - position.y 
+        };
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+        
+        const newX = e.clientX - dragOffset.current.x;
+        const newY = e.clientY - dragOffset.current.y;
+        
+        const maxX = window.innerWidth - size;
+        const maxY = window.innerHeight - 50; 
+        
+        setPosition({
+            x: Math.max(0, Math.min(newX, maxX)),
+            y: Math.max(0, Math.min(newY, maxY))
+        });
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDragging.current = false;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+
+    if (isMinimized) {
+        return (
+            <div 
+                className="fixed bottom-24 right-4 bg-vingi-900 text-white p-3 rounded-full shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform animate-bounce-subtle"
+                onClick={() => setIsMinimized(false)}
+                title="Expandir Referência"
+            >
+                <ImageIcon size={24} />
+            </div>
+        );
+    }
+
+    return (
+        <div 
+            className="fixed z-[90] bg-white rounded-xl shadow-2xl border-2 border-vingi-500 overflow-hidden flex flex-col transition-shadow shadow-md"
+            style={{ 
+                left: position.x, 
+                top: position.y, 
+                width: size,
+                touchAction: 'none' 
+            }}
+        >
+            <div 
+                className="bg-vingi-900 h-9 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+            >
+                <span className="text-[10px] font-bold text-white flex items-center gap-1 uppercase tracking-wider"><Move size={10}/> Ref</span>
+                <div 
+                    className="flex items-center gap-1" 
+                    onPointerDown={(e) => e.stopPropagation()} 
+                >
+                    <button onClick={() => setSize(s => Math.min(400, s + 30))} className="text-white/70 hover:text-white"><ZoomIn size={12}/></button>
+                    <button onClick={() => setIsMinimized(true)} className="text-white/70 hover:text-white"><Minimize2 size={12}/></button>
+                </div>
+            </div>
+            <div className="relative bg-gray-100 group">
+                <img src={image} className="w-full object-contain bg-white pointer-events-none select-none" style={{ maxHeight: size * 1.5 }} />
+            </div>
+        </div>
+    );
+};
+
 // --- CONSTANTES ---
 const LOADING_STEPS = [
     "Inicializando Visão Computacional...",
@@ -204,6 +287,11 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
 
     return (
         <div className="flex flex-col h-full bg-[#f8fafc] overflow-y-auto overflow-x-hidden relative custom-scrollbar">
+            {/* COMPARISON MODAL */}
+            {referenceImage && !isAnalyzing && (
+                <FloatingComparisonModal image={referenceImage} />
+            )}
+
             {/* HEADER */}
             <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-30 shadow-sm">
                 <div className="flex items-center gap-2">
