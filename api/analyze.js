@@ -1,13 +1,11 @@
 
-
-
 import { analyzeColorTrend } from './modules/departments/color.js';
 import { createTextileDesign } from './modules/departments/atelier.js';
 import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
-import { generatePattern } from './modules/generator.js'; // Importando o novo generator corrigido
-import { generateElement, decomposePattern } from './modules/departments/layerLab.js'; // NOVO MÓDULO
+import { generatePattern } from './modules/generator.js'; 
+import { reconstructElement, transformElement, decomposePattern } from './modules/departments/layerLab.js'; 
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -29,45 +27,45 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs, userHints } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs, userHints, cropBase64 } = req.body;
     
-    // API KEY MANAGER (Prioridade: ENV Var > VITE Var)
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
     if (!apiKey) return res.status(500).json({ error: "Chave de API não configurada no servidor." });
 
-    // --- ROTEAMENTO ESTRITO POR ABA (DEPARTAMENTOS) ---
+    // --- ROTEAMENTO ---
 
-    // 1. UTILITÁRIO GERAL (Imagem de Preview dos Links)
     if (action === 'GET_LINK_PREVIEW') {
         const contextType = (backupSearchTerm && backupSearchTerm.includes('pattern')) ? 'SURFACE' : 'CLOTHING';
         const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType, linkType);
         return res.status(200).json({ success: true, image });
     }
 
-    // 2. ABA LAYER STUDIO (NOVO)
+    // --- NOVO: LAYER LAB V2 ---
+    if (action === 'RECONSTRUCT_ELEMENT') {
+        // "Isolar e Completar": Recebe o recorte cru, devolve o objeto inteiro vetorizado
+        const result = await reconstructElement(apiKey, cropBase64);
+        return res.status(200).json({ success: true, ...result });
+    }
+
+    if (action === 'TRANSFORM_ELEMENT') {
+        // "Transformar": Recebe recorte + prompt do usuário
+        const result = await transformElement(apiKey, cropBase64, prompt);
+        return res.status(200).json({ success: true, ...result });
+    }
+
     if (action === 'DECOMPOSE_PATTERN') {
-        // Separação inteligente de fundo e elementos
         const result = await decomposePattern(apiKey, mainImageBase64);
         return res.status(200).json({ success: true, ...result });
     }
 
-    if (action === 'GENERATE_ELEMENT') {
-        // Geração de elemento isolado (Magic Edit)
-        const image = await generateElement(apiKey, prompt);
-        return res.status(200).json({ success: true, element: image });
-    }
-
-    // 3. ABA CRIADOR (Atelier + Forense de Superfície)
     if (action === 'GENERATE_PATTERN') {
-        // Dept: Atelier (Geração de Imagem com Restauração)
         const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
         const image = await generatePattern(apiKey, prompt, colors, specs);
         return res.status(200).json({ success: true, image });
     }
 
     if (action === 'DESCRIBE_PATTERN') {
-        // Dept: Colorimetria + Forense (Modo Textura) + Mercado (Modo Textura)
         const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson);
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE', userHints);
         const matches = generateMarketLinks(visualData, 'TEXTURE');
@@ -81,7 +79,6 @@ export default async function handler(req, res) {
         });
     }
 
-    // 4. ABA SCANNER (Forense de Roupa + Mercado de Moldes)
     if (action === 'SCAN_CLOTHING' || !action) { 
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'GARMENT');
         const matches = generateMarketLinks(visualData, 'GARMENT');
