@@ -8,79 +8,90 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     // 2. Desconstrução das Specs
-    // 'styleGuide' substitui 'restoration' para focar em criação
-    const { layout = "Corrida", selvedge = "Inferior", width = 140, height = 100, styleGuide = "Clean lines", dpi = 72 } = textileSpecs || {};
+    const { layout = "Corrida", repeat = "Straight", width = 64, height = 64, styleGuide = "Clean lines", dpi = 300 } = textileSpecs || {};
     
     // --- MELHORIA DE COR: Injeção de HEX e Pantone ---
-    // A IA entende melhor a cor se passarmos o Hexadecimal junto com o nome.
-    // Isso garante fidelidade ao Pantone detectado.
     const colorList = colors && colors.length > 0 
-        ? colors.map(c => `${c.name} (Hex: ${c.hex}, Pantone: ${c.code})`).join(', ') 
+        ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
-    // LÓGICA DE LAYOUT TÊXTIL (Direção da Arte)
+    // LÓGICA DE LAYOUT TÊXTIL (Direção da Arte baseada em Ourela/Trama)
+    // Se altura (Urdume) > Largura, favorecer layout vertical.
     let layoutInstruction = "";
+    const isVertical = height > width;
     
     if (layout === 'Barrada') {
         layoutInstruction = `
         LAYOUT: ENGINEERED BORDER PRINT (BARRADO).
-        - DIMENSIONS: Design must fit exactly within the ${width}x${height}cm canvas.
-        - GRAVITY: Motifs concentrated at the ${selvedge.toUpperCase()} edge.
-        - NEGATIVE SPACE: Fade to solid color towards the opposite edge.
+        - CANVAS: ${width}cm (Weft) x ${height}cm (Warp).
+        - DIRECTION: The border motifs must run along the ${isVertical ? 'vertical' : 'horizontal'} edge.
+        - GRAVITY: Heavy motifs at the bottom/edge, fading to solid color.
         `;
     } else if (layout === 'Localizada') {
         layoutInstruction = `
         LAYOUT: PLACEMENT PRINT (LOCALIZADA).
-        - COMPOSITION: Single central element centered in ${width}x${height}cm.
-        - BACKGROUND: Clean or subtle texture.
+        - CANVAS: ${width}cm x ${height}cm.
+        - COMPOSITION: Single central element, perfectly centered.
+        - BACKGROUND: Clean or subtle texture, suitable for a t-shirt chest or scarf panel.
         `;
     } else {
         // Corrida (Default)
+        // LÓGICA DE MAESTRIA PARA MEIO-SALTO (HALF-DROP)
+        // Para que o meio-salto funcione em um tile único gerado por IA, 
+        // solicitamos que a disposição interna dos motivos seja "Diamante" ou "Diagonal".
+        // Assim, visualmente não cria linhas (avenidas), simulando o efeito de cilindro.
+        
+        let repeatLogic = "";
+        if (repeat === 'Half-Drop') {
+             repeatLogic = "REPEAT STYLE: VISUAL HALF-DROP (MEIO-SALTO). Arrange motifs in a Diamond/Diagonal grid to avoid vertical striping. Fluid distribution.";
+        } else if (repeat === 'Mirror') {
+             repeatLogic = "REPEAT STYLE: KALEIDOSCOPIC MIRROR SYMMETRY. Center focused, reflecting outwards.";
+        } else {
+             repeatLogic = "REPEAT STYLE: STANDARD STRAIGHT GRID (CORRIDO). Aligned motif distribution.";
+        }
+
         layoutInstruction = `
         LAYOUT: SEAMLESS REPEAT (ALL-OVER).
-        - REPETITION: Design must be a perfect tile capable of covering ${width}x${height}cm via infinite repetition.
-        - EDGES: Match left-right and top-bottom perfectly.
+        - REPEAT SIZE: ${width}cm (Weft) x ${height}cm (Warp).
+        - ${repeatLogic}
+        - TILING: Must be a perfect seamless tile. Edges must match perfectly on all sides.
+        - ORIENTATION: ${isVertical ? 'Vertical flow (Waterfall)' : 'Multi-directional'}.
         `;
     }
 
     // AJUSTE DE QUALIDADE BASEADO EM DPI (PRO MODE)
-    // Se o DPI for alto (>=150), forçamos um estilo vetorizado/limpo que permita Upscaling sem perda (SVG-like).
-    let qualityPrompt = "Style: Vector illustration style, flat lighting, high definition.";
+    // DPI alto força estilo vetorial "plano" para facilitar vetorização posterior.
+    // DPI baixo (72) permite mais "ruído" artístico.
+    let qualityPrompt = "";
     if (dpi >= 300) {
-        qualityPrompt = "Style: ULTRA-HIGH DEFINITION, 8K, Vector Art, Sharp Edges, No Noise, Professional Print Quality. Optimized for upscaling.";
-    } else if (dpi >= 150) {
-        qualityPrompt = "Style: High definition textile print, clear lines, standard print quality.";
+        qualityPrompt = "Style: VECTOR ILLUSTRATION, Flat Colors, Sharp Edges, No Blur, No JPEG Artifacts. Optimized for Screen Printing Separation.";
+    } else {
+        qualityPrompt = "Style: Digital Textile Print, High Definition, Rich Texture.";
     }
 
-    // Prompt Otimizado para evitar Safety Blocks e erros de formato
+    // Prompt Otimizado
     const finalPrompt = `
     Create a professional textile pattern design file.
     Subject: ${prompt}.
     
     COLOR PALETTE (STRICT ADHERENCE):
     ${colorList}
-    - INSTRUCTION: Use strictly these colors for the main motifs and background. Ensure faithful reproduction of the Hex codes provided.
     
-    Technical Specs:
+    TECHNICAL SPECS:
     ${layoutInstruction}
     
-    Quality Standards (Auto-Restoration):
+    QUALITY STANDARDS:
     - ${styleGuide}
     - ${qualityPrompt}
     - Output: A single high-quality texture tile.
     `;
 
     try {
-        // PAYLOAD BLINDADO (Minimalista para evitar rejeição)
         const payload = {
-            contents: [{ 
-                parts: [
-                    { text: finalPrompt }
-                ] 
-            }],
+            contents: [{ parts: [{ text: finalPrompt }] }],
             generationConfig: {
                 imageConfig: {
-                    aspectRatio: "1:1" // Único parâmetro mandatório e estável
+                    aspectRatio: "1:1" // Mantemos 1:1 pois o modelo ainda não suporta custom aspect ratio arbitrário confiavelmente, o corte é feito no layout.
                 }
             }
         };
@@ -94,34 +105,18 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         if (!response.ok) {
             const errText = await response.text();
             console.error("Generator API Error Details:", errText);
-            
-            if (response.status === 400 || response.status === 403) {
-                throw new Error("Acesso negado ao modelo de imagem. Verifique API Key.");
-            }
             throw new Error(`Erro Atelier (${response.status}): O servidor rejeitou a solicitação.`);
         }
 
         const data = await response.json();
-        
-        // Verificação de Segurança (Safety Filter)
         const candidate = data.candidates?.[0];
-        if (candidate?.finishReason === 'SAFETY') {
-            throw new Error("A IA bloqueou a geração por segurança (Safety Filter). Tente simplificar o prompt ou remover termos sensíveis.");
-        }
-        if (candidate?.finishReason === 'RECITATION') {
-            throw new Error("Bloqueio de Copyright. O prompt solicitou algo muito similar a uma marca protegida.");
-        }
-
-        // 3. Extração da Imagem
-        const parts = candidate?.content?.parts;
-        const imagePart = parts?.find(p => p.inlineData);
         
-        if (imagePart) {
-             return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-        } 
+        if (candidate?.finishReason === 'SAFETY') throw new Error("Safety Filter: Tente simplificar o prompt.");
         
-        console.error("Payload recebido sem imagem:", JSON.stringify(data));
-        throw new Error("A IA processou o pedido mas não retornou a imagem. Tente novamente em instantes.");
+        const imagePart = candidate?.content?.parts?.find(p => p.inlineData);
+        if (imagePart) return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        
+        throw new Error("A IA processou o pedido mas não retornou a imagem.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);
