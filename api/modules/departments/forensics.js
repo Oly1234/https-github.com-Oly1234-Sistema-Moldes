@@ -6,41 +6,43 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // ABA DE CRIADOR: Foco na Arte/Superfície & Criação
-        // Incorpora instruções do usuário se existirem
+        // ABA DE CRIADOR / ATELIER: Foco na Arte/Superfície & Criação
         const userContext = userHints ? `IMPORTANT - USER OVERRIDE/INSTRUCTION: "${userHints}". CONSIDER THIS IN THE STYLE GUIDE.` : '';
 
         SYSTEM_PROMPT = `
-        ACT AS: Senior Surface Designer & Textile Engineer (Portuguese Speaker).
-        TASK: Analyze the artwork to enable a High-Definition Recreation (New Design Generation).
+        ACT AS: Senior Surface Designer & Prompt Engineer.
+        TASK: Analyze the artwork to enable a High-Definition Recreation by an AI Image Generator.
         ${userContext}
         
-        ANALYSIS REQUIRED (RETURN VALUES IN PORTUGUESE PT-BR):
-        1. LAYOUT TYPE: Is it "Corrida" (Seamless), "Barrada" (Border), "Localizada" (Placement)?
-        2. ART STYLE: Detailed technique (e.g. "Aquarela no papel molhado", "Vetor Flat", "Traço Manual").
-        3. STYLE GUIDE: Identify the artistic key elements to replicate (e.g. "Clean lines", "Vibrant gradient", "Vector precision").
+        ANALYSIS REQUIRED:
+        1. VISUAL DESCRIPTION (ENGLISH): A highly detailed, descriptive prompt for an AI model. Include:
+           - Subject (e.g., "watercolor floral", "geometric ikat").
+           - Colors (e.g., "pastel pink and sage green on navy").
+           - Technique (e.g., "wet-on-wet watercolor", "crisp vector lines").
+           - Composition (e.g., "dense seamless repeat", "minimalist scattered").
+        2. LAYOUT TYPE: "Corrida" (Seamless), "Barrada" (Border), or "Localizada" (Placement).
         
         OUTPUT JSON:
         {
-            "visualDescription": "Descrição visual rica em Português (Ex: Floral romântico com fundo azul e rosas em degradê)",
-            "printLayout": "Corrida" (or "Barrada", "Geométrica"),
+            "visualDescription": "A professional seamless pattern design featuring [subject] in [style]. The palette consists of [colors]. [Technique details]. High resolution, textile texture.",
+            "printLayout": "Corrida",
             "searchKeywords": [
                 "Termo principal (EN)",
                 "Termo técnico (EN)",
                 "Termo visual (EN)"
             ],
             "technicalSpecs": { 
-                "technique": "Técnica (PT-BR)", 
-                "motifs": ["Motivo Principal (PT-BR)"], 
-                "complexity": "Alta/Baixa",
-                "vibe": "Mood (PT-BR)",
-                "layout": "String (e.g. 'Barrada' or 'Corrida')",
-                "restorationInstructions": "Style Guide for the AI Generator (In English) - Focus on quality (e.g. 'Vectorize, remove noise, sharp edges')"
+                "technique": "Technique Name", 
+                "motifs": ["Motif 1", "Motif 2"], 
+                "complexity": "Medium",
+                "vibe": "Mood",
+                "layout": "Corrida",
+                "restorationInstructions": "Vectorize, sharpen edges, remove noise"
             }
         }
         `;
     } else {
-        // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa
+        // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa (Mantém PT-BR para interface)
         SYSTEM_PROMPT = `
         ACT AS: Master Pattern Cutter (Portuguese Speaker).
         TASK: Analyze the garment structure for sewing patterns.
@@ -74,15 +76,25 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         const response = await fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
         if (!text) throw new Error("Sem resposta visual.");
-        return JSON.parse(cleanJson(text));
+        
+        const result = JSON.parse(cleanJson(text));
+        
+        // Fallback robusto se a descrição vier vazia
+        if (!result.visualDescription || result.visualDescription.length < 5) {
+            result.visualDescription = "High quality seamless textile pattern with artistic motifs";
+        }
+        
+        return result;
+
     } catch (e) {
         console.error("Forensics Dept Error:", e);
         return {
-            visualDescription: "Item de Moda",
-            printLayout: "Padrão",
+            visualDescription: "Artistic seamless textile pattern, high resolution, vector style",
+            printLayout: "Corrida",
             searchKeywords: ["Pattern", "Texture"],
-            technicalSpecs: { silhouette: "Desconhecido", layout: "Padrão", restorationInstructions: "High quality vector style" }
+            technicalSpecs: { silhouette: "Desconhecido", layout: "Corrida", restorationInstructions: "High quality vector style" }
         };
     }
 };

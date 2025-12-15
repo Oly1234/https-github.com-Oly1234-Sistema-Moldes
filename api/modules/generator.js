@@ -3,96 +3,53 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
 
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
-    // 1. Definição do Modelo (Nano Banana para Imagem)
+    // 1. Definição do Modelo: USAR APENAS FLASH-IMAGE (NANO BANANA)
+    // Documentação: https://ai.google.dev/gemini-api/docs/models/gemini#gemini-2.5-flash-image
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     // 2. Desconstrução das Specs
-    const { layout = "Corrida", repeat = "Straight", width = 64, height = 64, styleGuide = "Clean lines", dpi = 300 } = textileSpecs || {};
+    const { layout = "Corrida", repeat = "Straight", styleGuide = "Clean lines", dpi = 300 } = textileSpecs || {};
     
-    // --- MELHORIA DE COR: Injeção de HEX e Pantone ---
+    // Injeção de Cores
     const colorList = colors && colors.length > 0 
         ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
-    // LÓGICA DE ENGENHARIA TÊXTIL (Context-Aware Layout)
+    // Engenharia de Prompt
     let layoutInstruction = "";
-    
     if (layout === 'Barrada') {
-        if (width < 80) {
-            layoutInstruction = `
-            TYPE: ENGINEERED BORDER PRINT (BARRADO).
-            - COMPOSITION: Asymmetrical. Heavy artistic details on the BOTTOM edge, fading upwards into negative space or smaller motifs.
-            - USAGE: Hemline of a dress.
-            `;
-        } else {
-            layoutInstruction = `
-            TYPE: DOUBLE BORDER PANEL.
-            - COMPOSITION: Rich details at bottom and top edges. Center is lighter.
-            `;
-        }
+        layoutInstruction = "TYPE: ENGINEERED BORDER PRINT. Asymmetrical composition with heavy details at the bottom edge.";
     } else if (layout === 'Localizada') {
-        layoutInstruction = `
-        TYPE: PLACEMENT PRINT (ENGINEERED PANEL).
-        - COMPOSITION: One single, magnificent central artwork. Perfectly centered.
-        - NO REPEAT. This is a chest print or scarf panel.
-        `;
+        layoutInstruction = "TYPE: PLACEMENT PRINT. Single central artwork, centered, no repeat.";
     } else {
-        // Corrida (Seamless) - REFORÇO DE CONTINUIDADE
-        let repeatLogic = "";
-        if (repeat === 'Half-Drop') {
-             repeatLogic = "REPEAT: HALF-DROP (Diamond Layout). Fluid diagonal flow.";
-        } else if (repeat === 'Mirror') {
-             repeatLogic = "REPEAT: KALEIDOSCOPIC MIRROR. Symmetrical reflection from center.";
-        } else {
-             repeatLogic = "REPEAT: SQUARE GRID (Straight).";
-        }
-
-        layoutInstruction = `
-        TYPE: SEAMLESS REPEAT PATTERN (ALL-OVER).
-        - ${repeatLogic}
-        - EDGES: Must match perfectly left-to-right and top-to-bottom.
-        `;
+        layoutInstruction = `TYPE: SEAMLESS REPEAT PATTERN. ${repeat === 'Half-Drop' ? 'Half-drop repeat' : 'Grid repeat'}. Edges must match perfectly.`;
     }
 
-    // AJUSTE DE ESTILO: RAW ARTWORK vs GARMENT SILHOUETTE
-    // Correção Crítica: O usuário não quer ver um vestido, quer ver a ARTE.
-    const RAW_DIGITAL_PROMPT = `
-    FORMAT: RECTANGULAR TEXTURE SWATCH (FULL BLEED).
-    
-    NEGATIVE CONSTRAINTS (DO NOT DRAW):
-    - DO NOT DRAW A DRESS, T-SHIRT, MANNEQUIN, OR MODEL.
-    - DO NOT DRAW NECKLINES, SLEEVES, OR SEAMS.
-    - DO NOT LEAVE WHITE BORDERS. FILL THE ENTIRE CANVAS.
-    
-    ARTISTIC DIRECTION:
-    - STYLE: ${styleGuide}
-    - FLUIDITY: Create ORGANIC FLOW and NATURAL MOVEMENT. Avoid stiff, rigid, or overly geometric layouts unless requested.
-    - DETAILS: High-Fidelity, Painterly, Intricate. Use rich gradients, tone-on-tone depth, and volumetric shading to give life to elements.
-    - SURFACE: Flat Digital Artwork (for printing). 
-    - TEXTURE NOTE: Do NOT render fabric grain (weave/threads). Keep the base flat for printing, but make the ARTWORK itself look rich and dimensional.
-    `;
+    // CORREÇÃO CRÍTICA: Fallback para prompt vazio
+    // Se 'prompt' for null/vazio, a IA recusa. Forçamos um assunto padrão.
+    const safeSubject = prompt && prompt.trim().length > 2 
+        ? prompt 
+        : "A sophisticated abstract textile pattern with elegant motifs";
 
-    const finalPrompt = `
-    Create a professional high-end textile design file.
-    Subject: ${prompt}.
-    
-    COLOR PALETTE:
-    ${colorList}
+    const RAW_DIGITAL_PROMPT = `
+    TASK: Generate a professional textile pattern design.
+    SUBJECT: ${safeSubject}.
+    PALETTE: ${colorList}.
     
     TECHNICAL SPECS:
-    ${layoutInstruction}
-    
-    ${RAW_DIGITAL_PROMPT}
+    - ${layoutInstruction}
+    - STYLE: ${styleGuide}.
+    - VIEW: Flat 2D texture swatch. NO perspective, NO shadows, NO fabric grain.
+    - QUALITY: Vector-like crispness, high contrast.
     `;
 
     try {
         const payload = {
-            contents: [{ parts: [{ text: finalPrompt }] }],
+            contents: [{ parts: [{ text: RAW_DIGITAL_PROMPT }] }],
+            // NÃO USAR 'responseMimeType' ou 'imageSize' com este modelo.
             generationConfig: {
-                imageConfig: {
-                    aspectRatio: "1:1" // Mantém 1:1 por limitação atual do modelo
-                }
+                // imageConfig opcional: aspectRatio padrão é 1:1
             }
         };
 
@@ -104,18 +61,29 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         
         if (!response.ok) {
             const errText = await response.text();
-            throw new Error(`Erro Atelier (${response.status}): O servidor rejeitou a solicitação.`);
+            throw new Error(`Google API Error (${response.status}): ${errText}`);
         }
 
         const data = await response.json();
-        const candidate = data.candidates?.[0];
         
-        if (candidate?.finishReason === 'SAFETY') throw new Error("Safety Filter: Tente simplificar o prompt.");
+        // Verificação Robusta da Resposta
+        const candidate = data.candidates?.[0]?.content?.parts;
+        if (!candidate) throw new Error("A IA retornou uma resposta vazia.");
+
+        // Procura pela parte de imagem
+        const imagePart = candidate.find(p => p.inline_data);
         
-        const imagePart = candidate?.content?.parts?.find(p => p.inlineData);
-        if (imagePart) return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        if (imagePart) {
+            return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
+        }
         
-        throw new Error("A IA processou o pedido mas não retornou a imagem.");
+        // Se não tem imagem, verifica se tem texto de recusa (Safety/Refusal)
+        const textPart = candidate.find(p => p.text);
+        if (textPart) {
+            throw new Error(`A IA recusou gerar a imagem. Motivo: "${textPart.text}". Tente simplificar o prompt.`);
+        }
+        
+        throw new Error("Falha desconhecida: A IA não gerou imagem nem erro explícito.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);
