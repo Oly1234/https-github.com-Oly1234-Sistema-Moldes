@@ -106,7 +106,7 @@ const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
     </a>
 );
 
-// CARTÃO PANTONE INTERATIVO
+// CARTÃO PANTONE INTERATIVO ATUALIZADO
 const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
     const handleSearch = () => {
         const query = `Pantone ${color.code} ${color.name} cotton swatch`;
@@ -114,20 +114,21 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
     };
 
     return (
-        <div onClick={handleSearch} className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg transition-all cursor-pointer group h-full hover:scale-[1.02]">
-            <div className="h-16 w-full relative" style={{ backgroundColor: color.hex }}>
-                 <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                     <div className="bg-white/90 rounded text-[8px] font-mono px-1 py-0.5">{color.hex}</div>
+        <div onClick={handleSearch} className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg hover:border-vingi-300 transition-all cursor-pointer group h-full hover:scale-[1.02]">
+            <div className="h-14 w-full relative" style={{ backgroundColor: color.hex }}>
+                 <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                 <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-1">
+                     <Search size={10} className="text-gray-700"/>
                  </div>
             </div>
             <div className="p-2 flex flex-col justify-between flex-1">
                 <div className="mb-1">
-                    <span className="block text-[9px] font-extrabold text-gray-900 leading-tight uppercase truncate" title={color.name}>{color.name}</span>
-                    <span className="block text-[10px] text-gray-600 font-mono font-bold">{color.code || 'PENDING'}</span>
+                    <span className="block text-[8px] font-extrabold text-gray-900 leading-tight uppercase truncate" title={color.name}>{color.name}</span>
+                    <span className="block text-[9px] text-gray-600 font-mono font-bold">{color.code || 'PENDING'}</span>
                 </div>
-                {color.trendStatus && (
-                    <span className="self-start text-[8px] font-bold text-vingi-600 bg-vingi-50 px-1.5 py-0.5 rounded border border-vingi-100 flex items-center gap-1">
-                        <TrendingUp size={8}/> {color.trendStatus}
+                {color.role && (
+                    <span className="self-start text-[7px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1 mt-1">
+                       {color.role.includes('Tom') ? <Droplets size={6}/> : <Palette size={6}/>} {color.role}
                     </span>
                 )}
             </div>
@@ -364,18 +365,19 @@ export const PatternCreator: React.FC = () => {
                             {/* 1. Preview da Ourela & Layout */}
                             <div className="mb-4">
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Estrutura e Orientação</label>
-                                {/* Nova Ferramenta Visual */}
+                                {/* Nova Ferramenta Visual (Agora sempre ativa) */}
                                 <SelvedgeTool 
                                     image={referenceImage || ''} 
                                     selectedPos={selvedgePos} 
                                     onSelect={setSelvedgePos} 
-                                    active={layoutType === 'Barrada'}
+                                    active={true}
                                 />
-                                {layoutType === 'Barrada' && (
-                                    <p className="text-[10px] text-vingi-500 mt-2 font-bold text-center flex items-center justify-center gap-1">
-                                        <Info size={12}/> Clique na imagem para alterar a posição da ourela
-                                    </p>
-                                )}
+                                <p className="text-[10px] text-vingi-500 mt-2 font-bold text-center flex items-center justify-center gap-1">
+                                    <Info size={12}/> 
+                                    {layoutType === 'Barrada' 
+                                        ? 'Defina onde ficará a barra do desenho' 
+                                        : 'Indique a orientação do fio do tecido (Ourela)'}
+                                </p>
                             </div>
 
                             {/* 2. Seleção de Layout */}
@@ -665,6 +667,9 @@ export const PatternCreator: React.FC = () => {
                                                             ) : (
                                                                 <p className="text-xs text-gray-400 italic">Cores extraídas automaticamente da geração.</p>
                                                             )}
+                                                            <div className="mt-4 text-[10px] text-gray-400 italic text-center">
+                                                                *Clique na cor para visualizar a referência física
+                                                            </div>
                                                         </div>
                                                     </>
                                                 )}

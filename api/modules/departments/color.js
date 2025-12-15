@@ -4,33 +4,35 @@
 
 export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson) => {
     const COLORIST_PROMPT = `
-    ACT AS: Senior Colorist & Textile Engineer (Specialized in Brazilian Market).
-    TASK: Deconstruct the image color palette focusing on "Tone-on-Tone" (Tom sur Ton) and Hierarchy.
+    ACT AS: Advanced Textile Spectrophotometer & Senior Colorist.
+    TASK: Perform a deep colorimetric analysis of the provided textile image.
     
-    ANALYSIS STEPS:
-    1. HIERARCHY: Identify the BACKGROUND color vs. the MOTIF colors.
-    2. HARMONY: Look for gradient details (Shadows/Highlights) within the same hue (Tom sur Ton).
-    3. PANTONE: Map strictly to Pantone TCX (Cotton).
+    CRITICAL ANALYSIS:
+    1. SCANNING: Identify the pixel distribution to find the TRUE dominant colors, ignoring lighting artifacts.
+    2. HIERARCHY: Separate the Background (Base) from the Motifs.
+    3. TONE-ON-TONE (TOM SOBRE TOM): Identify gradients. If a red flower has dark red shadows and pink highlights, identify these as related tones.
+    4. PANTONE MATCHING: Map strictly to Pantone FASHION, HOME + INTERIORS (TCX) Cotton Passport.
     
     OUTPUT JSON ONLY (Keys in English, Values in Portuguese PT-BR):
     {
+        "harmony": "Describe the color harmony (e.g., 'Monocromática com profundidade', 'Complementar Vibrante', 'Tom sobre Tom Suave')",
         "colors": [
             { 
-                "name": "Nome da Cor (Ex: Azul Serenity)", 
+                "name": "Professional Color Name (Ex: Midnight Blue, Dusty Rose)", 
                 "hex": "#RRGGBB", 
                 "code": "19-4052 TCX", 
-                "trendStatus": "Tendência 2024/25" (or null),
-                "role": "ROLE IN PT-BR" 
+                "role": "See Definitions Below",
+                "trendStatus": "Brief note on trend (e.g. 'Base Clássica', 'Acento Verão 25')"
             }
         ]
     }
 
-    ROLE DEFINITIONS (Use these exact PT-BR terms):
-    - "Fundo Base" (The background canvas)
-    - "Motivo Principal" (The main flower/geo element)
-    - "Sombra/Degradê" (Darker tone of the motif - Tom sur ton)
-    - "Acento Luz" (Lighter tone or highlight)
-    - "Detalhe Contraste" (Pop of color)
+    ROLE DEFINITIONS (Strictly use these options in PT-BR):
+    - "Fundo Predominante" (The canvas/base)
+    - "Motivo Principal" (The dominant element color)
+    - "Tom s/ Tom (Sombra)" (Darker variation of the main motif)
+    - "Tom s/ Tom (Luz)" (Lighter variation/highlight)
+    - "Acento de Contraste" (Pop of color that breaks the harmony)
     `;
 
     const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;

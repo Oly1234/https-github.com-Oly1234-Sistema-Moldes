@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, ArrowDownToLine, ArrowRightToLine, Check, Printer, Globe, X, ScanLine, Brush, Info } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, ArrowDownToLine, ArrowRightToLine, Check, Printer, Globe, X, ScanLine, Brush, Info, Search, Droplets } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
 
@@ -24,15 +24,35 @@ const GENERATION_STEPS = [
     "Finalizando Renderização 4K..."
 ];
 
-const PantoneCard: React.FC<{ color: PantoneColor }> = ({ color }) => (
-    <div className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 h-full">
-        <div className="h-12 w-full" style={{ backgroundColor: color.hex }} />
-        <div className="p-2">
-            <span className="block text-[8px] font-extrabold text-gray-900 leading-tight uppercase truncate">{color.name}</span>
-            <span className="block text-[9px] text-gray-500 font-mono font-bold">{color.code}</span>
+// Componente Pantone Melhorado
+const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
+    const handleSearch = () => {
+        const query = `Pantone ${color.code} ${color.name} cotton swatch`;
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`, '_blank');
+    };
+
+    return (
+        <div onClick={handleSearch} className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg hover:border-vingi-300 transition-all cursor-pointer group h-full hover:scale-[1.02]">
+            <div className="h-14 w-full relative" style={{ backgroundColor: color.hex }}>
+                 <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                 <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-1">
+                     <Search size={10} className="text-gray-700"/>
+                 </div>
+            </div>
+            <div className="p-2 flex flex-col justify-between flex-1">
+                <div className="mb-1">
+                    <span className="block text-[8px] font-extrabold text-gray-900 leading-tight uppercase truncate" title={color.name}>{color.name}</span>
+                    <span className="block text-[9px] text-gray-600 font-mono font-bold">{color.code || 'PENDING'}</span>
+                </div>
+                {color.role && (
+                    <span className="self-start text-[7px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1 mt-1">
+                       {color.role.includes('Tom') ? <Droplets size={6}/> : <Palette size={6}/>} {color.role}
+                    </span>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const AtelierSystem: React.FC = () => {
     // --- STATE ---
@@ -201,19 +221,20 @@ export const AtelierSystem: React.FC = () => {
                                     <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold uppercase">{layoutType}</span>
                                 </div>
 
-                                {/* FERRAMENTA VISUAL DE OURELA */}
+                                {/* FERRAMENTA VISUAL DE OURELA (AGORA ATIVA PARA TODOS OS MODOS) */}
                                 <div className="mb-6">
                                     <SelvedgeTool 
                                         image={referenceImage} 
                                         selectedPos={selvedgePos} 
                                         onSelect={setSelvedgePos} 
-                                        active={layoutType === 'Barrada'}
+                                        active={true}
                                     />
-                                    {layoutType === 'Barrada' && (
-                                        <p className="text-[10px] text-vingi-500 mt-2 font-bold text-center flex items-center justify-center gap-1">
-                                            <Info size={12}/> Clique na imagem para alterar a posição da ourela
-                                        </p>
-                                    )}
+                                    <p className="text-[10px] text-vingi-500 mt-2 font-bold text-center flex items-center justify-center gap-1">
+                                        <Info size={12}/> 
+                                        {layoutType === 'Barrada' 
+                                            ? 'Defina onde ficará a barra do desenho' 
+                                            : 'Indique a orientação do fio do tecido (Ourela)'}
+                                    </p>
                                 </div>
 
                                 {/* SELETORES DE LAYOUT */}
@@ -310,6 +331,9 @@ export const AtelierSystem: React.FC = () => {
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                             {detectedColors.map((c, i) => <PantoneCard key={i} color={c} />)}
                                             {detectedColors.length === 0 && <p className="text-xs text-gray-400 col-span-4">Cores embutidas no arquivo.</p>}
+                                        </div>
+                                        <div className="mt-4 text-[10px] text-gray-400 italic text-center">
+                                            *Clique na cor para visualizar a referência física
                                         </div>
                                     </div>
 
