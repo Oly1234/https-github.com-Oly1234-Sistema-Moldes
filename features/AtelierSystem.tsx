@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Check, Printer, Brush, Info, Settings2, Ruler, Scroll, Maximize, FileWarning, Zap, Grip, AlignVerticalSpaceAround, Spline, RefreshCw, Droplets, Sun, Moon, Contrast } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Check, Printer, Brush, Info, Settings2, Ruler, Scroll, Maximize, FileWarning, Zap, Grip, AlignVerticalSpaceAround, Spline, RefreshCw, Droplets, Sun, Moon, Contrast, Sparkles } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage } from '../components/Shared';
 
@@ -333,17 +333,48 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     </div>
                                 </div>
 
+                                {/* DPI SELECTOR (NOVO) */}
+                                <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group mb-3">
+                                    <span className="text-[9px] text-gray-400 font-bold block flex items-center gap-1 mb-2">
+                                        RESOLUÇÃO DE SAÍDA (DPI)
+                                    </span>
+                                    <div className="flex bg-gray-50 rounded-lg p-1 gap-1">
+                                        {[72, 150, 300].map(val => (
+                                            <button
+                                                key={val}
+                                                onClick={() => setDpi(val as any)}
+                                                className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                                                    dpi === val 
+                                                    ? 'bg-white text-vingi-900 shadow-sm ring-1 ring-black/5' 
+                                                    : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                            >
+                                                {val === 300 && <Sparkles size={8} className={dpi===300?'text-amber-500':''}/>}
+                                                {val}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-2 mb-4">
-                                    {SIZE_PRESETS.map((p) => (
-                                        <button 
-                                            key={p.label}
-                                            onClick={() => { setWidthCm(p.w); setHeightCm(p.h); }}
-                                            className="px-2 py-1.5 bg-white border border-gray-200 rounded hover:border-vingi-300 hover:bg-vingi-50 text-left transition-all"
-                                        >
-                                            <span className="block text-[10px] font-bold text-gray-700">{p.label}</span>
-                                            <span className="block text-[8px] text-gray-400">{p.w}x{p.h}cm • {p.desc}</span>
-                                        </button>
-                                    ))}
+                                    {SIZE_PRESETS.map((p) => {
+                                        const isActive = widthCm === p.w && heightCm === p.h;
+                                        return (
+                                            <button 
+                                                key={p.label}
+                                                onClick={() => { setWidthCm(p.w); setHeightCm(p.h); }}
+                                                className={`px-3 py-2 rounded-lg border text-left transition-all group relative overflow-hidden ${
+                                                    isActive 
+                                                    ? 'bg-vingi-900 border-vingi-900 text-white shadow-md ring-1 ring-vingi-700' 
+                                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-vingi-300'
+                                                }`}
+                                            >
+                                                {isActive && <div className="absolute top-0 right-0 p-1"><Check size={10} className="text-vingi-400"/></div>}
+                                                <span className={`block text-[10px] font-bold ${isActive ? 'text-white' : 'text-gray-800'}`}>{p.label}</span>
+                                                <span className={`block text-[8px] ${isActive ? 'text-gray-400' : 'text-gray-400'}`}>{p.w}x{p.h}cm • {p.desc}</span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
 
                                 <div className="space-y-3">

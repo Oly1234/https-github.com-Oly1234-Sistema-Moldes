@@ -3,9 +3,9 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
 
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
-    // 1. Definição do Modelo (Nano Banana para Imagem)
-    const MODEL_NAME = 'gemini-2.5-flash-image'; 
-    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    // 1. Definição do Modelo (Imagen 3 para Alta Fidelidade Têxtil)
+    const MODEL_NAME = 'imagen-3.0-generate-001'; 
+    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:predict?key=${apiKey}`;
 
     // 2. Desconstrução das Specs
     const { layout = "Corrida", repeat = "Straight", width = 64, height = 64, styleGuide = "Clean lines", dpi = 300 } = textileSpecs || {};
@@ -56,7 +56,6 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     }
 
     // AJUSTE DE ESTILO: RAW ARTWORK vs GARMENT SILHOUETTE
-    // Correção Crítica: O usuário não quer ver um vestido, quer ver a ARTE.
     const RAW_DIGITAL_PROMPT = `
     FORMAT: RECTANGULAR TEXTURE SWATCH (FULL BLEED).
     
@@ -87,12 +86,14 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     `;
 
     try {
+        // Payload específico para Imagen (Predict API)
         const payload = {
-            contents: [{ parts: [{ text: finalPrompt }] }],
-            generationConfig: {
-                imageConfig: {
-                    aspectRatio: "1:1" // Mantém 1:1 por limitação atual do modelo
-                }
+            instances: [
+                { prompt: finalPrompt }
+            ],
+            parameters: {
+                sampleCount: 1,
+                aspectRatio: "1:1"
             }
         };
 
@@ -104,18 +105,20 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         
         if (!response.ok) {
             const errText = await response.text();
-            throw new Error(`Erro Atelier (${response.status}): O servidor rejeitou a solicitação.`);
+            throw new Error(`Erro Atelier (${response.status}): ${errText}`);
         }
 
         const data = await response.json();
-        const candidate = data.candidates?.[0];
         
-        if (candidate?.finishReason === 'SAFETY') throw new Error("Safety Filter: Tente simplificar o prompt.");
+        // Estrutura de resposta do Imagen
+        const prediction = data.predictions?.[0];
         
-        const imagePart = candidate?.content?.parts?.find(p => p.inlineData);
-        if (imagePart) return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        if (prediction?.bytesBase64Encoded) {
+            const mime = prediction.mimeType || 'image/png';
+            return `data:${mime};base64,${prediction.bytesBase64Encoded}`;
+        }
         
-        throw new Error("A IA processou o pedido mas não retornou a imagem.");
+        throw new Error("A IA processou o pedido mas não retornou a imagem (Formato inesperado).");
 
     } catch (e) {
         console.error("Generator Module Error:", e);
