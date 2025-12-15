@@ -1,22 +1,117 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, ArrowDownToLine, ArrowRightToLine, Check, Printer, Globe, X, ScanLine, Brush, Info, Search, Droplets, Shirt } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, ArrowDownToLine, ArrowRightToLine, Check, Printer, Globe, X, ScanLine, Brush, Info, Search, Droplets, Shirt, Maximize2, RotateCcw } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
+
+// --- COMPONENTE SMART VIEWER (ZOOM & PAN) ---
+const SmartImageViewer: React.FC<{ src: string; alt?: string }> = ({ src, alt }) => {
+    const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
+    const [isPinching, setIsPinching] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    
+    // Refs para gestos
+    const lastDist = useRef<number>(0);
+    const lastCenter = useRef<{x: number, y: number}>({x: 0, y: 0});
+    const lastPos = useRef<{x: number, y: number}>({x: 0, y: 0});
+    const isDragging = useRef(false);
+
+    // Helpers de Touch
+    const getDist = (t1: React.Touch, t2: React.Touch) => Math.sqrt((t1.clientX-t2.clientX)**2 + (t1.clientY-t2.clientY)**2);
+    const getCenter = (t1: React.Touch, t2: React.Touch) => ({ x: (t1.clientX+t2.clientX)/2, y: (t1.clientY+t2.clientY)/2 });
+
+    const handleWheel = (e: React.WheelEvent) => {
+        e.preventDefault();
+        const scaleChange = -e.deltaY * 0.001;
+        const newScale = Math.min(Math.max(0.5, transform.k + scaleChange), 5);
+        setTransform(p => ({ ...p, k: newScale }));
+    };
+
+    const handlePointerDown = (e: React.TouchEvent | React.MouseEvent) => {
+        if ('touches' in e && e.touches.length === 2) {
+            setIsPinching(true);
+            lastDist.current = getDist(e.touches[0], e.touches[1]);
+            lastCenter.current = getCenter(e.touches[0], e.touches[1]);
+        } else {
+            isDragging.current = true;
+            const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+            const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+            lastPos.current = { x: clientX, y: clientY };
+        }
+    };
+
+    const handlePointerMove = (e: React.TouchEvent | React.MouseEvent) => {
+        if (isPinching && 'touches' in e && e.touches.length === 2) {
+            e.preventDefault(); // Evita scroll da pagina
+            const dist = getDist(e.touches[0], e.touches[1]);
+            const center = getCenter(e.touches[0], e.touches[1]);
+            
+            const zoomFactor = dist / lastDist.current;
+            const newScale = Math.min(Math.max(transform.k * zoomFactor, 0.5), 5);
+            
+            const dx = center.x - lastCenter.current.x;
+            const dy = center.y - lastCenter.current.y;
+
+            setTransform(p => ({ k: newScale, x: p.x + dx, y: p.y + dy }));
+            lastDist.current = dist;
+            lastCenter.current = center;
+        } else if (isDragging.current) {
+            const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+            const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+            
+            const dx = clientX - lastPos.current.x;
+            const dy = clientY - lastPos.current.y;
+            
+            setTransform(p => ({ ...p, x: p.x + dx, y: p.y + dy }));
+            lastPos.current = { x: clientX, y: clientY };
+        }
+    };
+
+    const handlePointerUp = () => {
+        isDragging.current = false;
+        setIsPinching(false);
+    };
+
+    const reset = () => setTransform({ k: 1, x: 0, y: 0 });
+
+    return (
+        <div 
+            ref={containerRef}
+            className="w-full h-full overflow-hidden bg-gray-100 relative cursor-grab active:cursor-grabbing touch-none flex items-center justify-center"
+            onWheel={handleWheel}
+            onTouchStart={handlePointerDown}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerUp}
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            onDoubleClick={reset}
+        >
+            <div 
+                style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`, transition: isDragging.current || isPinching ? 'none' : 'transform 0.2s ease-out' }}
+                className="w-full h-full flex items-center justify-center"
+            >
+                <img src={src} alt={alt} className="max-w-full max-h-full object-contain shadow-xl" draggable={false} />
+            </div>
+            
+            {/* Controles Flutuantes */}
+            <div className="absolute bottom-4 right-4 flex gap-2">
+                <button onClick={reset} className="bg-white/90 p-2 rounded-full shadow-lg text-gray-700 hover:text-vingi-600 backdrop-blur-sm">
+                    <RotateCcw size={16}/>
+                </button>
+                <div className="bg-black/70 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm flex items-center">
+                    {Math.round(transform.k * 100)}%
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- TYPES ---
 interface AtelierSystemProps {
     onNavigateToMockup?: () => void;
-    onNavigateToLayerStudio?: () => void; // NOVO
-}
-
-interface GeneratedAsset {
-    id: string;
-    imageUrl: string;
-    prompt: string;
-    layout: string;
-    timestamp: number;
-    specs: { width: number; height: number; dpi: number };
+    onNavigateToLayerStudio?: () => void;
 }
 
 // --- CONSTANTES ---
@@ -38,22 +133,14 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
 
     return (
         <div onClick={handleSearch} className="flex flex-col bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 hover:shadow-lg hover:border-vingi-300 transition-all cursor-pointer group h-full hover:scale-[1.02]">
-            <div className="h-14 w-full relative" style={{ backgroundColor: color.hex }}>
+            <div className="h-10 w-full relative" style={{ backgroundColor: color.hex }}>
                  <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                 <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-1">
-                     <Search size={10} className="text-gray-700"/>
-                 </div>
             </div>
             <div className="p-2 flex flex-col justify-between flex-1">
                 <div className="mb-1">
                     <span className="block text-[8px] font-extrabold text-gray-900 leading-tight uppercase truncate" title={color.name}>{color.name}</span>
-                    <span className="block text-[9px] text-gray-600 font-mono font-bold">{color.code || 'PENDING'}</span>
+                    <span className="block text-[8px] text-gray-500 font-mono font-bold">{color.code || 'PENDING'}</span>
                 </div>
-                {color.role && (
-                    <span className="self-start text-[7px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1 mt-1">
-                       {color.role.includes('Tom') ? <Droplets size={6}/> : <Palette size={6}/>} {color.role}
-                    </span>
-                )}
             </div>
         </div>
     );
@@ -83,7 +170,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     // --- EFFECTS ---
     useEffect(() => {
-        // Checar por imagem transferida da aba de pesquisa
         const transferImage = localStorage.getItem('vingi_transfer_image');
         if (transferImage) {
             setReferenceImage(transferImage);
@@ -121,10 +207,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setError(null);
 
         try {
-            // 1. Primeiro analisamos a imagem para extrair cores e prompt técnico (Modo DESCRIBE)
-            const compressedBase64 = referenceImage.split(',')[1]; // Simplificado (assumindo jpeg/png)
+            const compressedBase64 = referenceImage.split(',')[1];
             
-            // Passo 1: Análise Prévia (Extração de DNA Visual)
             const analysisRes = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -144,7 +228,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             setDetectedColors(autoColors);
             setPrompt(autoPrompt);
 
-            // 2. Passo 2: Geração Efetiva (Atelier)
             const finalPrompt = userInstruction 
             ? `${userInstruction}. Based on: ${autoPrompt}`
             : autoPrompt;
@@ -195,29 +278,25 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     const handleTransferToMockup = () => {
         if (!generatedPattern || !onNavigateToMockup) return;
-        // REMOVIDO: triggerDownload(generatedPattern); 
-        // Agora transfere apenas internamente para UX fluida
         localStorage.setItem('vingi_mockup_pattern', generatedPattern);
         onNavigateToMockup();
     };
 
     const handleTransferToLayerStudio = () => {
         if (!generatedPattern || !onNavigateToLayerStudio) return;
-        // REMOVIDO: triggerDownload(generatedPattern);
-        // Agora transfere apenas internamente
         localStorage.setItem('vingi_layer_studio_source', generatedPattern);
         onNavigateToLayerStudio();
     };
 
     // --- RENDER ---
     return (
-        <div className="h-full bg-[#f8fafc] overflow-y-auto custom-scrollbar flex flex-col items-center">
-             <header className="w-full bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+        <div className="h-full bg-[#f8fafc] overflow-hidden flex flex-col">
+             {/* Header Compacto */}
+             <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shrink-0 z-30">
                 <div className="flex items-center gap-3">
-                    <div className="bg-vingi-900 p-2 rounded-lg text-white"><Brush size={20}/></div>
+                    <div className="bg-vingi-900 p-2 rounded-lg text-white"><Brush size={18}/></div>
                     <div>
-                        <h1 className="text-lg font-bold text-gray-900 leading-tight">Atelier de Criação</h1>
-                        <p className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">IA Generativa Têxtil</p>
+                        <h1 className="text-base font-bold text-gray-900 leading-tight">Atelier de Criação</h1>
                     </div>
                 </div>
                 {referenceImage && !isGenerating && (
@@ -227,202 +306,149 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 )}
             </header>
 
-            <div className="w-full max-w-5xl p-6 md:p-10 space-y-10 pb-32">
-                
-                {/* 1. UPLOAD AREA (Se vazio) */}
-                {!referenceImage ? (
-                    <div className="min-h-[60vh] flex flex-col items-center justify-center animate-fade-in">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 max-w-2xl w-full">
-                            <h2 className="text-xl font-bold text-gray-900 mb-2">Atelier Generativo</h2>
-                            <p className="text-gray-500">
-                                Crie estampas exclusivas do zero. Carregue um desenho ou imagem de referência e defina o layout (Corrido, Barrado) para que a IA gere um arquivo de alta resolução pronto para impressão.
-                            </p>
-                        </div>
-
-                        <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-2xl h-96 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-6 group shadow-sm hover:shadow-xl">
-                             <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
-                             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
-                                 <UploadCloud size={40} className="text-gray-400 group-hover:text-vingi-500"/>
-                             </div>
-                             <div className="text-center px-4">
-                                 <h3 className="text-2xl font-bold text-gray-700">Carregar Desenho ou Referência</h3>
-                                 <p className="text-gray-400 mt-2 max-w-md mx-auto">A IA extrairá cores e estilo para gerar a nova estampa.</p>
-                             </div>
-                        </div>
+            {!referenceImage ? (
+                <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center animate-fade-in">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 max-w-xl w-full text-center">
+                        <h2 className="text-xl font-bold text-gray-900 mb-2">Atelier Generativo</h2>
+                        <p className="text-gray-500 text-sm">
+                            Crie estampas exclusivas do zero. Carregue um desenho ou imagem de referência e a IA gerará um arquivo de alta resolução.
+                        </p>
                     </div>
-                ) : (
-                    // 2. WORKSPACE DE CRIAÇÃO
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
-                        
-                        {/* COLUNA ESQUERDA: CONFIGURAÇÃO VISUAL */}
-                        <div className="space-y-6">
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><Target size={18} className="text-vingi-500"/> Definição de Layout</h3>
-                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold uppercase">{layoutType}</span>
+
+                    <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-xl h-64 bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-vingi-500 hover:bg-vingi-50/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group shadow-sm hover:shadow-xl">
+                         <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
+                         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
+                             <UploadCloud size={28} className="text-gray-400 group-hover:text-vingi-500"/>
+                         </div>
+                         <div className="text-center px-4">
+                             <h3 className="text-lg font-bold text-gray-700">Carregar Referência</h3>
+                             <p className="text-xs text-gray-400 mt-1">A IA extrairá cores e estilo.</p>
+                         </div>
+                    </div>
+                </div>
+            ) : (
+                // LAYOUT PRINCIPAL: MOBILE VERTICAL (ARTE NO TOPO), DESKTOP LADO A LADO
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+                    
+                    {/* ÁREA DE VISUALIZAÇÃO (ARTE) - TOPO NO MOBILE, DIREITA NO DESKTOP */}
+                    <div className="order-1 lg:order-2 flex-1 lg:h-full bg-slate-900 relative min-h-[40vh] lg:min-h-0 flex flex-col">
+                        {isGenerating ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 z-20">
+                                <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,100,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.05)_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+                                <div className="absolute top-0 left-0 w-full h-2 bg-vingi-400 shadow-[0_0_30px_rgba(96,165,250,1)] animate-scan z-10 opacity-80"></div>
+                                
+                                <Loader2 size={48} className="text-vingi-500 animate-spin mb-4 relative z-20"/>
+                                <h3 className="text-xl font-bold text-white relative z-20 tracking-tight animate-pulse">{GENERATION_STEPS[genStep]}</h3>
+                                <p className="text-slate-400 mt-2 relative z-20 text-xs">Processando {widthCm}x{heightCm}cm</p>
+                            </div>
+                        ) : (
+                            <SmartImageViewer src={generatedPattern || referenceImage!} />
+                        )}
+
+                        {/* Tag de Status sobre a imagem */}
+                        <div className="absolute top-4 left-4 z-10">
+                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold shadow-lg backdrop-blur-md text-white border border-white/20 ${generatedPattern ? 'bg-green-500/80' : 'bg-gray-500/80'}`}>
+                                 {generatedPattern ? 'RESULTADO FINAL' : 'REFERÊNCIA ORIGINAL'}
+                             </span>
+                        </div>
+
+                        {error && (
+                            <div className="absolute bottom-4 left-4 right-4 bg-red-500/90 text-white p-3 rounded-lg text-xs font-bold flex items-center gap-2 backdrop-blur-md animate-fade-in shadow-xl z-20">
+                                <Info size={14}/> {error}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ÁREA DE CONTROLES - ABAIXO NO MOBILE, ESQUERDA NO DESKTOP */}
+                    <div className="order-2 lg:order-1 w-full lg:w-[400px] h-[60vh] lg:h-full bg-white border-t lg:border-t-0 lg:border-r border-gray-200 shadow-2xl z-20 overflow-y-auto custom-scrollbar flex flex-col">
+                        <div className="p-6 space-y-8 pb-24">
+                            
+                            {/* Actions se já gerou */}
+                            {generatedPattern && (
+                                <div className="grid grid-cols-2 gap-2 animate-fade-in">
+                                    <button onClick={handleDownload} className="bg-gray-900 text-white py-3 rounded-xl font-bold shadow hover:bg-black transition-transform flex items-center justify-center gap-2 text-xs">
+                                        <Download size={14}/> BAIXAR ARQUIVO
+                                    </button>
+                                    {onNavigateToMockup && (
+                                        <button onClick={handleTransferToMockup} className="bg-vingi-500 text-white py-3 rounded-xl font-bold shadow hover:bg-vingi-600 transition-transform flex items-center justify-center gap-2 text-xs">
+                                            <Shirt size={14}/> PROVAR AGORA
+                                        </button>
+                                    )}
+                                    {onNavigateToLayerStudio && (
+                                        <button onClick={handleTransferToLayerStudio} className="col-span-2 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 border border-gray-300 py-3 rounded-xl font-bold shadow hover:bg-gray-200 transition-transform flex items-center justify-center gap-2 text-xs">
+                                            <Layers size={14}/> SEPARAR CAMADAS (IA)
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Configurações */}
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Target size={16} className="text-vingi-500"/> Layout & Estrutura</h3>
                                 </div>
 
-                                {/* FERRAMENTA VISUAL DE OURELA (AGORA ATIVA PARA TODOS OS MODOS) */}
-                                <div className="mb-6">
-                                    <SelvedgeTool 
-                                        image={referenceImage} 
-                                        selectedPos={selvedgePos} 
-                                        onSelect={setSelvedgePos} 
-                                        active={true}
-                                    />
-                                    <p className="text-[10px] text-vingi-500 mt-2 font-bold text-center flex items-center justify-center gap-1">
-                                        <Info size={12}/> 
-                                        {layoutType === 'Barrada' 
-                                            ? 'Defina onde ficará a barra do desenho' 
-                                            : 'Indique a orientação do fio do tecido (Ourela)'}
-                                    </p>
-                                </div>
-
-                                {/* SELETORES DE LAYOUT */}
-                                <div className="grid grid-cols-3 gap-2 mb-6">
-                                    <button onClick={() => setLayoutType('Corrida')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Corrida' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
-                                        <Grid3X3 size={16}/> CORRIDA
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button onClick={() => setLayoutType('Corrida')} className={`py-2 rounded-lg border text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Corrida' ? 'bg-vingi-50 text-vingi-700 border-vingi-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        <Grid3X3 size={14}/> CORRIDA
                                     </button>
-                                    <button onClick={() => setLayoutType('Barrada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Barrada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
-                                        <ArrowDownToLine size={16}/> BARRADA
+                                    <button onClick={() => setLayoutType('Barrada')} className={`py-2 rounded-lg border text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Barrada' ? 'bg-vingi-50 text-vingi-700 border-vingi-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        <ArrowDownToLine size={14}/> BARRADA
                                     </button>
-                                    <button onClick={() => setLayoutType('Localizada')} className={`py-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Localizada' ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
-                                        <Target size={16}/> LOCAL
+                                    <button onClick={() => setLayoutType('Localizada')} className={`py-2 rounded-lg border text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${layoutType === 'Localizada' ? 'bg-vingi-50 text-vingi-700 border-vingi-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        <Target size={14}/> LOCAL
                                     </button>
                                 </div>
 
-                                {/* INPUTS TÉCNICOS */}
-                                <div className="space-y-4">
-                                    <div className="flex gap-4">
-                                        <div className="flex-1">
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Largura</label>
-                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3">
-                                                <input type="number" value={widthCm} onChange={e => setWidthCm(Number(e.target.value))} className="w-full py-2 bg-transparent outline-none text-sm font-bold text-gray-800"/>
-                                                <span className="text-[10px] font-bold text-gray-400">CM</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Altura</label>
-                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3">
-                                                <input type="number" value={heightCm} onChange={e => setHeightCm(Number(e.target.value))} className="w-full py-2 bg-transparent outline-none text-sm font-bold text-gray-800"/>
-                                                <span className="text-[10px] font-bold text-gray-400">CM</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Qualidade</label>
-                                            <select value={dpi} onChange={e => setDpi(Number(e.target.value))} className="w-full py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-800 outline-none">
-                                                <option value={72}>72 DPI</option>
-                                                <option value={150}>150 DPI</option>
-                                                <option value={300}>300 DPI</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Instruções Extras (Prompt)</label>
-                                        <textarea 
-                                            value={userInstruction} 
-                                            onChange={e => setUserInstruction(e.target.value)} 
-                                            placeholder="Ex: Quero cores mais vivas e traços de aquarela..."
-                                            className="w-full h-20 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs resize-none focus:bg-white focus:border-vingi-500 outline-none transition-colors"
-                                        />
-                                    </div>
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                                     <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-2">Dimensões Físicas (cm)</h4>
+                                     <div className="flex gap-3">
+                                         <div className="flex-1 bg-white border border-gray-200 rounded px-2 py-1 flex items-center">
+                                             <span className="text-[10px] text-gray-400 mr-2">W</span>
+                                             <input type="number" value={widthCm} onChange={e => setWidthCm(Number(e.target.value))} className="w-full text-sm font-bold outline-none"/>
+                                         </div>
+                                         <div className="flex-1 bg-white border border-gray-200 rounded px-2 py-1 flex items-center">
+                                             <span className="text-[10px] text-gray-400 mr-2">H</span>
+                                             <input type="number" value={heightCm} onChange={e => setHeightCm(Number(e.target.value))} className="w-full text-sm font-bold outline-none"/>
+                                         </div>
+                                     </div>
                                 </div>
                             </div>
-                            
-                            {!isGenerating && !generatedPattern && (
+
+                            {/* Prompting */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-bold text-gray-700">Instruções para a IA</label>
+                                <textarea 
+                                    value={userInstruction} 
+                                    onChange={e => setUserInstruction(e.target.value)} 
+                                    placeholder="Ex: Quero um fundo azul marinho, flores menores e traço de aquarela..."
+                                    className="w-full h-24 p-3 bg-white border border-gray-200 rounded-xl text-xs resize-none focus:border-vingi-500 outline-none transition-colors shadow-sm"
+                                />
+                            </div>
+
+                            {/* Paleta (Somente Leitura/Visualização) */}
+                            {detectedColors.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2"><Palette size={12}/> Paleta Detectada</h4>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {detectedColors.slice(0, 4).map((c, i) => <PantoneCard key={i} color={c} />)}
+                                    </div>
+                                </div>
+                            )}
+
+                            {!isGenerating && (
                                 <button 
                                     onClick={handleGenerate}
-                                    className="w-full py-5 bg-vingi-900 text-white rounded-2xl font-bold shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
+                                    className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 text-sm"
                                 >
-                                    <Wand2 size={24} className="text-purple-300"/>
-                                    <span>CRIAR ESTAMPA AGORA</span>
+                                    <Wand2 size={18} className="text-purple-300"/>
+                                    {generatedPattern ? 'REFINAR / GERAR NOVAMENTE' : 'CRIAR ESTAMPA'}
                                 </button>
                             )}
                         </div>
-
-                        {/* COLUNA DIREITA: PREVIEW / RESULTADO */}
-                        <div className="relative">
-                            {isGenerating ? (
-                                <div className="h-full min-h-[500px] bg-slate-900 rounded-3xl overflow-hidden relative border-4 border-slate-800 flex flex-col items-center justify-center text-center p-8 shadow-2xl">
-                                    {/* Scan Animation */}
-                                    <div className="absolute inset-0 bg-[linear-gradient(rgba(0,255,100,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.05)_1px,transparent_1px)] bg-[size:40px_40px]"></div>
-                                    <div className="absolute top-0 left-0 w-full h-2 bg-vingi-400 shadow-[0_0_30px_rgba(96,165,250,1)] animate-scan z-10 opacity-80"></div>
-                                    
-                                    <Loader2 size={64} className="text-vingi-500 animate-spin mb-6 relative z-20"/>
-                                    <h3 className="text-2xl font-bold text-white relative z-20 tracking-tight animate-pulse">{GENERATION_STEPS[genStep]}</h3>
-                                    <p className="text-slate-400 mt-2 relative z-20 text-sm">O Atelier está processando {widthCm}x{heightCm}cm em {dpi} DPI</p>
-                                </div>
-                            ) : generatedPattern ? (
-                                <div className="space-y-6 animate-fade-in">
-                                    <div className="relative aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white group">
-                                        <img src={generatedPattern} className="w-full h-full object-cover"/>
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm gap-4 flex-col md:flex-row p-4">
-                                            <button onClick={handleDownload} className="bg-white text-gray-900 px-6 py-3 rounded-full font-bold shadow-xl hover:scale-105 transition-transform flex items-center gap-2 w-full md:w-auto justify-center">
-                                                <Download size={18}/> BAIXAR
-                                            </button>
-                                            {onNavigateToMockup && (
-                                                <button onClick={handleTransferToMockup} className="bg-vingi-500 text-white px-6 py-3 rounded-full font-bold shadow-xl hover:scale-105 transition-transform flex items-center gap-2 w-full md:w-auto justify-center border-2 border-white/20">
-                                                    <Shirt size={18}/> PROVAR
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* CTA PARA LAYER STUDIO (NOVO) */}
-                                    {onNavigateToLayerStudio && (
-                                        <div onClick={handleTransferToLayerStudio} className="bg-gradient-to-r from-gray-900 to-slate-800 p-4 rounded-xl shadow-lg cursor-pointer group border border-gray-700 hover:border-vingi-500 transition-all">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="bg-vingi-600 p-2 rounded-lg text-white group-hover:scale-110 transition-transform"><Layers size={20}/></div>
-                                                    <div>
-                                                        <h4 className="font-bold text-white text-sm">Separe os Elementos & Altere (Layer Studio)</h4>
-                                                        <p className="text-gray-400 text-xs mt-0.5">IA: Isolamento de fundo e regeneração de camadas.</p>
-                                                    </div>
-                                                </div>
-                                                <ArrowRightToLine size={20} className="text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all"/>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* RESULTADO: PANTONES */}
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-                                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <Palette size={14}/> Paleta Gerada (Pantone TCX)
-                                        </h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                            {detectedColors.map((c, i) => <PantoneCard key={i} color={c} />)}
-                                            {detectedColors.length === 0 && <p className="text-xs text-gray-400 col-span-4">Cores embutidas no arquivo.</p>}
-                                        </div>
-                                        <div className="mt-4 text-[10px] text-gray-400 italic text-center">
-                                            *Clique na cor para visualizar a referência física
-                                        </div>
-                                    </div>
-                                    
-                                    <button onClick={() => setGeneratedPattern(null)} className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors">
-                                        Gerar Novamente
-                                    </button>
-                                </div>
-                            ) : (
-                                // PLACEHOLDER INICIAL (PREVIEW DA REFERENCIA)
-                                <div className="h-full min-h-[400px] bg-gray-100 rounded-3xl border-2 border-dashed border-gray-300 flex items-center justify-center p-8 relative overflow-hidden">
-                                     <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#94a3b8 2px, transparent 2px)', backgroundSize: '24px 24px' }} />
-                                     <div className="text-center relative z-10 opacity-50">
-                                         <Sparkles size={48} className="mx-auto mb-4 text-gray-400"/>
-                                         <p className="font-bold text-gray-500">O preview da estampa aparecerá aqui</p>
-                                     </div>
-                                </div>
-                            )}
-
-                            {error && (
-                                <div className="absolute top-4 left-4 right-4 bg-red-100 border border-red-200 text-red-700 p-4 rounded-xl text-sm font-bold flex items-center gap-2 animate-fade-in shadow-lg">
-                                    <Info size={18}/> {error}
-                                </div>
-                            )}
-                        </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
