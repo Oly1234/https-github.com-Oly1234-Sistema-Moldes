@@ -1,5 +1,4 @@
 
-
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
@@ -116,10 +115,12 @@ export interface DesignLayer {
   y: number;
   scale: number;
   rotation: number;
+  flipX: boolean; // NOVO
+  flipY: boolean; // NOVO
   visible: boolean;
   locked: boolean;
   zIndex: number;
-  originalPrompt?: string; // Para recriação
+  originalPrompt?: string; 
 }
 
 export enum AppState {
