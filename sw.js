@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'vingi-moldes-cache-v5-fix'; // Mudança de nome força atualização
+const CACHE_NAME = 'vingi-moldes-cache-v4-fix'; // Mudança de nome força atualização
 const urlsToCache = [
   '/',
   '/index.html',
