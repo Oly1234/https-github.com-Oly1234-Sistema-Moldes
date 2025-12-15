@@ -26,9 +26,15 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         layoutInstruction = `TYPE: SEAMLESS REPEAT PATTERN. ${repeat === 'Half-Drop' ? 'Half-drop repeat' : 'Grid repeat'}. Edges must match perfectly.`;
     }
 
+    // CORREÇÃO CRÍTICA: Fallback para prompt vazio
+    // Se 'prompt' for null/vazio, a IA recusa. Forçamos um assunto padrão.
+    const safeSubject = prompt && prompt.trim().length > 2 
+        ? prompt 
+        : "A sophisticated abstract textile pattern with elegant motifs";
+
     const RAW_DIGITAL_PROMPT = `
     TASK: Generate a professional textile pattern design.
-    SUBJECT: ${prompt}.
+    SUBJECT: ${safeSubject}.
     PALETTE: ${colorList}.
     
     TECHNICAL SPECS:

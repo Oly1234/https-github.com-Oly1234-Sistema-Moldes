@@ -10,9 +10,12 @@ export const createTextileDesign = async (apiKey, prompt, colors) => {
         ? colors.map(c => c.name).join(', ') 
         : 'harmonious trend colors';
 
+    // Fallback de segurança para prompt
+    const safeSubject = prompt && prompt.trim().length > 0 ? prompt : "Artistic seamless textile pattern";
+
     const ENGINEERING_PROMPT = `
     Design a professional seamless textile pattern.
-    Subject: ${prompt}.
+    Subject: ${safeSubject}.
     Palette: ${colorString}.
     Style: High-end fabric print, flat view, no shadows, seamless repeat.
     Quality: 4k, detailed, vector-like precision.

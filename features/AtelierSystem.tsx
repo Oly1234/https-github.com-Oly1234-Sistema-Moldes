@@ -168,9 +168,14 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         abortControllerRef.current = controller;
 
         try {
+            // CORREÇÃO: Garante que o prompt nunca esteja vazio
+            const safeBasePrompt = technicalPrompt && technicalPrompt.trim() !== "" 
+                ? technicalPrompt 
+                : "High-end abstract textile pattern, seamless repeat, vector quality";
+
             const finalPrompt = userInstruction 
-                ? `${userInstruction}. Visual Base: ${technicalPrompt}` 
-                : technicalPrompt;
+                ? `${userInstruction}. Style Base: ${safeBasePrompt}` 
+                : safeBasePrompt;
 
             const genRes = await fetch('/api/analyze', {
                 method: 'POST',
@@ -288,7 +293,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     />
                 </>
             ) : (
-                // WORKSPACE (REMOVED: KEEP EXISTING WORKSPACE AS IS)
+                // WORKSPACE
                 <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
                     
                     {/* LEFT PANEL: ENGINEERING CONTROLS */}
@@ -499,11 +504,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                              generatedPattern ? (
                                 <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
                                      {/* IMAGE CONTAINER */}
-                                     {/* Shrink-wrapped container to match image dimensions, preventing texture bleed and distortion */}
                                      <div className="relative shadow-2xl rounded-sm border border-white/10 overflow-hidden group flex justify-center items-center" 
                                           style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}>
                                          
-                                         {/* Image naturally preserves aspect ratio with w-auto h-auto */}
                                          <img src={generatedPattern} className="block w-auto h-auto max-w-full max-h-[85vh] bg-white" style={{ objectFit: 'contain' }} />
                                          
                                          {/* TEXTURE OVERLAY LAYER */}
