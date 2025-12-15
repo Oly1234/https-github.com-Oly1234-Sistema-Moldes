@@ -1,6 +1,5 @@
 
 
-
 export interface TechnicalDNA {
   silhouette: string;
   neckline: string;
@@ -104,6 +103,7 @@ export interface PantoneColor {
   code: string;  // TCX Code (e.g. 18-1750 TCX)
   hex: string;
   trendStatus?: string; // e.g. "COY 2023"
+  role?: string;
 }
 
 // NOVO TIPO PARA CAMADAS DO STUDIO
