@@ -1,10 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, ArrowDownToLine, ArrowRightToLine, Check, Printer, Globe, X, ScanLine, Brush, Info, Search, Droplets } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, ArrowDownToLine, ArrowRightToLine, Check, Printer, Globe, X, ScanLine, Brush, Info, Search, Droplets, Shirt } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
 
 // --- TYPES ---
+interface AtelierSystemProps {
+    onNavigateToMockup?: () => void;
+}
+
 interface GeneratedAsset {
     id: string;
     imageUrl: string;
@@ -54,7 +58,7 @@ const PantoneCard: React.FC<{ color: PantoneColor | any }> = ({ color }) => {
     );
 };
 
-export const AtelierSystem: React.FC = () => {
+export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup }) => {
     // --- STATE ---
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
@@ -77,6 +81,15 @@ export const AtelierSystem: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // --- EFFECTS ---
+    useEffect(() => {
+        // Checar por imagem transferida da aba de pesquisa
+        const transferImage = localStorage.getItem('vingi_transfer_image');
+        if (transferImage) {
+            setReferenceImage(transferImage);
+            localStorage.removeItem('vingi_transfer_image');
+        }
+    }, []);
+
     useEffect(() => {
         let interval: any;
         if (isGenerating) {
@@ -173,6 +186,12 @@ export const AtelierSystem: React.FC = () => {
         link.download = `vingi-atelier-creation-${Date.now()}.jpg`;
         link.href = generatedPattern;
         link.click();
+    };
+
+    const handleTransferToMockup = () => {
+        if (!generatedPattern || !onNavigateToMockup) return;
+        localStorage.setItem('vingi_mockup_pattern', generatedPattern);
+        onNavigateToMockup();
     };
 
     // --- RENDER ---
@@ -316,10 +335,15 @@ export const AtelierSystem: React.FC = () => {
                                 <div className="space-y-6 animate-fade-in">
                                     <div className="relative aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white group">
                                         <img src={generatedPattern} className="w-full h-full object-cover"/>
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                                            <button onClick={handleDownload} className="bg-white text-gray-900 px-8 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-transform flex items-center gap-2">
-                                                <Download size={20}/> BAIXAR ARQUIVO
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm gap-4 flex-col md:flex-row p-4">
+                                            <button onClick={handleDownload} className="bg-white text-gray-900 px-6 py-3 rounded-full font-bold shadow-xl hover:scale-105 transition-transform flex items-center gap-2 w-full md:w-auto justify-center">
+                                                <Download size={18}/> BAIXAR
                                             </button>
+                                            {onNavigateToMockup && (
+                                                <button onClick={handleTransferToMockup} className="bg-vingi-500 text-white px-6 py-3 rounded-full font-bold shadow-xl hover:scale-105 transition-transform flex items-center gap-2 w-full md:w-auto justify-center border-2 border-white/20">
+                                                    <Shirt size={18}/> PROVAR
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 

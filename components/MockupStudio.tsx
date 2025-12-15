@@ -57,6 +57,15 @@ export const MockupStudio: React.FC = () => {
 
   // --- INITIALIZATION ---
   useEffect(() => {
+    // Check for transferred pattern from Atelier
+    const transferredPattern = localStorage.getItem('vingi_mockup_pattern');
+    if (transferredPattern) {
+        setPatternImage(transferredPattern);
+        localStorage.removeItem('vingi_mockup_pattern');
+    }
+  }, []);
+
+  useEffect(() => {
     if (moldImage) {
       const img = new Image();
       img.src = moldImage;

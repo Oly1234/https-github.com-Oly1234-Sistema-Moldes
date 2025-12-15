@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, History, PenTool, Download, Palette, Brush } from 'lucide-react';
+import { ScanLine, History, Shirt, Globe, Palette } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -30,34 +30,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         
         <nav className="flex flex-col gap-6 mt-8">
           <NavItem 
-            icon={<LayoutDashboard size={24} />} 
+            icon={<ScanLine size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
-            tooltip="Scanner 3D"
+            tooltip="1. Scanner Visual DNA"
+          />
+          <NavItem 
+            icon={<Globe size={24} />} 
+            active={currentView === 'CREATOR'} 
+            onClick={() => onViewChange('CREATOR')}
+            tooltip="2. Pesquisa Global"
           />
           <NavItem 
             icon={<Palette size={24} />} 
-            active={currentView === 'CREATOR'} 
-            onClick={() => onViewChange('CREATOR')}
-            tooltip="Pattern Studio (Search)"
-          />
-          <NavItem 
-            icon={<Brush size={24} />} 
             active={currentView === 'ATELIER'} 
             onClick={() => onViewChange('ATELIER')}
-            tooltip="Atelier (Create)"
+            tooltip="3. Atelier Generativo"
           />
           <NavItem 
-            icon={<PenTool size={24} />} 
+            icon={<Shirt size={24} />} 
             active={currentView === 'MOCKUP'} 
             onClick={() => onViewChange('MOCKUP')}
-            tooltip="Mockup Studio"
+            tooltip="4. Provador Virtual"
           />
           <NavItem 
             icon={<History size={24} />} 
             active={currentView === 'HISTORY'} 
             onClick={() => onViewChange('HISTORY')}
-            tooltip="Histórico"
+            tooltip="Acervo Pessoal"
           />
         </nav>
       </div>
@@ -65,25 +65,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Nav */}
       <div className="flex md:hidden w-full justify-between items-center px-4">
           <NavItem 
-            icon={<LayoutDashboard size={24} />} 
+            icon={<ScanLine size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
             isMobile
           />
           <NavItem 
-            icon={<Palette size={24} />} 
+            icon={<Globe size={24} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
             isMobile
           />
           <NavItem 
-            icon={<Brush size={24} />} 
+            icon={<Palette size={24} />} 
             active={currentView === 'ATELIER'} 
             onClick={() => onViewChange('ATELIER')}
             isMobile
           />
            <NavItem 
-            icon={<PenTool size={24} />} 
+            icon={<Shirt size={24} />} 
             active={currentView === 'MOCKUP'} 
             onClick={() => onViewChange('MOCKUP')}
             isMobile
@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="p-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all animate-pulse"
             title="Instalar App"
           >
-            <Download size={20} />
+            <React.Fragment>↓</React.Fragment>
           </button>
         )}
       </div>

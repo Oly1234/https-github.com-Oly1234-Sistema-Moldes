@@ -29,7 +29,7 @@ export default function App() {
 
   // --- AUTO-UPDATE & PWA LOGIC ---
   useEffect(() => {
-    const APP_VERSION = '6.3-PERSISTENCE';
+    const APP_VERSION = '6.4-WORKFLOW';
     const checkUpdate = async () => {
         try {
             const storedVersion = localStorage.getItem('vingi_app_version');
@@ -98,11 +98,13 @@ export default function App() {
         </div>
         
         <div style={{ display: view === 'CREATOR' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
-            <PatternCreator />
+            {/* onNavigateToAtelier leva da Busca para o Atelier */}
+            <PatternCreator onNavigateToAtelier={() => setView('ATELIER')} />
         </div>
 
         <div style={{ display: view === 'ATELIER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
-            <AtelierSystem />
+            {/* onNavigateToMockup leva do Atelier para o Provador */}
+            <AtelierSystem onNavigateToMockup={() => setView('MOCKUP')} />
         </div>
 
         <div style={{ display: view === 'MOCKUP' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
