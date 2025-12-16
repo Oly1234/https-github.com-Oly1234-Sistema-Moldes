@@ -26,7 +26,7 @@ const SANITIZATION_MAP = {
     "lady": "style",
     "model": "composition",
     "wearing": "featuring",
-    "dress": "textile design", // "Dress" confunde a IA para desenhar uma roupa 3D. Queremos o tecido plano.
+    "dress": "textile design", 
     "shirt": "fabric print",
     "skirt": "surface pattern",
     
@@ -59,7 +59,7 @@ const callGeminiImage = async (apiKey, prompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
-    // CONFIGURAÇÃO SEGURA: Sem generationConfig (evita erro 400) e filtros permissivos
+    // CONFIGURAÇÃO SEGURA: Sem generationConfig (evita erro 400)
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -112,28 +112,51 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         return sanitizeText(c.name) + ` (${c.hex})`; 
     }).join(', ');
 
-    const colorInstruction = safeColors ? `Palette: ${safeColors}.` : "Palette: Harmonious trend colors.";
+    const colorInstruction = safeColors 
+        ? `Aplicar paleta cromática precisa: ${safeColors}. Cores chapadas e harmoniosas.` 
+        : "Aplicar paleta cromática harmoniosa e comercial.";
 
     // 2. SANITIZAÇÃO DO PROMPT DO USUÁRIO
-    // Se o usuário digitou "Floral dress on a model", isso vira "Floral textile design on a composition".
     let safePrompt = sanitizeText(prompt);
-    if (!safePrompt || safePrompt.length < 3) safePrompt = "Abstract artistic textile pattern";
+    if (!safePrompt || safePrompt.length < 3) safePrompt = "Estampa botânica contemporânea";
 
-    // 3. PROMPT OTIMIZADO (Senior Textile Designer Persona)
-    // Força a IA a criar um ARQUIVO TÉCNICO (Flat 2D), não uma foto realista.
+    // 3. DEFINIÇÃO DE CONSTRUÇÃO (Baseado no JSON 'construction_variations')
+    let constructionPrompt = "";
+    switch(layout) {
+        case 'Barrada':
+            constructionPrompt = "CONSTRUÇÃO: Estruturar a estampa em dois sistemas coordenados: área corrida principal no topo e BARRADO ORNAMENTAL horizontal na base, com elementos estilizados.";
+            break;
+        case 'Localizada':
+            constructionPrompt = "CONSTRUÇÃO: Desenvolver estampa LOCALIZADA MODULAR, mantendo leitura central clara e elementos distribuídos de forma equilibrada, preservando áreas de respiro visual (Negative Space).";
+            break;
+        default: // Corrida
+            constructionPrompt = "CONSTRUÇÃO: Organizar a estampa em sistema TOTALMENTE CORRIDO (All-over), com distribuição orgânica dos motivos e repetição contínua (Rapport perfeito), sem hierarquia direcional evidente.";
+            break;
+    }
+
+    // 4. PROMPT MESTRE (Adaptação Fiel do JSON 'base_textile_floral_contemporary')
+    // Usamos Inglês para melhor interpretação da IA, mas mantendo a lógica estrita.
     const MASTER_PROMPT = `
-    Create a professional textile design file (Surface Pattern Design).
+    ACT AS: Senior Textile Designer (20+ Years Experience).
+    TASK: Create a professional High-Resolution Textile Print Design (Surface Pattern).
     
-    TECHNICAL BRIEF:
-    - Motif: ${safePrompt}.
+    // DESIGN BRIEF (Contemporary Professional Style)
+    - SUBJECT: ${safePrompt}.
+    - STYLE: Stylized clean illustration, professional vector trace. Sophisticated and commercial.
+    - COMPOSITION: Balanced composition with clear reading of elements.
+    - TECHNIQUE: Organic vector style, precise lines. 
+    
+    // COLOR & FINISH
     - ${colorInstruction}
-    - Technique: ${styleGuide}, Screen Print aesthetic, Clean Vector Lines.
-    - View: FLAT 2D SWATCH (Top-down view). NO shadows, NO folds, NO 3D rendering.
-    - Layout: ${layout}, ${repeat}.
-    - Quality: Production-ready artwork.
+    - FINISH: Solid flat colors (Cores Chapadas) with subtle internal tonal variations.
+    - CONSTRAINT: NO pictorial textures, NO watercolor blur, NO grain/noise. Clean definition.
     
-    RESTRICTIONS:
-    - IGNORE any reference to human figures, bodies, or anatomy if present in the motif description. Convert them to abstract artistic shapes.
+    // TECHNICAL SPECS
+    - ${constructionPrompt}
+    - REPEAT: ${repeat} (Seamless perfect rapport).
+    - VIEW: FLAT 2D SWATCH (Top-down view). NO shadows, NO fabric folds, NOT a photo of a dress. Just the artwork.
+    
+    OUTPUT: A production-ready textile file.
     `;
 
     try {
@@ -141,25 +164,26 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     } catch (e) {
         const errString = e.message || e.toString();
         
-        // 4. FALLBACK QUÂNTICO (Se falhar, tentamos algo 100% seguro)
+        // 5. FALLBACK "MEMORÁVEL" (Simplificado mas com qualidade)
         if (errString.includes("SAFETY_BLOCK") || errString.includes("400") || errString.includes("503") || errString.includes("Erro")) {
-            console.warn("Block detected. Engaging Safe Geometry Fallback...");
+            console.warn("Block detected. Engaging 'Memorável' Fallback...");
             
             const SAFE_FALLBACK_PROMPT = `
-            Abstract Geometric Pattern.
-            Theme: ${safePrompt.substring(0, 30)} inspired shapes.
+            Textile Pattern Design.
+            Theme: ${safePrompt.substring(0, 50)}.
+            Style: Flat Vector Art, Clean Lines, Solid Colors.
+            Composition: Seamless Repeat Pattern.
             ${colorInstruction}
-            Style: Bauhaus, Minimalist, Vector Art.
-            View: Flat 2D Texture.
+            View: 2D Texture Swatch.
             `;
             
             try {
                 return await callGeminiImage(apiKey, SAFE_FALLBACK_PROMPT);
             } catch (retryError) {
-                // Última tentativa: Abstração pura
+                // Última tentativa: Abstração Geométrica Pura (Garantia de não falhar)
                 const LAST_RESORT_PROMPT = `
-                Beautiful seamless fabric pattern.
-                Style: Abstract stripes and shapes.
+                Geometric seamless pattern.
+                Style: Modern, abstract shapes, clean lines.
                 ${colorInstruction}
                 `;
                 return await callGeminiImage(apiKey, LAST_RESORT_PROMPT);
