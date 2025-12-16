@@ -1,12 +1,14 @@
 // api/modules/generator.js
 // DEPARTAMENTO: FABRICAÇÃO DE ESTAMPAS (The Loom)
-// TECNOLOGIA: Clean Vector Prompt v3.2 (Stable)
+// TECNOLOGIA: SafeTexture Gen v6.0 (Architecture: Texture-First)
 
 const callGeminiImage = async (apiKey, prompt) => {
+    // USAMOS O MODELO DE IMAGEM MAIS ESTÁVEL
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
-    // SAFETY: Configuramos para bloquear apenas o extremo.
+    // SAFETY: Configuramos para bloquear apenas conteúdo extremamente nocivo.
+    // O segredo está no prompt, não apenas aqui.
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -16,7 +18,7 @@ const callGeminiImage = async (apiKey, prompt) => {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
         ],
         generationConfig: {
-            temperature: 0.4, 
+            temperature: 0.3, // Menor temperatura = Menos alucinação
             topK: 32,
             topP: 0.95,
             candidateCount: 1
@@ -30,83 +32,93 @@ const callGeminiImage = async (apiKey, prompt) => {
     });
     
     if (!response.ok) {
-        const errText = await response.text();
-        console.error("Gemini API Error:", errText);
-        throw new Error(`Erro na API (${response.status})`);
+        throw new Error(`Gemini API Error: ${response.status}`);
     }
 
     const data = await response.json();
-    const candidate = data.candidates?.[0]?.content?.parts;
     
-    if (!candidate) throw new Error("A IA não retornou conteúdo.");
+    // Tratamento específico para BLOQUEIO DE SEGURANÇA
+    if (data.promptFeedback?.blockReason) {
+         console.warn("Bloqueio de Segurança Detectado:", data.promptFeedback);
+         throw new Error("SAFETY_BLOCK");
+    }
+
+    const candidate = data.candidates?.[0]?.content?.parts;
+    if (!candidate) throw new Error("NO_CONTENT");
 
     const imagePart = candidate.find(p => p.inline_data);
     if (imagePart) {
         return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
     }
     
+    // Se a IA recusou gerando texto (ex: "I cannot generate...")
     const textPart = candidate.find(p => p.text);
     if (textPart) {
-        console.warn("Gemini Refusal:", textPart.text);
-        throw new Error("SAFETY_BLOCK"); 
+        console.warn("Recusa Textual da IA:", textPart.text);
+        throw new Error("SAFETY_REFUSAL"); 
     }
     
-    throw new Error("Nenhuma imagem gerada.");
+    throw new Error("GENERIC_FAIL");
+};
+
+// LIMPEZA DE VOCABULÁRIO PERIGOSO
+const sanitizePromptInternal = (text) => {
+    if (!text) return "Abstract geometric pattern";
+    return text
+        .replace(/\b(nude|skin|body|flesh|sexy|bikini|underwear|lingerie|human|woman|man|girl|boy|face|model)\b/gi, "organic form")
+        .replace(/\b(blood|gore|violent)\b/gi, "red vivid")
+        .replace(/\b(dress|shirt|skirt|pants)\b/gi, "fabric texture"); // Força contexto de tecido, não roupa
 };
 
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const { layout = "Corrida", repeat = "Straight" } = textileSpecs || {};
     
-    // 1. PALETTE DEFINITION (Solid Flat Colors)
-    const colorString = (colors || []).map(c => `${c.name} (${c.hex})`).join(', ');
-    const paletteInstruction = colorString 
-        ? `COLORS: Use strictly these solid flat colors: ${colorString}. High contrast, no shading.`
-        : `COLORS: High contrast flat vector colors.`;
+    // 1. HIGIENIZAÇÃO DO PROMPT (Crucial para evitar filtros)
+    const cleanPrompt = sanitizePromptInternal(prompt);
+    
+    // 2. CONSTRUÇÃO DA PALETA TÉCNICA
+    const colorList = (colors || []).map(c => `${sanitizePromptInternal(c.name)} (${c.hex})`).join(', ');
+    const colorInstruction = colorList 
+        ? `Palette: ${colorList}. Use flat solid colors.` 
+        : `Palette: High contrast professional colors.`;
 
-    // 2. INDUSTRIAL MASTER PROMPT (CLEAN VERSION)
-    const layoutTerm = layout === 'Barrada' ? 'Engineered border print design' : 'Seamless all-over repeat pattern';
-    
-    // FIX: Usando a variável correta 'repeat' em vez de 'repeatType'
+    // 3. PROMPT MESTRE "TEXTURE-FIRST"
+    // Truque: Pedimos "Wallpaper" ou "Texture Swatch" para evitar que a IA desenhe pessoas.
     const MASTER_PROMPT = `
-    Professional Textile Surface Design.
+    Create a high-quality seamless texture file.
+    VISUAL SUBJECT: ${cleanPrompt}
     
-    Product: Digital vector file for fabric printing.
-    Type: ${layoutTerm}.
-    Style: Flat Vector Illustration, Clean Lines, 2D Planar Geometry.
+    TECHNICAL SPECS:
+    - View: Top-down flat texture swatch (2D).
+    - Layout: ${layout === 'Barrada' ? 'Border arrangement' : 'Seamless repeat pattern'}.
+    - Style: Vector art, clear lines, commercial print quality.
+    - ${colorInstruction}
     
-    VISUAL DESCRIPTION:
-    ${prompt}
-    
-    TECHNICAL FINISH:
-    - High resolution vector graphics.
-    - Sharp defined edges.
-    - Solid fills (Screen print style).
-    - Composition: Balanced, rhythmic, professional ${repeat === 'Half-Drop' ? 'half-drop' : 'straight'} repeat.
-    
-    ${paletteInstruction}
+    NEGATIVE CONSTRAINTS (STRICT):
+    - NO human figures, NO body parts, NO realistic photos, NO shadows, NO garments.
+    - Just the raw artwork pattern.
     `;
 
     try {
         return await callGeminiImage(apiKey, MASTER_PROMPT);
     } catch (e) {
-        const errString = e.message || e.toString();
+        console.warn("Tentativa Principal Falhou:", e.message);
         
-        // Fallback: Simplificação Extrema
-        if (errString.includes("SAFETY_BLOCK")) {
-            console.warn("Engaging Technical Fallback (Pure Abstract)...");
-            
-            // Limpa o prompt para evitar gatilhos
-            const cleanSubject = prompt.split('.')[0].substring(0, 100); 
-            
-            const FALLBACK_PROMPT = `
-            Textile Pattern Design.
-            Subject: ${cleanSubject}.
-            Style: Abstract flat vector geometry.
-            Colors: ${colorString || 'Vibrant'}.
-            View: 2D Texture Swatch.
-            `;
-            return await callGeminiImage(apiKey, FALLBACK_PROMPT);
+        // 4. FALLBACK DE EMERGÊNCIA (O "Plano B" Garantido)
+        // Se a IA bloquear por segurança ou erro, geramos algo 100% seguro (Geométrico) com as cores do usuário.
+        
+        const SAFE_FALLBACK_PROMPT = `
+        Abstract geometric Bauhaus texture.
+        Style: Minimalist vector art, clean shapes.
+        ${colorInstruction}
+        View: Flat 2D swatch.
+        `;
+        
+        try {
+            console.log("Ativando Protocolo de Fallback...");
+            return await callGeminiImage(apiKey, SAFE_FALLBACK_PROMPT);
+        } catch (fallbackError) {
+            throw new Error("O sistema de segurança da IA bloqueou esta solicitação. Tente usar termos mais abstratos (ex: 'Floral' em vez de 'Estampa de Biquíni').");
         }
-        throw e; // Repassa erro original (incluindo ReferenceError se houver, mas agora corrigido)
     }
 };

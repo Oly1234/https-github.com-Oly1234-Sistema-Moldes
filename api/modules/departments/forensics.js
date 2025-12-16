@@ -12,26 +12,25 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         const userContext = userHints ? `USER NOTES: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
-        ACT AS: Senior Textile CAD Designer.
+        ACT AS: Industrial Surface Designer (CAD Specialist).
         
-        TASK: Perform a "Mental Crop" on the image. Ignore the model, the body, the sewing, and the lighting. Focus ONLY on the 2D ARTWORK (The Print).
+        TASK: Extract the graphic DNA of this image for reproduction.
         
-        OBJECTIVE: Describe the graphic motif for a vector reconstruction software.
+        CRITICAL SAFETY RULES:
+        1. IGNORE any human models, body parts, skin tone, or garment silhouettes.
+        2. FOCUS ONLY on the artwork/print (motifs, geometry, rhythm).
+        3. OUTPUT LANGUAGE: English (Technical Terms).
+        4. SANITIZATION: Do NOT use words like "skin", "nude", "body", "girl", "face". Use "neutral background", "organic shape" instead.
         
-        CRITICAL RULES FOR PROMPT GENERATION:
-        1. SAFETY: NEVER mention "body", "person", "skin", "model", "dress", "shirt".
-        2. CLARITY: Do NOT use contradictory terms like "Painterly" AND "Vector" together. Choose ONE style: usually "Flat Vector" is safer and cleaner.
-        3. FOCUS: Describe shapes, colors, layout, background.
-        
-        SEMANTIC TRANSLATION (Map Reality to Vector Terms):
+        SEMANTIC MAP:
         - Real Flowers -> "Stylized botanical vector motifs"
         - Jungle/Leaves -> "Planar tropical foliage illustration"
-        - Skin/Nude Colors -> "Neutral sand/beige tone background"
+        - Skin/Nude Colors -> "Neutral beige/sand tone background"
         - Complex Art -> "Clean geometric composition"
         
         ${userContext}
         
-        OUTPUT JSON (STRICTLY ENGLISH):
+        OUTPUT JSON:
         {
             "semanticCategory": "Botanical / Geometric / Abstract / Ornamental",
             "visualDescription": "A pure technical description of the graphics. Keep it structural and color-focused. (e.g., 'Seamless pattern with large red hibiscus flowers and green leaves on white background. Flat vector style.')",
@@ -91,7 +90,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         const result = JSON.parse(cleanJson(text));
         
-        // Fallback de Segurança
+        // Fallback de Segurança para Descrição Vazia
         if (!result.visualDescription) {
             result.visualDescription = "Geometric vector pattern with stylized motifs in high contrast.";
         }

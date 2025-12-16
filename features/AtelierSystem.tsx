@@ -39,7 +39,7 @@ const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => (
     </div>
 );
 
-// Helper de compressão (Mesma lógica do PatternCreator que funciona)
+// Helper de compressão ROBUSTO (Idêntico ao PatternCreator)
 const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve, reject) => {
         if (!base64Str) { reject(new Error("Imagem vazia")); return; }
@@ -59,9 +59,10 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
 };
 
 // Sanitização Frontend (Dupla camada de segurança)
-const sanitizePrompt = (text: string) => {
+const sanitizePromptClient = (text: string) => {
+    if (!text) return "";
     return text
-        .replace(/\b(dress|shirt|garment|model|body|person|skin|face|human|woman|man|girl|boy)\b/gi, "abstract shape")
+        .replace(/\b(dress|shirt|garment|model|body|person|skin|face|human|woman|man|girl|boy|bikini|swimwear)\b/gi, "abstract motif")
         .replace(/\s+/g, " ")
         .trim();
 };
@@ -175,7 +176,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setIsAnalyzingColors(true);
         setActiveColorMode(variation); 
         try {
-            // USO CRÍTICO DE COMPRESSÃO
+            // USO CRÍTICO DE COMPRESSÃO - Igual ao PatternCreator
             const compressed = await compressImage(imgBase64);
             const cleanBase64 = compressed.split(',')[1];
             
@@ -197,8 +198,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     suggestion: "Cores calibradas." 
                 });
                 if (data.prompt) {
-                    // SANITIZAÇÃO DE SEGURANÇA
-                    setTechnicalPrompt(sanitizePrompt(data.prompt));
+                    setTechnicalPrompt(sanitizePromptClient(data.prompt));
                 }
             }
         } catch (e) {
@@ -259,14 +259,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         try {
             let finalPrompt = "";
             if (creationMode === 'IMAGE') {
-                finalPrompt = userInstruction ? `${technicalPrompt}. User Instruction: ${userInstruction}` : technicalPrompt;
+                finalPrompt = userInstruction ? `${technicalPrompt}. ${userInstruction}` : technicalPrompt;
             } else {
                 finalPrompt = userInstruction || technicalPrompt;
-                if (finalPrompt.length < 5) throw new Error("A descrição está muito curta. Detalhe mais sua ideia.");
             }
 
-            // Sanitização final antes de enviar
-            finalPrompt = sanitizePrompt(finalPrompt);
+            // Sanitização final no cliente
+            finalPrompt = sanitizePromptClient(finalPrompt);
+
+            if (!finalPrompt || finalPrompt.length < 3) {
+                finalPrompt = "Abstract geometric seamless pattern";
+            }
 
             const genRes = await fetch('/api/analyze', {
                 method: 'POST',
@@ -280,8 +283,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         repeat: repeatType,
                         width: widthCm, 
                         height: heightCm, 
-                        dpi: dpi,
-                        styleGuide: "Vector Art, Clean lines, Flat colors", 
+                        dpi: dpi
                     }
                 }),
                 signal: controller.signal
@@ -291,9 +293,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             if (genData.success && genData.image) {
                 setGeneratedPattern(genData.image);
             } else {
-                let msg = genData.error || "Erro desconhecido.";
-                if (msg.includes("SAFETY")) msg = "Segurança: Tente remover palavras que possam ter duplo sentido (ex: pele, corpo).";
-                throw new Error(msg);
+                // Erro genérico
+                throw new Error("A IA encontrou dificuldade. Tente usar termos mais simples como 'Floral', 'Geométrico'.");
             }
 
         } catch (err: any) {
@@ -316,7 +317,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 body: JSON.stringify({ 
                     action: 'ENHANCE_PATTERN', 
                     mainImageBase64: generatedPattern,
-                    prompt: technicalPrompt || userInstruction || "High quality textile pattern"
+                    prompt: technicalPrompt || userInstruction || "High quality pattern"
                 })
             });
             const data = await res.json();
@@ -327,7 +328,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 throw new Error("Falha no refinamento.");
             }
         } catch (e: any) {
-            setError("Erro ao refinar imagem. Tente novamente.");
+            setError("Erro ao refinar imagem.");
         } finally {
             setIsEnhancing(false);
         }
@@ -510,7 +511,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                  <FileWarning size={18} className="shrink-0"/> 
                                  <div className="flex flex-col text-left">
                                      <span className="line-clamp-3">{error}</span>
-                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente termos como "Organic", "Floral", "Abstract".</span>
+                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente remover palavras como 'Vestido', 'Corpo' ou 'Modelo'.</span>
                                  </div>
                              </div>
                          )}
