@@ -3,8 +3,6 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
 // TECNOLOGIA: Vingi Neuro-Bridge (Semantic Safety Negotiation)
 
-// Mapeamento estático rápido (Nível 1 de Segurança - EXECUÇÃO IMEDIATA)
-// Expandido para cobrir gatilhos comuns que confundem a IA (Anatomia vs Botânica)
 const SANITIZATION_MAP = {
     "hot pink": "vibrant magenta",
     "flesh tone": "warm beige",
@@ -32,7 +30,7 @@ const SANITIZATION_MAP = {
     "breast": "chest",
     "chest": "torso",
     "nipple": "point",
-    "realistic": "hyper-detailed illustration", // Realismo muitas vezes trigga filtros de deepfake
+    "realistic": "hyper-detailed illustration",
     "photo": "high definition render",
     "photograph": "digital art"
 };
@@ -40,15 +38,11 @@ const SANITIZATION_MAP = {
 const sanitizePrompt = (text) => {
     if (!text) return "Abstract textile pattern";
     let safeText = text.toLowerCase();
-    
-    // Substituição agressiva local para evitar round-trip na API
     Object.keys(SANITIZATION_MAP).forEach(forbidden => {
         const safe = SANITIZATION_MAP[forbidden];
-        // Regex com boundary (\b) para não substituir palavras parciais incorretamente
         const regex = new RegExp(`\\b${forbidden}\\b`, 'gi');
         safeText = safeText.replace(regex, safe);
     });
-    
     return safeText;
 };
 
@@ -56,8 +50,8 @@ const callGeminiImage = async (apiKey, prompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
-    // Configuração de segurança permissiva ao máximo permitido para Arte
-    // REMOVIDO generationConfig inválido que causava erro 400
+    // CRITICAL FIX: DO NOT INCLUDE generation_config OR generationConfig FOR IMAGE MODELS
+    // The presence of 'response_mime_type' triggers a 400 Invalid Argument error.
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -75,9 +69,12 @@ const callGeminiImage = async (apiKey, prompt) => {
     });
     
     if (!response.ok) {
-        // Se der 500/503 do Google, lançamos erro para o retry pegar
         const errText = await response.text();
-        throw new Error(`Google API Error (${response.status}): ${errText}`);
+        // Log interno para debug, mas lança erro genérico ou específico tratado
+        console.error("Gemini API Error:", errText);
+        if (response.status === 400) throw new Error("Erro de parâmetro na IA (400).");
+        if (response.status === 503) throw new Error("IA sobrecarregada (503).");
+        throw new Error(`Erro na API (${response.status})`);
     }
 
     const data = await response.json();
@@ -92,7 +89,6 @@ const callGeminiImage = async (apiKey, prompt) => {
     
     const textPart = candidate.find(p => p.text);
     if (textPart) {
-        // Se a IA retornou texto, é uma recusa de segurança ou chat
         console.warn("Gemini Refusal:", textPart.text);
         throw new Error("SAFETY_BLOCK"); 
     }
@@ -101,9 +97,8 @@ const callGeminiImage = async (apiKey, prompt) => {
 };
 
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
-    const { layout = "Corrida", repeat = "Straight", styleGuide = "Vector Art", dpi = 300 } = textileSpecs || {};
+    const { layout = "Corrida", repeat = "Straight", styleGuide = "Vector Art" } = textileSpecs || {};
     
-    // INJEÇÃO DE CORES "QUANTUM PALETTE"
     const colorList = colors && colors.length > 0 
         ? colors.map(c => `${c.name} (${c.hex})`).join(', ') 
         : 'harmonious trend colors';
@@ -112,7 +107,6 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     if (layout === 'Barrada') layoutInstruction = "Engineered Border Print (Heavy bottom, open top)";
     else if (layout === 'Localizada') layoutInstruction = "Placement Print (Centralized motif, isolated)";
 
-    // 1. TENTATIVA PADRÃO (SANITIZADA NIVEL 1)
     let initialPrompt = sanitizePrompt(prompt);
 
     const RAW_DIGITAL_PROMPT = `
@@ -128,14 +122,10 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     try {
         return await callGeminiImage(apiKey, RAW_DIGITAL_PROMPT);
     } catch (e) {
-        // Se for bloqueio de segurança ou erro 500 do Google ou erro 400 (Bad Request) que pode ser contornado
         const errString = e.message || e.toString();
-        if (errString.includes("SAFETY_BLOCK") || errString.includes("500") || errString.includes("503") || errString.includes("400")) {
-            console.warn("Block detected. Engaging Instant Quantum Fallback...");
-            
-            // 2. FALLBACK IMEDIATO (QUANTUM ABSTRACTION)
-            // Pulamos a "Neuro-Negociação" de texto (LLM) para evitar Timeout (503) da Vercel.
-            // Vamos direto para um prompt "Seguro Garantido" que mantém as cores e o layout.
+        // Catch both SAFETY_BLOCK and the 400/500 errors to trigger fallback
+        if (errString.includes("SAFETY_BLOCK") || errString.includes("400") || errString.includes("503") || errString.includes("Erro")) {
+            console.warn("Generation Issue detected. Engaging Instant Quantum Fallback...");
             
             const SAFE_GEOMETRY_PROMPT = `
             Abstract Geometric Art Pattern.
@@ -149,8 +139,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
             try {
                 return await callGeminiImage(apiKey, SAFE_GEOMETRY_PROMPT);
             } catch (retryError) {
-                // Se até a geometria falhar, retornamos um erro amigável para o front não crashar
-                throw new Error("O sistema de segurança bloqueou todas as tentativas. Tente usar termos mais simples como 'Geometric', 'Stripes' ou 'Floral'.");
+                throw new Error("O sistema de segurança bloqueou a criação. Tente usar termos mais simples como 'Geométrico' ou 'Abstrato'.");
             }
         }
         throw e;

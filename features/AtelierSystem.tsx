@@ -21,40 +21,23 @@ const triggerTransfer = (targetModule: string, imageData: string, textureData?: 
     }));
 };
 
-// ATUALIZADO: Visual mais limpo, foco no código. Nome discreto.
 const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => (
     <div 
         className="flex flex-col bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-20 w-full group relative"
         title={`${color.name} (Clique para copiar)`}
         onClick={() => { navigator.clipboard.writeText(`${color.code} (${color.hex})`); }}
     >
-        {/* Color Block */}
         <div className="h-12 w-full relative" style={{ backgroundColor: color.hex }}>
              <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-black"></div>
         </div>
-        
-        {/* Info Block */}
         <div className="p-1.5 flex flex-col justify-center h-8 bg-white border-t border-gray-100">
-            {/* Linha 1: Código TCX (Destaque) */}
-            <span className="text-[10px] font-bold text-gray-800 font-mono tracking-tight leading-none">
-                {color.code}
-            </span>
-            {/* Linha 2: Nome ou Hex (Discreto) */}
+            <span className="text-[10px] font-bold text-gray-800 font-mono tracking-tight leading-none">{color.code}</span>
             <div className="flex justify-between items-center mt-0.5">
-                <span className="text-[8px] text-gray-400 font-medium truncate max-w-[80%] uppercase">
-                    {color.name || color.hex}
-                </span>
+                <span className="text-[8px] text-gray-400 font-medium truncate max-w-[80%] uppercase">{color.name || color.hex}</span>
             </div>
         </div>
     </div>
 );
-
-const SIZE_PRESETS = [
-    { label: "Rapport 64", w: 64, h: 64, desc: "Padrão Indústria" },
-    { label: "Rapport 32", w: 32, h: 32, desc: "Mini-Rapport" },
-    { label: "Digital 145", w: 145, h: 100, desc: "Largura Útil" },
-    { label: "Painel", w: 100, h: 140, desc: "Localizado" }
-];
 
 interface AtelierSystemProps {
     onNavigateToMockup?: () => void;
@@ -88,7 +71,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [widthCm, setWidthCm] = useState<number>(64);
     const [heightCm, setHeightCm] = useState<number>(64);
     const [dpi, setDpi] = useState<72 | 150 | 300>(300);
-    const [selvedgeInfo, setSelvedgeInfo] = useState(true);
 
     // Texture Overlay Post-Process
     const [textureType, setTextureType] = useState<'None' | 'Cotton' | 'Linen' | 'Silk' | 'Canvas'>('None');
@@ -100,7 +82,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     // State
     const [isGenerating, setIsGenerating] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
-    const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false); // New State
+    const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
     const [isAnalyzingColors, setIsAnalyzingColors] = useState(false);
     const [genStep, setGenStep] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -117,7 +99,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         }
     }, []);
 
-    // Animation Loop
     useEffect(() => {
         let interval: any;
         if (isGenerating) {
@@ -155,16 +136,14 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setCreationMode('TEXT');
         setReferenceImage(null);
         setGeneratedPattern(null);
-        setColorData(null); // No colors initially in text mode
+        setColorData(null);
         setError(null);
         setDpi(300);
         setWidthCm(64);
         setHeightCm(64);
-        // Set a placeholder technical prompt to guide generation if user doesn't type much
         setTechnicalPrompt("Seamless textile pattern");
     };
 
-    // Independent Color Analysis
     const analyzeColors = async (imgBase64: string, variation: 'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK') => {
         setIsAnalyzingColors(true);
         setActiveColorMode(variation); 
@@ -205,7 +184,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         }
     };
 
-    // --- PROMPT ENHANCER ---
     const handlePromptEnhance = async () => {
         if (!userInstruction || userInstruction.length < 3) return;
         setIsEnhancingPrompt(true);
@@ -244,16 +222,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         abortControllerRef.current = controller;
 
         try {
-            // Logic: Use Technical Prompt (from Image Analysis) OR User Instruction (Text Mode)
             let finalPrompt = "";
-            
             if (creationMode === 'IMAGE') {
-                // Image Mode: Merge Technical + User Hints
-                finalPrompt = userInstruction 
-                    ? `${technicalPrompt}. User Instruction: ${userInstruction}` 
-                    : technicalPrompt;
+                finalPrompt = userInstruction ? `${technicalPrompt}. User Instruction: ${userInstruction}` : technicalPrompt;
             } else {
-                // Text Mode: Rely heavily on User Instruction
                 finalPrompt = userInstruction || technicalPrompt;
                 if (finalPrompt.length < 5) throw new Error("A descrição está muito curta. Detalhe mais sua ideia.");
             }
@@ -372,11 +344,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             )}
 
             {!creationMode ? (
-                // LANDING STATE: DUAL CHOICE
-                // ADDED overflow-y-auto to fix mobile scrolling
                 <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 animate-fade-in bg-gradient-to-b from-[#f8fafc] to-gray-50 overflow-y-auto">
                     <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
-                    
                     <div className="text-center mb-10 max-w-2xl">
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-vingi-900 text-white mb-6 shadow-xl shadow-vingi-900/20">
                             <Palette size={32} />
@@ -386,9 +355,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             Escolha como deseja criar sua estampa. Use IA para reinterpretar imagens ou crie do zero com prompts textuais.
                         </p>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl pb-10">
-                        {/* CARD 1: REFERENCE */}
                         <button 
                             onClick={() => fileInputRef.current?.click()}
                             className="bg-white p-8 rounded-3xl border border-gray-200 shadow-xl hover:shadow-2xl hover:border-vingi-400 hover:-translate-y-1 transition-all group text-left relative overflow-hidden"
@@ -408,7 +375,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             </div>
                         </button>
 
-                        {/* CARD 2: TEXT */}
                         <button 
                             onClick={handleTextSession}
                             className="bg-white p-8 rounded-3xl border border-gray-200 shadow-xl hover:shadow-2xl hover:border-purple-400 hover:-translate-y-1 transition-all group text-left relative overflow-hidden"
@@ -430,10 +396,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     </div>
                 </div>
             ) : (
-                // WORKSPACE (Unified for both modes)
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                    
-                    {/* VISUALIZATION PANEL */}
                     <div className="order-1 md:order-2 flex-1 bg-slate-900 relative flex items-center justify-center overflow-hidden min-w-0 h-[55vh] md:h-full">
                          <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#ffffff_1px,transparent_1px),linear-gradient(90deg,#ffffff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
 
@@ -465,7 +428,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                              <div className="absolute inset-0 pointer-events-none z-10 transition-all duration-300" style={getTextureStyle()}></div>
                                          )}
                                      </div>
-                                     {/* Texture Controls */}
                                      <div className="absolute bottom-4 bg-gray-900/90 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-700 flex items-center gap-4 animate-slide-up z-50 overflow-x-auto max-w-[90%]">
                                          <div className="flex flex-col gap-1 shrink-0">
                                              <span className="text-[9px] font-bold text-gray-400 uppercase">Acabamento</span>
@@ -484,10 +446,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                  </div>
                                              </>
                                          )}
-                                     </div>
-                                     <div className="absolute top-4 right-4 flex gap-2">
-                                         {isEnhanced && <div className="bg-green-500/90 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-bold border border-green-400 shadow-lg animate-pulse z-30 flex items-center gap-1"><Sparkles size={10}/> HI-RES POLISHED</div>}
-                                         <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-mono border border-white/10 z-30">{widthCm}x{heightCm}cm | {dpi} DPI</div>
                                      </div>
                                 </div>
                              ) : (
@@ -508,21 +466,18 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                          )}
 
                          {error && (
-                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400">
-                                 <FileWarning size={18}/> 
+                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400 max-w-sm">
+                                 <FileWarning size={18} className="shrink-0"/> 
                                  <div className="flex flex-col text-left">
-                                     <span>{error}</span>
-                                     <span className="text-[10px] opacity-80 font-normal">A Neuro-Negociação falhou. Simplifique o prompt.</span>
+                                     <span className="line-clamp-2">{error.length > 80 ? error.substring(0, 80) + '...' : error}</span>
+                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente simplificar o prompt.</span>
                                  </div>
                              </div>
                          )}
                     </div>
                     
-                    {/* CONTROLS PANEL */}
                     <div className="order-2 md:order-1 w-full md:w-[380px] lg:w-[400px] bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col z-20 shadow-xl h-[45vh] md:h-full overflow-y-auto custom-scrollbar shrink-0">
                         <div className="p-5 space-y-6 pb-20">
-                            
-                            {/* SECTION 1: DIMENSÕES */}
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
                                     <Ruler size={14} className="text-vingi-500"/> Dimensões Digitais
@@ -542,42 +497,24 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <button key={val} onClick={() => setDpi(val as any)} className={`flex-1 py-1.5 rounded text-[10px] font-bold ${dpi === val ? 'bg-white text-vingi-900 shadow-sm' : 'text-gray-400'}`}>{val}</button>
                                     ))}
                                 </div>
-                                <div className="space-y-3">
-                                    <div>
-                                        <span className="text-[9px] font-bold text-gray-400 block mb-1">TIPO DE ENCAIXE</span>
-                                        <div className="flex bg-white rounded-lg border border-gray-200 p-1 gap-1">
-                                            {[{ id: 'Straight', label: 'Alinhado', icon: Grid3X3 }, { id: 'Half-Drop', label: 'Meio-Salto', icon: AlignVerticalSpaceAround }, { id: 'Mirror', label: 'Espelhado', icon: Spline }].map(t => (
-                                                <button key={t.id} onClick={() => setRepeatType(t.id as any)} className={`flex-1 py-2 rounded-md text-[10px] font-bold flex flex-col items-center gap-1 transition-all ${repeatType === t.id ? 'bg-vingi-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}><t.icon size={14}/>{t.label}</button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
 
-                            {/* SECTION 2: ESTILO & COR */}
                             <div>
                                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest mb-3 flex items-center gap-2">
                                     <Palette size={14} className="text-vingi-500"/> Direção Criativa
                                 </h3>
-                                
                                 <div className="flex gap-2 mb-3">
                                     {['Corrida', 'Barrada', 'Localizada'].map((type) => (
                                         <button key={type} onClick={() => setLayoutType(type as any)} className={`flex-1 py-2 rounded-lg border text-[10px] font-bold transition-all ${layoutType === type ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>{type}</button>
                                     ))}
                                 </div>
                                 
-                                {/* PROMPT AREA */}
                                 <div className="relative">
                                      {creationMode === 'TEXT' && (
                                          <div className="flex justify-between items-center mb-1 px-1">
                                              <span className="text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
-                                             <button 
-                                                onClick={handlePromptEnhance}
-                                                disabled={isEnhancingPrompt}
-                                                className="flex items-center gap-1 text-[9px] font-bold text-vingi-600 bg-vingi-50 px-2 py-1 rounded-md hover:bg-vingi-100 transition-colors disabled:opacity-50"
-                                             >
-                                                {isEnhancingPrompt ? <Loader2 size={10} className="animate-spin"/> : <Sparkles size={10}/>}
-                                                OTIMIZAR COM IA
+                                             <button onClick={handlePromptEnhance} disabled={isEnhancingPrompt} className="flex items-center gap-1 text-[9px] font-bold text-vingi-600 bg-vingi-50 px-2 py-1 rounded-md hover:bg-vingi-100 transition-colors disabled:opacity-50">
+                                                {isEnhancingPrompt ? <Loader2 size={10} className="animate-spin"/> : <Sparkles size={10}/>} OTIMIZAR
                                              </button>
                                          </div>
                                      )}

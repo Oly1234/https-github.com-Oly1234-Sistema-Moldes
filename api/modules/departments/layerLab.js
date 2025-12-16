@@ -7,10 +7,9 @@ const generateImage = async (apiKey, prompt) => {
     // USO CORRETO: gemini-2.5-flash-image
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
     
+    // CRITICAL: NO generationConfig allowed
     const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
-        // NENHUMA config de 'imageSize' ou 'sampleCount' permitida aqui.
-        generationConfig: {}
+        contents: [{ parts: [{ text: prompt }] }]
     };
 
     try {
@@ -31,7 +30,6 @@ const generateImage = async (apiKey, prompt) => {
         
         if (imagePart) return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         
-        // Log se houver recusa textual
         const textPart = candidate?.find(p => p.text);
         if (textPart) console.warn("LayerLab Refusal:", textPart.text);
         
@@ -51,7 +49,7 @@ export const reconstructElement = async (apiKey, cropBase64, originalPrompt) => 
             { text: "Analyze this image fragment. Identify the WHOLE object it belongs to (e.g. flower from a petal). Return JSON: { wholeObject: string, style: string }" },
             { inline_data: { mime_type: "image/png", data: cropBase64 } }
         ] }],
-        generation_config: { response_mime_type: "application/json" }
+        generationConfig: { response_mime_type: "application/json" }
     };
     
     let analysis = { wholeObject: "abstract shape", style: "vector flat style" };
@@ -71,7 +69,7 @@ export const reconstructElement = async (apiKey, cropBase64, originalPrompt) => 
         console.error("Analysis failed, using fallback");
     }
 
-    // Passo 2: Gerar o Objeto INTEIRO (Usa Flash Image com Prompt Estruturado)
+    // Passo 2: Gerar o Objeto INTEIRO (Usa Flash Image)
     const reconstructionPrompt = `
     Generate a vector illustration.
     Subject: ${analysis.wholeObject}.
