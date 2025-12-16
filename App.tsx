@@ -15,6 +15,7 @@ import { HistorySystem } from './features/HistorySystem';
 import { HomePage } from './components/HomePage';
 import { LayerStudio } from './components/LayerStudio';
 import { ViewState } from './types';
+import { Sparkles } from 'lucide-react';
 
 // Componente para barrar navegadores não suportados (ex: webview dentro de app social)
 const InstallGatekeeper: React.FC<{ onInstall: () => void, isIOS: boolean }> = ({ onInstall, isIOS }) => (
@@ -27,9 +28,37 @@ const InstallGatekeeper: React.FC<{ onInstall: () => void, isIOS: boolean }> = (
     </div>
 );
 
+// HUD Toast for Voice Commands
+const ContextHUD: React.FC<{ message: string | null }> = ({ message }) => {
+    if (!message) return null;
+    return (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-slide-down-fade pointer-events-none w-[90%] md:w-auto">
+            <div className="bg-black/80 backdrop-blur-md text-white px-6 py-4 rounded-2xl border border-white/20 shadow-2xl flex items-center gap-4">
+                <div className="bg-vingi-500/20 p-2 rounded-full">
+                    <Sparkles size={20} className="text-vingi-400 animate-pulse"/>
+                </div>
+                <div>
+                    <p className="text-[10px] uppercase font-bold text-vingi-400 tracking-widest mb-0.5">Vingi Assistant</p>
+                    <p className="text-sm font-medium leading-tight">{message}</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function App() {
   const [view, setView] = useState<ViewState>('HOME'); 
+  const [hudMessage, setHudMessage] = useState<string | null>(null);
   
+  // Navigation handler wrapper
+  const handleNavigate = (newView: ViewState, message?: string) => {
+      setView(newView);
+      if (message) {
+          setHudMessage(message);
+          setTimeout(() => setHudMessage(null), 5000); // Hide after 5s
+      }
+  };
+
   // PWA & Environment State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isMobileBrowser, setIsMobileBrowser] = useState(false);
@@ -83,9 +112,11 @@ export default function App() {
 
   return (
     <div className="flex h-[100dvh] w-full bg-[#f8fafc] text-gray-800 font-sans overflow-hidden fixed inset-0">
+      <ContextHUD message={hudMessage} />
+      
       <Sidebar 
         currentView={view} 
-        onViewChange={setView} 
+        onViewChange={(v) => handleNavigate(v)} 
         onInstallClick={handleInstallClick}
         showInstallButton={!!deferredPrompt && !isMobileBrowser}
       />
@@ -104,7 +135,7 @@ export default function App() {
         
         {/* NEW HOME PAGE DASHBOARD */}
         <div style={{ display: view === 'HOME' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
-            <HomePage onNavigate={setView} />
+            <HomePage onNavigate={handleNavigate} />
         </div>
 
         <div style={{ display: view === 'SCANNER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
@@ -113,21 +144,21 @@ export default function App() {
         
         <div style={{ display: view === 'CREATOR' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             {/* onNavigateToAtelier leva da Busca para o Atelier */}
-            <PatternCreator onNavigateToAtelier={() => setView('ATELIER')} />
+            <PatternCreator onNavigateToAtelier={() => handleNavigate('ATELIER')} />
         </div>
 
         <div style={{ display: view === 'ATELIER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             {/* onNavigateToMockup leva do Atelier para o Provador */}
             <AtelierSystem 
-                onNavigateToMockup={() => setView('MOCKUP')} 
-                onNavigateToLayerStudio={() => setView('LAYER_STUDIO')}
+                onNavigateToMockup={() => handleNavigate('MOCKUP')} 
+                onNavigateToLayerStudio={() => handleNavigate('LAYER_STUDIO')}
             />
         </div>
 
         <div style={{ display: view === 'LAYER_STUDIO' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
             <LayerStudio 
-                onNavigateBack={() => setView('ATELIER')} 
-                onNavigateToMockup={() => setView('MOCKUP')}
+                onNavigateBack={() => handleNavigate('ATELIER')} 
+                onNavigateToMockup={() => handleNavigate('MOCKUP')}
             />
         </div>
 

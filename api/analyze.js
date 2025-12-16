@@ -28,13 +28,47 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs, userHints, cropBase64 } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs, userHints, cropBase64, commandText } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
     if (!apiKey) return res.status(500).json({ error: "Chave de API não configurada no servidor." });
 
     // --- ROTEAMENTO ---
+
+    // NOVO: AGENTE DE VOZ (SEMANTIC ROUTER)
+    if (action === 'VOICE_COMMAND') {
+        const ROUTER_PROMPT = `
+        ACT AS: Vingi OS Navigation System.
+        USER SAID: "${commandText}"
+        
+        TASK: Map the user's intent to one of the following modules:
+        - 'SCANNER': For finding sewing patterns, identifying clothes, reverse engineering garments.
+        - 'CREATOR': For searching existing prints/textures in the market/global banks.
+        - 'ATELIER': For generating NEW prints from scratch, text prompts, or restoration.
+        - 'LAYER_STUDIO': For editing, removing background, separating layers, photoshop-like tasks.
+        - 'MOCKUP': For testing prints on 3D clothes, visualization, fitting.
+        - 'HISTORY': For viewing past works.
+        
+        OUTPUT JSON:
+        {
+            "targetView": "MODULE_NAME",
+            "message": "A short, futuristic, helpful context message (max 15 words) in Portuguese. Explain WHY we are going there based on the user request. Example: 'Iniciando Scanner Visual para identificar sua peça.'"
+        }
+        `;
+
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT }] }] }) 
+        });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const result = JSON.parse(cleanJson(text));
+        
+        return res.status(200).json({ success: true, ...result });
+    }
 
     if (action === 'GET_LINK_PREVIEW') {
         const contextType = (backupSearchTerm && backupSearchTerm.includes('pattern')) ? 'SURFACE' : 'CLOTHING';

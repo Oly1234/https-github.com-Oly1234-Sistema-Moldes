@@ -8,9 +8,10 @@
 import React from 'react';
 import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, MessageCircle, Layers } from 'lucide-react';
 import { ViewState } from '../types';
+import { AIVoiceAgent } from './AIVoiceAgent';
 
 interface HomePageProps {
-    onNavigate: (view: ViewState) => void;
+    onNavigate: (view: ViewState, contextMessage?: string) => void;
 }
 
 const ModuleCard: React.FC<{
@@ -58,7 +59,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     };
 
     return (
-        <div className="min-h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar">
+        <div className="min-h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar relative">
             <div className="max-w-6xl mx-auto space-y-10 pb-24">
                 
                 {/* HERO SECTION - REDESIGNED FOR EDITORIAL LOOK */}
@@ -84,6 +85,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     <p className="text-gray-500 max-w-xl mx-auto text-sm md:text-lg font-light tracking-wide mt-4">
                         <span className="font-medium text-vingi-600">Assistida por Inteligência.</span> Um ecossistema completo para escanear roupas reais, encontrar moldes técnicos e criar estampas digitais.
                     </p>
+                    
+                    {/* NEW AI VOICE AGENT */}
+                    <AIVoiceAgent onNavigate={onNavigate} />
                 </div>
 
                 {/* MODULES GRID */}

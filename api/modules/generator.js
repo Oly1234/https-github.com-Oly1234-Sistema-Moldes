@@ -3,7 +3,6 @@
 // DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
 
 // Mapeamento de termos arriscados para termos técnicos seguros
-// A ordem importa: frases compostas ("hot pink") devem vir antes de palavras simples ("hot")
 const SANITIZATION_MAP = {
     "hot pink": "vibrant magenta",
     "flesh tone": "peach color",
@@ -21,7 +20,7 @@ const SANITIZATION_MAP = {
     "hot": "vibrant", 
     "sexy": "alluring",
     "human": "silhouette",
-    "woman": "female figure", // Às vezes ajuda a abstrair
+    "woman": "female figure",
     "man": "male figure",
     "face": "portrait element",
     "child": "youth",
@@ -34,11 +33,8 @@ const sanitizePrompt = (text) => {
     if (!text) return "Abstract textile pattern";
     let safeText = text.toLowerCase();
     
-    // Substituição baseada no mapa
     Object.keys(SANITIZATION_MAP).forEach(forbidden => {
         const safe = SANITIZATION_MAP[forbidden];
-        // Usa regex com word boundaries (\b) para evitar substituir partes de palavras
-        // Mas para frases compostas como "hot pink", boundary funciona bem
         const regex = new RegExp(`\\b${forbidden}\\b`, 'gi');
         safeText = safeText.replace(regex, safe);
     });
@@ -87,9 +83,11 @@ const callGeminiImage = async (apiKey, prompt) => {
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const { layout = "Corrida", repeat = "Straight", styleGuide = "Vector Art", dpi = 300 } = textileSpecs || {};
     
-    // Injeção de Cores
+    // INJEÇÃO DE CORES "SAFE MODE"
+    // Removemos o nome da cor para evitar bloqueios (ex: "Skin" -> Bloqueio).
+    // Enviamos apenas o HEX e o Código TCX para a IA de imagem, que entende Hex perfeitamente.
     const colorList = colors && colors.length > 0 
-        ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
+        ? colors.map(c => `(${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
     let layoutInstruction = "Seamless Repeat Pattern";
@@ -102,7 +100,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const RAW_DIGITAL_PROMPT = `
     Create a professional textile design file.
     Subject: ${safeSubject}.
-    Colors: ${colorList}.
+    Palette Hex Codes: ${colorList}.
     Technique: ${styleGuide}, Flat 2D Vector Graphics, Screen Print style.
     Layout: ${layoutInstruction}, ${repeatTypeToText(repeat)}.
     Restrictions: NO photorealism, NO shading, NO 3D effects, NO biological textures. Keep it graphic and artistic.
@@ -116,11 +114,10 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
             console.warn("Safety Block detected. Retrying with SAFE_FALLBACK...");
             
             // 2. TENTATIVA DE SEGURANÇA (SAFE FALLBACK)
-            // Se falhou, removemos o prompt do usuário que pode conter o termo proibido oculto
-            // e geramos algo puramente baseado nas cores e no estilo técnico.
+            // Removemos o subject do usuário e focamos apenas na estética geométrica e nas cores (Hex).
             const SAFE_FALLBACK_PROMPT = `
             Create a beautiful Abstract Geometric Textile Pattern.
-            Colors: ${colorList}.
+            Palette Hex Codes: ${colorList}.
             Technique: Vector Art, Flat Colors.
             Style: Modern, Clean, Professional Print.
             Restrictions: No realistic objects, just shapes and colors.

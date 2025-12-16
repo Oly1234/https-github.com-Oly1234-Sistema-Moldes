@@ -1,44 +1,41 @@
 
 // DEPARTAMENTO: COLORIMETRIA & TENDÊNCIAS
 // Responsabilidade: Extração de Pantone TCX, Hex e Status de Tendência com Lógica Têxtil Brasileira
-// ATUALIZAÇÃO v6.5: Lógica de Espectrofotômetro para Tom sobre Tom e Degradês
+// ATUALIZAÇÃO v6.6: Lógica de Segurança (Safe Names) & Agrupamento Inteligente (Smart Clustering)
 
 export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson, variation = 'NATURAL') => {
-    // VARIATIONS: 'NATURAL' (As is), 'VIVID' (Boost Saturation), 'PASTEL', 'DARK'
     
     let VARIATION_INSTRUCTION = "";
-    if (variation === 'VIVID') {
-        VARIATION_INSTRUCTION = "CRITICAL: The input photo is DULL/FADED. You must SIMULATE the original, VIBRANT colors as if they were new. Boost saturation and brightness in your analysis.";
-    } else if (variation === 'PASTEL') {
-        VARIATION_INSTRUCTION = "CRITICAL: Interpret the colors as a Soft/Pastel palette.";
-    } else if (variation === 'DARK') {
-        VARIATION_INSTRUCTION = "CRITICAL: Interpret the colors as a Deep/Moody palette.";
-    }
+    if (variation === 'VIVID') VARIATION_INSTRUCTION = "Boost saturation significantly. Make colors pop.";
+    else if (variation === 'PASTEL') VARIATION_INSTRUCTION = "Shift colors to a soft, milky, pastel palette.";
+    else if (variation === 'DARK') VARIATION_INSTRUCTION = "Shift colors to deep, rich, moody tones.";
 
     const COLORIST_PROMPT = `
-    ACT AS: Advanced Textile Spectrophotometer & Senior Colorist (Pantone Certified).
-    TASK: Perform a deep colorimetric analysis of the provided textile image.
+    ACT AS: Safety-Conscious Textile Colorist & Spectrophotometer.
+    TASK: Analyze the textile image and extract the Pantone Fashion, Home + Interiors (TCX) palette.
     ${VARIATION_INSTRUCTION}
     
-    CRITICAL ANALYSIS INSTRUCTIONS:
-    1. GRADIENTS & TONE-ON-TONE: Look for relationships. Identify "Tone-on-Tone" sets.
-    2. NUANCE: Identify subtle variations.
-    3. PALETTE SIZE: Extract up to 8 distinct tones.
-    4. PANTONE MATCHING: Map strictly to Pantone FASHION, HOME + INTERIORS (TCX) Cotton Passport.
+    SAFETY NAMING PROTOCOL (CRITICAL):
+    - DO NOT use sensitive names (e.g. 'Nude', 'Flesh', 'Skin', 'Blood', 'Hot Pink').
+    - USE TECHNICAL/NATURE names (e.g. 'Sand', 'Beige', 'Crimson', 'Magenta', 'Peach').
     
-    OUTPUT JSON ONLY (Keys in English, Values in Portuguese PT-BR):
+    SMART CLUSTERING LOGIC:
+    1. GROUP BY MOTIF: List colors that appear together in the artwork side-by-side (e.g. If a flower has Yellow petals and Orange center, list Yellow then Orange).
+    2. LIMIT REDUNDANCY: If there are 5 shades of Yellow, pick only the 2 most distinct ones.
+    3. MAX COLORS: 6 to 8 colors total.
+    
+    OUTPUT JSON ONLY (Values in PT-BR for display, but names in English/International):
     {
-        "harmony": "Describe the harmony technically (Ex: 'Monocromia em Azul Profundo')",
+        "harmony": "Technical harmony description (e.g. 'Complementary Contrast')",
         "colors": [
             { 
-                "name": "Professional Color Name", 
+                "name": "Safe International Name", 
                 "hex": "#RRGGBB", 
-                "code": "19-4052 TCX", 
-                "role": "Fundo, Motivo, Sombra, Luz, Acento, Contorno",
-                "trendStatus": "Analysis"
+                "code": "19-XXXX TCX", 
+                "role": "Background/Motif/Accent"
             }
         ],
-        "suggestion": "Brief advice for reproduction."
+        "suggestion": "Brief advice for print reproduction."
     }
     `;
 

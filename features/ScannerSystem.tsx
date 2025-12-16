@@ -273,7 +273,7 @@ export const ScannerSystem: React.FC = () => {
           className = "bg-vingi-600 hover:bg-vingi-500 border-2 border-white shadow-xl shadow-vingi-900/50 w-auto px-8 h-14 rounded-full animate-bounce-subtle z-50 ring-4 ring-black/10 scale-105";
       }
       return (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 md:hidden z-[60]">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:hidden z-[60]">
              <button onClick={handleFabClick} className={`flex items-center justify-center gap-2 transition-all duration-300 ease-out transform ${className}`}>
                 {icon}
                 {label && <span className="text-white font-bold text-sm tracking-wide whitespace-nowrap animate-fade-in">{label}</span>}

@@ -21,15 +21,29 @@ const triggerTransfer = (targetModule: string, imageData: string, textureData?: 
     }));
 };
 
+// ATUALIZADO: Visual mais limpo, foco no código. Nome discreto.
 const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => (
-    <div className="flex flex-col bg-white shadow-sm border border-gray-200 rounded-md overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-20 w-full group">
+    <div 
+        className="flex flex-col bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-20 w-full group relative"
+        title={`${color.name} (Clique para copiar)`}
+        onClick={() => { navigator.clipboard.writeText(`${color.code} (${color.hex})`); }}
+    >
+        {/* Color Block */}
         <div className="h-12 w-full relative" style={{ backgroundColor: color.hex }}>
-             <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity bg-white mix-blend-overlay"></div>
+             <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-black"></div>
         </div>
-        <div className="p-1.5 flex flex-col justify-center h-8 bg-white">
-            <span className="text-[9px] font-bold text-gray-800 truncate leading-none mb-0.5">{color.name}</span>
-            <div className="flex justify-between items-center">
-                <span className="text-[7px] text-gray-500 font-mono">{color.code}</span>
+        
+        {/* Info Block */}
+        <div className="p-1.5 flex flex-col justify-center h-8 bg-white border-t border-gray-100">
+            {/* Linha 1: Código TCX (Destaque) */}
+            <span className="text-[10px] font-bold text-gray-800 font-mono tracking-tight leading-none">
+                {color.code}
+            </span>
+            {/* Linha 2: Nome ou Hex (Discreto) */}
+            <div className="flex justify-between items-center mt-0.5">
+                <span className="text-[8px] text-gray-400 font-medium truncate max-w-[80%] uppercase">
+                    {color.name || color.hex}
+                </span>
             </div>
         </div>
     </div>
