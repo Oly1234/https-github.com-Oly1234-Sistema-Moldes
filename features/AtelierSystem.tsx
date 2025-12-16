@@ -1,50 +1,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Check, Printer, Brush, Info, Settings2, Ruler, Scroll, Maximize, FileWarning, Zap, Grip, AlignVerticalSpaceAround, Spline, RefreshCw, Droplets, Sun, Moon, Contrast, Sparkles, X, Hammer, Image as ImageIcon, Type, BrainCircuit } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference } from '../components/Shared';
 
 // --- HELPERS ---
-const triggerTransfer = (targetModule: string, imageData: string, textureData?: any) => {
-    if (targetModule === 'MOCKUP') {
-        localStorage.setItem('vingi_mockup_pattern', imageData);
-    }
-    if (targetModule === 'LAYER') {
-        const payload = {
-            mainImage: imageData,
-            texture: textureData
-        };
-        localStorage.setItem('vingi_layer_studio_data', JSON.stringify(payload));
-    }
-    window.dispatchEvent(new CustomEvent('vingi_transfer', { 
-        detail: { module: targetModule, timestamp: Date.now() } 
-    }));
+const triggerTransfer = (targetModule: string, imageData: string) => {
+    if (targetModule === 'MOCKUP') localStorage.setItem('vingi_mockup_pattern', imageData);
+    if (targetModule === 'LAYER') localStorage.setItem('vingi_layer_studio_source', imageData);
+    window.dispatchEvent(new CustomEvent('vingi_transfer', { detail: { module: targetModule } }));
 };
 
-const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => (
-    <div 
-        className="flex flex-col bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-20 w-full group relative"
-        title={`${color.name} (Clique para copiar)`}
-        onClick={() => { navigator.clipboard.writeText(`${color.code} (${color.hex})`); }}
-    >
-        <div className="h-12 w-full relative" style={{ backgroundColor: color.hex }}>
-             <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-black"></div>
-        </div>
-        <div className="p-1.5 flex flex-col justify-center h-8 bg-white border-t border-gray-100">
-            <span className="text-[10px] font-bold text-gray-800 font-mono tracking-tight leading-none">{color.code}</span>
-            <div className="flex justify-between items-center mt-0.5">
-                <span className="text-[8px] text-gray-400 font-medium truncate max-w-[80%] uppercase">{color.name || color.hex}</span>
-            </div>
-        </div>
-    </div>
-);
-
-// Helper de compressão ROBUSTO (Idêntico ao PatternCreator)
 const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
     return new Promise((resolve, reject) => {
         if (!base64Str) { reject(new Error("Imagem vazia")); return; }
-        const img = new Image(); 
-        img.src = base64Str;
+        const img = new Image(); img.src = base64Str;
         img.onload = () => {
             const canvas = document.createElement('canvas');
             let w = img.width, h = img.height;
@@ -58,122 +28,48 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
-// Sanitização Frontend SIMPLIFICADA
-const sanitizePromptClient = (text: string) => {
-    if (!text) return "";
-    // Removemos agressivamente qualquer menção a roupas ou pessoas
-    return text
-        .replace(/\b(vestido|camisa|blusa|saia|calça|roupa|modelo|mulher|homem|corpo|pele|rosto|foto|fotografia|realista)\b/gi, "")
-        .replace(/\b(dress|shirt|skirt|pants|garment|model|woman|man|body|skin|face|photo|realistic)\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim();
-};
-
 interface AtelierSystemProps {
     onNavigateToMockup?: () => void;
     onNavigateToLayerStudio?: () => void;
 }
 
-const GENERATION_STEPS = [
-    "Inicializando IA...",
-    "Criando Textura Vetorial...",
-    "Finalizando Arquivo..."
-];
-
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
-    // Assets
+    // State
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
-    const [isEnhanced, setIsEnhanced] = useState(false);
+    const [userPrompt, setUserPrompt] = useState<string>('');
+    const [colors, setColors] = useState<PantoneColor[]>([]);
     
-    // Data
-    const [colorData, setColorData] = useState<{ harmony: string, suggestion: string, colors: PantoneColor[] } | null>(null);
-    const [technicalPrompt, setTechnicalPrompt] = useState<string>('');
-    const [activeColorMode, setActiveColorMode] = useState<'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK'>('NATURAL');
-    const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT' | null>(null);
-    
-    // Engenharia
-    const [layoutType, setLayoutType] = useState<'Corrida' | 'Barrada' | 'Localizada'>('Corrida');
-    const [repeatType, setRepeatType] = useState<'Straight' | 'Half-Drop' | 'Mirror'>('Straight');
-    const [widthCm, setWidthCm] = useState<number>(64);
-    const [heightCm, setHeightCm] = useState<number>(64);
-    const [dpi, setDpi] = useState<72 | 150 | 300>(300);
-
-    // Texture Overlay Post-Process
-    const [textureType, setTextureType] = useState<'None' | 'Cotton' | 'Linen' | 'Silk' | 'Canvas'>('None');
-    const [textureOpacity, setTextureOpacity] = useState(0.4);
-    const [textureBlend, setTextureBlend] = useState<'multiply' | 'overlay' | 'screen'>('multiply');
-
-    const [userInstruction, setUserInstruction] = useState<string>('');
-    
-    // State
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isEnhancing, setIsEnhancing] = useState(false);
-    const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
-    const [isAnalyzingColors, setIsAnalyzingColors] = useState(false);
-    const [genStep, setGenStep] = useState(0);
+    // Status
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
     
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const abortControllerRef = useRef<AbortController | null>(null);
 
-    // --- INITIALIZATION ---
+    // Initial Load from Transfer
     useEffect(() => {
         const transferImage = localStorage.getItem('vingi_transfer_image');
         if (transferImage) {
-            handleImageSession(transferImage);
+            handleReferenceUpload(transferImage);
             localStorage.removeItem('vingi_transfer_image');
         }
     }, []);
 
-    useEffect(() => {
-        let interval: any;
-        if (isGenerating) {
-            setGenStep(0);
-            interval = setInterval(() => { setGenStep(p => (p + 1) % GENERATION_STEPS.length); }, 1500);
-        }
-        return () => clearInterval(interval);
-    }, [isGenerating]);
-
     const resetSession = () => {
         setReferenceImage(null);
         setGeneratedPattern(null);
-        setIsEnhanced(false);
-        setColorData(null);
-        setTechnicalPrompt('');
-        setUserInstruction('');
-        setCreationMode(null);
+        setUserPrompt('');
+        setColors([]);
         setError(null);
     };
 
-    const handleImageSession = (img: string) => {
-        setReferenceImage(img);
-        setCreationMode('IMAGE');
-        setGeneratedPattern(null);
-        setIsEnhanced(false);
-        setColorData(null);
+    const handleReferenceUpload = async (imgBase64: string) => {
+        setReferenceImage(imgBase64);
+        setIsProcessing(true);
+        setStatusMessage("Analisando referência...");
         setError(null);
-        setDpi(300);
-        setWidthCm(64);
-        setHeightCm(64);
-        analyzeColors(img, 'NATURAL');
-    };
 
-    const handleTextSession = () => {
-        setCreationMode('TEXT');
-        setReferenceImage(null);
-        setGeneratedPattern(null);
-        setColorData(null);
-        setError(null);
-        setDpi(300);
-        setWidthCm(64);
-        setHeightCm(64);
-        setTechnicalPrompt("");
-    };
-
-    const analyzeColors = async (imgBase64: string, variation: 'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK') => {
-        setIsAnalyzingColors(true);
-        setActiveColorMode(variation); 
         try {
             const compressed = await compressImage(imgBase64);
             const cleanBase64 = compressed.split(',')[1];
@@ -182,159 +78,72 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    action: 'DESCRIBE_PATTERN', 
-                    mainImageBase64: cleanBase64, 
-                    mainMimeType: 'image/jpeg',
-                    userHints: variation === 'NATURAL' ? '' : `VARIATION: ${variation}`
+                    action: 'ANALYZE_REFERENCE_FOR_PROMPT', 
+                    mainImageBase64: cleanBase64
                 })
             });
             const data = await res.json();
-            if (data.success && data.colors) {
-                setColorData({ 
-                    colors: data.colors, 
-                    harmony: variation === 'NATURAL' ? "Paleta Original" : `Variação: ${variation}`, 
-                    suggestion: "Cores calibradas." 
-                });
-                // Prompt simplificado
-                if (data.prompt) {
-                    setTechnicalPrompt(sanitizePromptClient(data.prompt));
-                }
+            
+            if (data.success) {
+                if (data.prompt) setUserPrompt(data.prompt);
+                if (data.colors) setColors(data.colors);
             }
         } catch (e) {
-            console.error("Analysis Error:", e);
+            console.error(e);
+        } finally {
+            setIsProcessing(false);
         }
-        setIsAnalyzingColors(false);
     };
 
-    const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (ev) => {
-                const img = ev.target?.result as string;
-                handleImageSession(img);
-            };
+            reader.onload = (ev) => handleReferenceUpload(ev.target?.result as string);
             reader.readAsDataURL(file);
         }
     };
 
-    // Removed Prompt Enhance (Simplification)
-    // const handlePromptEnhance = ...
-
     const handleGenerate = async () => {
-        if (!referenceImage && (!userInstruction && !technicalPrompt)) {
-            setError("Digite uma descrição (ex: 'Floral', 'Listras').");
+        if (!userPrompt.trim()) {
+            setError("Por favor, descreva a estampa que deseja criar.");
             return;
         }
 
-        setIsGenerating(true);
-        setIsEnhanced(false);
+        setIsProcessing(true);
+        setStatusMessage("Criando estampa...");
+        setGeneratedPattern(null);
         setError(null);
 
-        if (abortControllerRef.current) abortControllerRef.current.abort();
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-
-        try {
-            // Combinação simples
-            let rawPrompt = userInstruction + " " + technicalPrompt;
-            
-            // Sanitização no cliente
-            const safePrompt = sanitizePromptClient(rawPrompt);
-            const finalPrompt = safePrompt || "Geometric pattern"; // Fallback se o usuário limpou tudo
-
-            const genRes = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'GENERATE_PATTERN', 
-                    prompt: finalPrompt,
-                    colors: colorData?.colors || [],
-                    textileSpecs: {
-                        layout: layoutType,
-                        repeat: repeatType
-                    }
-                }),
-                signal: controller.signal
-            });
-
-            const genData = await genRes.json();
-            if (genData.success && genData.image) {
-                setGeneratedPattern(genData.image);
-            } else {
-                throw new Error("Erro na geração. Tente termos mais simples.");
-            }
-
-        } catch (err: any) {
-            if (err.name !== 'AbortError') setError(err.message || "Erro desconhecido");
-        } finally {
-            setIsGenerating(false);
-            abortControllerRef.current = null;
-        }
-    };
-
-    const handleEnhance = async () => {
-        // Feature "Magic Polish" simplified/removed for now to stabilize core functionality
-        // Or keep it simple if it works
-        if (!generatedPattern) return;
-        setIsEnhancing(true);
-        setError(null);
-        
         try {
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    action: 'ENHANCE_PATTERN', 
-                    mainImageBase64: generatedPattern,
-                    prompt: "Clean vector lines" // Fixed prompt
+                    action: 'GENERATE_PATTERN', 
+                    prompt: userPrompt,
+                    colors: colors
                 })
             });
+
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
-                setIsEnhanced(true);
+            } else {
+                throw new Error(data.error || "Não foi possível gerar a estampa.");
             }
-        } catch (e) {
-            // Ignore error in polish phase
+        } catch (err: any) {
+            setError(err.message);
         } finally {
-            setIsEnhancing(false);
+            setIsProcessing(false);
         }
     };
 
     const handleTransfer = (target: 'MOCKUP' | 'LAYER') => {
         if (!generatedPattern) return;
-        
-        let textureData = null;
-        if (target === 'LAYER' && textureType !== 'None') {
-            textureData = {
-                type: textureType,
-                opacity: textureOpacity,
-                blend: textureBlend,
-                url: getTextureUrl(textureType)
-            };
-        }
-
-        triggerTransfer(target, generatedPattern, textureData);
+        triggerTransfer(target, generatedPattern);
         if (target === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
         if (target === 'LAYER' && onNavigateToLayerStudio) onNavigateToLayerStudio();
-    };
-
-    const getTextureUrl = (type: string) => {
-        if (type === 'Cotton') return 'https://www.transparenttextures.com/patterns/canvas-orange.png';
-        if (type === 'Linen') return 'https://www.transparenttextures.com/patterns/black-linen.png';
-        if (type === 'Silk') return 'https://www.transparenttextures.com/patterns/shattered-island.png';
-        if (type === 'Canvas') return 'https://www.transparenttextures.com/patterns/rough-cloth-light.png';
-        return '';
-    };
-
-    const getTextureStyle = () => {
-        if (textureType === 'None') return {};
-        return {
-            backgroundImage: `url("${getTextureUrl(textureType)}")`,
-            opacity: textureOpacity,
-            mixBlendMode: textureBlend
-        };
     };
 
     return (
@@ -342,194 +151,102 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             <ModuleHeader 
                 icon={Palette} 
                 title="Criar Estampas" 
-                subtitle="Modo Simplificado (Direct-to-Texture)"
+                subtitle="Modo Direto"
                 referenceImage={referenceImage}
-                actionLabel={creationMode ? "Reiniciar" : undefined}
+                actionLabel={referenceImage || generatedPattern ? "Reiniciar" : undefined}
                 onAction={resetSession}
             />
 
-            {referenceImage && !isGenerating && !isEnhancing && (
-                <FloatingReference image={referenceImage} label="Ref. Original" />
-            )}
-
-            {!creationMode ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 animate-fade-in bg-gradient-to-b from-[#f8fafc] to-gray-50 overflow-y-auto">
-                    <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
-                    <div className="text-center mb-10 max-w-2xl">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-vingi-900 text-white mb-6 shadow-xl shadow-vingi-900/20">
-                            <Palette size={32} />
-                        </div>
-                        <h1 className="text-4xl font-bold text-gray-900 mb-4 tracking-tight">Atelier Têxtil</h1>
-                        <p className="text-gray-500 text-lg">
-                            Crie texturas e estampas corridas sem limites. Sistema otimizado para evitar bloqueios de conteúdo.
-                        </p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl pb-10">
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="bg-white p-8 rounded-3xl border border-gray-200 shadow-xl hover:shadow-2xl hover:border-vingi-400 hover:-translate-y-1 transition-all group text-left relative overflow-hidden"
-                        >
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-                            <div className="relative z-10">
-                                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6">
-                                    <UploadCloud size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Usar Imagem Base</h3>
-                                <p className="text-sm text-gray-500 mb-6">
-                                    Envie uma referência e a IA extrai a textura. Ideal para restaurar estampas antigas.
-                                </p>
-                                <span className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest group-hover:gap-3 transition-all">
-                                    Carregar <ArrowDownToLine size={14} className="-rotate-90"/>
-                                </span>
-                            </div>
-                        </button>
-
-                        <button 
-                            onClick={handleTextSession}
-                            className="bg-white p-8 rounded-3xl border border-gray-200 shadow-xl hover:shadow-2xl hover:border-purple-400 hover:-translate-y-1 transition-all group text-left relative overflow-hidden"
-                        >
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-                            <div className="relative z-10">
-                                <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center mb-6">
-                                    <Type size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Digitar Ideia</h3>
-                                <p className="text-sm text-gray-500 mb-6">
-                                    Descreva o que você quer (ex: "Floral tropical, fundo preto").
-                                </p>
-                                <span className="inline-flex items-center gap-2 text-xs font-bold text-purple-600 uppercase tracking-widest group-hover:gap-3 transition-all">
-                                    Escrever <ArrowDownToLine size={14} className="-rotate-90"/>
-                                </span>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                    <div className="order-1 md:order-2 flex-1 bg-slate-900 relative flex items-center justify-center overflow-hidden min-w-0 h-[55vh] md:h-full">
-                         <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#ffffff_1px,transparent_1px),linear-gradient(90deg,#ffffff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
-
-                         {isGenerating || isEnhancing ? (
-                             <div className="text-center relative z-10 p-8 max-w-sm">
-                                 <div className="relative inline-block mb-6">
-                                     <Loader2 size={48} className="text-vingi-400 animate-spin"/>
-                                 </div>
-                                 <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
-                                     {isEnhancing ? "Polindo Imagem..." : GENERATION_STEPS[genStep]}
-                                 </h2>
-                                 <div className="mt-8 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
-                                     <div className="h-full bg-vingi-500 animate-progress-indeterminate"></div>
-                                 </div>
-                             </div>
-                         ) : (
-                             generatedPattern ? (
-                                <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
-                                     <div className="relative shadow-2xl rounded-sm border border-white/10 overflow-hidden group flex justify-center items-center" 
-                                          style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}>
-                                         <img src={generatedPattern} className="block w-auto h-auto max-w-full max-h-[85vh] bg-white" style={{ objectFit: 'contain' }} />
-                                         {textureType !== 'None' && (
-                                             <div className="absolute inset-0 pointer-events-none z-10 transition-all duration-300" style={getTextureStyle()}></div>
-                                         )}
-                                     </div>
-                                     <div className="absolute bottom-4 bg-gray-900/90 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-700 flex items-center gap-4 animate-slide-up z-50 overflow-x-auto max-w-[90%]">
-                                         <div className="flex flex-col gap-1 shrink-0">
-                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Acabamento</span>
-                                             <div className="flex gap-1">
-                                                {['None', 'Cotton', 'Linen', 'Silk', 'Canvas'].map(t => (
-                                                    <button key={t} onClick={() => setTextureType(t as any)} className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${textureType === t ? 'bg-vingi-500 text-white shadow-sm' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>{t}</button>
-                                                ))}
-                                             </div>
-                                         </div>
-                                     </div>
-                                </div>
-                             ) : (
-                                <div className="text-center opacity-30 select-none pointer-events-none">
-                                    <Grid3X3 size={64} className="mx-auto mb-4 text-white"/>
-                                    <p className="text-white text-sm font-medium">Área de Renderização</p>
-                                </div>
-                             )
-                         )}
-
-                         {error && (
-                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400 max-w-md">
-                                 <FileWarning size={18} className="shrink-0"/> 
-                                 <div className="flex flex-col text-left">
-                                     <span className="line-clamp-3">{error}</span>
-                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente remover termos complexos.</span>
-                                 </div>
-                             </div>
-                         )}
-                    </div>
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                
+                {/* ÁREA VISUAL (CANVAS) */}
+                <div className="flex-1 bg-slate-900 relative flex items-center justify-center p-4 min-h-[40vh]">
+                    <div className="absolute inset-0 opacity-10 bg-[linear-gradient(45deg,#ffffff_1px,transparent_1px)] bg-[size:24px_24px]"></div>
                     
-                    <div className="order-2 md:order-1 w-full md:w-[380px] lg:w-[400px] bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col z-20 shadow-xl h-[45vh] md:h-full overflow-y-auto custom-scrollbar shrink-0">
-                        <div className="p-5 space-y-6 pb-20">
-                            <div>
-                                <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Palette size={14} className="text-vingi-500"/> Configuração
-                                </h3>
-                                
-                                <div className="relative">
-                                     {creationMode === 'TEXT' && (
-                                         <div className="flex justify-between items-center mb-1 px-1">
-                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Prompt (Motivo Visual)</span>
-                                         </div>
-                                     )}
-                                    <textarea 
-                                        value={userInstruction}
-                                        onChange={(e) => setUserInstruction(e.target.value)}
-                                        placeholder="Ex: Florais vermelhos, fundo branco, geométrico..."
-                                        className={`w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all mb-4 ${creationMode === 'TEXT' ? 'h-32 border-vingi-200 shadow-inner' : 'h-20'}`}
-                                    />
-                                </div>
-                                
-                                {creationMode === 'IMAGE' && (
-                                    <div className="mb-4">
-                                         <label className="text-[9px] font-bold text-gray-400 uppercase flex justify-between items-center mb-1">IA Analysis</label>
-                                         <textarea value={technicalPrompt} onChange={(e) => setTechnicalPrompt(e.target.value)} className="w-full h-16 p-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 resize-none outline-none"/>
-                                    </div>
-                                )}
+                    {isProcessing ? (
+                        <div className="text-center relative z-10">
+                            <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-4"/>
+                            <h2 className="text-white font-bold text-xl">{statusMessage}</h2>
+                        </div>
+                    ) : generatedPattern ? (
+                        <div className="relative shadow-2xl bg-white max-w-full max-h-full flex items-center justify-center border border-white/20">
+                            <img src={generatedPattern} className="max-w-full max-h-[80vh] object-contain" />
+                        </div>
+                    ) : (
+                        <div className="text-center opacity-30 select-none">
+                            <Grid3X3 size={64} className="mx-auto mb-4 text-white"/>
+                            <p className="text-white text-sm">Área de Criação</p>
+                        </div>
+                    )}
 
-                                {creationMode === 'IMAGE' && (
-                                    <div className="space-y-2 animate-fade-in bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1"><Droplets size={10}/> Cores</span>
-                                            {isAnalyzingColors && <Loader2 size={10} className="animate-spin text-vingi-500"/>}
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2 mb-3">
-                                             <button onClick={() => referenceImage && analyzeColors(referenceImage, 'VIVID')} className={`py-2 border rounded-lg text-[10px] font-bold ${activeColorMode === 'VIVID' ? 'bg-blue-600 text-white' : 'bg-white'}`}>Mais Vivo</button>
-                                             <button onClick={() => referenceImage && analyzeColors(referenceImage, 'PASTEL')} className={`py-2 border rounded-lg text-[10px] font-bold ${activeColorMode === 'PASTEL' ? 'bg-pink-500 text-white' : 'bg-white'}`}>Pastel</button>
-                                             <button onClick={() => referenceImage && analyzeColors(referenceImage, 'DARK')} className={`py-2 border rounded-lg text-[10px] font-bold ${activeColorMode === 'DARK' ? 'bg-gray-800 text-white' : 'bg-white'}`}>Escuro</button>
-                                        </div>
-                                        {colorData && (
-                                            <div className="grid grid-cols-4 gap-2">
-                                                {colorData.colors.map((c, i) => <PantoneChip key={i} color={c}/>)}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                    {error && (
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl text-sm font-bold flex items-center gap-3 animate-bounce-subtle z-50">
+                            <FileWarning size={18}/> {error}
+                        </div>
+                    )}
+                </div>
+
+                {/* PAINEL DE CONTROLE */}
+                <div className="w-full md:w-[400px] bg-white border-l border-gray-200 flex flex-col z-20 shadow-xl overflow-y-auto custom-scrollbar h-[50vh] md:h-full">
+                    <div className="p-6 space-y-6">
+                        
+                        {/* 1. INPUT DE REFERÊNCIA */}
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <UploadCloud size={14}/> Referência (Opcional)
+                            </h3>
+                            <div className="flex gap-4 items-center">
+                                <button 
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="flex-1 bg-white border border-gray-200 text-gray-600 rounded-lg py-3 text-xs font-bold hover:bg-vingi-50 hover:border-vingi-200 hover:text-vingi-700 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <ImageIcon size={16}/> {referenceImage ? "Trocar Imagem" : "Carregar Foto"}
+                                </button>
+                                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                             </div>
+                            {referenceImage && (
+                                <p className="text-[10px] text-green-600 mt-2 font-medium flex items-center gap-1">
+                                    <Sparkles size={10}/> Prompt extraído da imagem com sucesso.
+                                </p>
+                            )}
+                        </div>
 
-                            {!isGenerating && !isEnhancing && (
+                        {/* 2. PROMPT TEXTUAL */}
+                        <div className="flex-1 flex flex-col">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Type size={14}/> Descrição da Estampa
+                            </h3>
+                            <textarea 
+                                value={userPrompt}
+                                onChange={(e) => setUserPrompt(e.target.value)}
+                                placeholder="Ex: Estampa floral tropical com fundo preto, estilo aquarela, cores vivas..."
+                                className="w-full h-40 p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all shadow-inner text-gray-800"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-2 text-right">Seja detalhado para melhores resultados.</p>
+                        </div>
+
+                        {/* 3. AÇÕES */}
+                        <div className="space-y-3 pt-4 border-t border-gray-100">
+                            {!isProcessing && (
                                 <button 
                                     onClick={handleGenerate}
-                                    className="w-full py-4 bg-gradient-to-r from-vingi-900 to-gray-800 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 text-sm mt-4 border border-gray-700"
+                                    className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
                                 >
                                     <Wand2 size={18} className="text-purple-300"/>
-                                    {generatedPattern ? 'TENTAR NOVAMENTE' : 'GERAR ESTAMPA'}
+                                    {generatedPattern ? "GERAR NOVAMENTE" : "CRIAR ESTAMPA"}
                                 </button>
                             )}
 
-                            {generatedPattern && !isGenerating && !isEnhancing && (
-                                <div className="space-y-2 animate-slide-up">
-                                    <button onClick={() => handleTransfer('MOCKUP')} className="w-full py-3 bg-white text-vingi-700 border border-gray-200 rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-gray-50"><Settings2 size={14}/> PROVAR NO MOCKUP</button>
-                                    <button onClick={() => handleTransfer('LAYER')} className="w-full py-3 bg-purple-50 text-purple-700 border border-purple-100 rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-purple-100"><Layers size={14}/> SEPARAR CAMADAS</button>
-                                    <button onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = 'vingi-pattern-master.png'; l.click(); }} className="w-full py-3 bg-gray-900 text-white border border-black rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-gray-800"><Download size={14}/> BAIXAR ARQUIVO</button>
+                            {generatedPattern && !isProcessing && (
+                                <div className="grid grid-cols-2 gap-2 animate-fade-in">
+                                    <button onClick={() => handleTransfer('MOCKUP')} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Settings2 size={14}/> PROVAR</button>
+                                    <button onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = 'estampa.png'; l.click(); }} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Download size={14}/> BAIXAR</button>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };
