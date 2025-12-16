@@ -58,11 +58,13 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
-// Sanitização Frontend (Dupla camada de segurança)
+// Sanitização Frontend SIMPLIFICADA
 const sanitizePromptClient = (text: string) => {
     if (!text) return "";
+    // Removemos agressivamente qualquer menção a roupas ou pessoas
     return text
-        .replace(/\b(dress|shirt|garment|model|body|person|skin|face|human|woman|man|girl|boy|bikini|swimwear)\b/gi, "abstract motif")
+        .replace(/\b(vestido|camisa|blusa|saia|calça|roupa|modelo|mulher|homem|corpo|pele|rosto|foto|fotografia|realista)\b/gi, "")
+        .replace(/\b(dress|shirt|skirt|pants|garment|model|woman|man|body|skin|face|photo|realistic)\b/gi, "")
         .replace(/\s+/g, " ")
         .trim();
 };
@@ -73,11 +75,8 @@ interface AtelierSystemProps {
 }
 
 const GENERATION_STEPS = [
-    "Inicializando Atelier Neural...",
-    "Verificando Compliance de Segurança...",
-    "Aplicando Vingi Neuro-Bridge...",
-    "Renderizando Vetores de Alta Densidade...",
-    "Calibrando Paleta Pantone...",
+    "Inicializando IA...",
+    "Criando Textura Vetorial...",
     "Finalizando Arquivo..."
 ];
 
@@ -131,7 +130,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         let interval: any;
         if (isGenerating) {
             setGenStep(0);
-            interval = setInterval(() => { setGenStep(p => (p + 1) % GENERATION_STEPS.length); }, 2000);
+            interval = setInterval(() => { setGenStep(p => (p + 1) % GENERATION_STEPS.length); }, 1500);
         }
         return () => clearInterval(interval);
     }, [isGenerating]);
@@ -169,14 +168,13 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setDpi(300);
         setWidthCm(64);
         setHeightCm(64);
-        setTechnicalPrompt("Seamless textile pattern");
+        setTechnicalPrompt("");
     };
 
     const analyzeColors = async (imgBase64: string, variation: 'NATURAL' | 'VIVID' | 'PASTEL' | 'DARK') => {
         setIsAnalyzingColors(true);
         setActiveColorMode(variation); 
         try {
-            // USO CRÍTICO DE COMPRESSÃO - Igual ao PatternCreator
             const compressed = await compressImage(imgBase64);
             const cleanBase64 = compressed.split(',')[1];
             
@@ -197,6 +195,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     harmony: variation === 'NATURAL' ? "Paleta Original" : `Variação: ${variation}`, 
                     suggestion: "Cores calibradas." 
                 });
+                // Prompt simplificado
                 if (data.prompt) {
                     setTechnicalPrompt(sanitizePromptClient(data.prompt));
                 }
@@ -219,32 +218,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         }
     };
 
-    const handlePromptEnhance = async () => {
-        if (!userInstruction || userInstruction.length < 3) return;
-        setIsEnhancingPrompt(true);
-        try {
-            const res = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'ENHANCE_TEXT_PROMPT', 
-                    prompt: userInstruction 
-                })
-            });
-            const data = await res.json();
-            if (data.success && data.enhancedText) {
-                setUserInstruction(data.enhancedText);
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsEnhancingPrompt(false);
-        }
-    };
+    // Removed Prompt Enhance (Simplification)
+    // const handlePromptEnhance = ...
 
     const handleGenerate = async () => {
         if (!referenceImage && (!userInstruction && !technicalPrompt)) {
-            setError("Para criar sem imagem, digite uma descrição no campo 'Prompt do Estilista'.");
+            setError("Digite uma descrição (ex: 'Floral', 'Listras').");
             return;
         }
 
@@ -257,19 +236,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         abortControllerRef.current = controller;
 
         try {
-            let finalPrompt = "";
-            if (creationMode === 'IMAGE') {
-                finalPrompt = userInstruction ? `${technicalPrompt}. ${userInstruction}` : technicalPrompt;
-            } else {
-                finalPrompt = userInstruction || technicalPrompt;
-            }
-
-            // Sanitização final no cliente
-            finalPrompt = sanitizePromptClient(finalPrompt);
-
-            if (!finalPrompt || finalPrompt.length < 3) {
-                finalPrompt = "Abstract geometric seamless pattern";
-            }
+            // Combinação simples
+            let rawPrompt = userInstruction + " " + technicalPrompt;
+            
+            // Sanitização no cliente
+            const safePrompt = sanitizePromptClient(rawPrompt);
+            const finalPrompt = safePrompt || "Geometric pattern"; // Fallback se o usuário limpou tudo
 
             const genRes = await fetch('/api/analyze', {
                 method: 'POST',
@@ -280,10 +252,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     colors: colorData?.colors || [],
                     textileSpecs: {
                         layout: layoutType,
-                        repeat: repeatType,
-                        width: widthCm, 
-                        height: heightCm, 
-                        dpi: dpi
+                        repeat: repeatType
                     }
                 }),
                 signal: controller.signal
@@ -293,12 +262,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             if (genData.success && genData.image) {
                 setGeneratedPattern(genData.image);
             } else {
-                // Erro genérico
-                throw new Error("A IA encontrou dificuldade. Tente usar termos mais simples como 'Floral', 'Geométrico'.");
+                throw new Error("Erro na geração. Tente termos mais simples.");
             }
 
         } catch (err: any) {
-            if (err.name !== 'AbortError') setError(err.message);
+            if (err.name !== 'AbortError') setError(err.message || "Erro desconhecido");
         } finally {
             setIsGenerating(false);
             abortControllerRef.current = null;
@@ -306,6 +274,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     };
 
     const handleEnhance = async () => {
+        // Feature "Magic Polish" simplified/removed for now to stabilize core functionality
+        // Or keep it simple if it works
         if (!generatedPattern) return;
         setIsEnhancing(true);
         setError(null);
@@ -317,18 +287,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 body: JSON.stringify({ 
                     action: 'ENHANCE_PATTERN', 
                     mainImageBase64: generatedPattern,
-                    prompt: technicalPrompt || userInstruction || "High quality pattern"
+                    prompt: "Clean vector lines" // Fixed prompt
                 })
             });
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
                 setIsEnhanced(true);
-            } else {
-                throw new Error("Falha no refinamento.");
             }
-        } catch (e: any) {
-            setError("Erro ao refinar imagem.");
+        } catch (e) {
+            // Ignore error in polish phase
         } finally {
             setIsEnhancing(false);
         }
@@ -374,7 +342,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             <ModuleHeader 
                 icon={Palette} 
                 title="Criar Estampas" 
-                subtitle="Impressão Digital & Estamparia"
+                subtitle="Modo Simplificado (Direct-to-Texture)"
                 referenceImage={referenceImage}
                 actionLabel={creationMode ? "Reiniciar" : undefined}
                 onAction={resetSession}
@@ -391,9 +359,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-vingi-900 text-white mb-6 shadow-xl shadow-vingi-900/20">
                             <Palette size={32} />
                         </div>
-                        <h1 className="text-4xl font-bold text-gray-900 mb-4 tracking-tight">Atelier Têxtil Digital</h1>
+                        <h1 className="text-4xl font-bold text-gray-900 mb-4 tracking-tight">Atelier Têxtil</h1>
                         <p className="text-gray-500 text-lg">
-                            Escolha como deseja criar sua estampa. Use IA para reinterpretar imagens ou crie do zero com prompts textuais.
+                            Crie texturas e estampas corridas sem limites. Sistema otimizado para evitar bloqueios de conteúdo.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl pb-10">
@@ -406,12 +374,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6">
                                     <UploadCloud size={24} />
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Recriar Sua Estampa</h3>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Usar Imagem Base</h3>
                                 <p className="text-sm text-gray-500 mb-6">
-                                    Envie uma foto de roupa ou tecido e a IA cria o arquivo digital idêntico em alta definição. Perfeito para restaurar estampas antigas.
+                                    Envie uma referência e a IA extrai a textura. Ideal para restaurar estampas antigas.
                                 </p>
                                 <span className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest group-hover:gap-3 transition-all">
-                                    Carregar Imagem <ArrowDownToLine size={14} className="-rotate-90"/>
+                                    Carregar <ArrowDownToLine size={14} className="-rotate-90"/>
                                 </span>
                             </div>
                         </button>
@@ -425,12 +393,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center mb-6">
                                     <Type size={24} />
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Criação Textual</h3>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Digitar Ideia</h3>
                                 <p className="text-sm text-gray-500 mb-6">
-                                    Não tem imagem? Descreva sua ideia (ex: "Floral tropical aquarela fundo preto") e a IA gera do zero.
+                                    Descreva o que você quer (ex: "Floral tropical, fundo preto").
                                 </p>
                                 <span className="inline-flex items-center gap-2 text-xs font-bold text-purple-600 uppercase tracking-widest group-hover:gap-3 transition-all">
-                                    Criar com Texto <ArrowDownToLine size={14} className="-rotate-90"/>
+                                    Escrever <ArrowDownToLine size={14} className="-rotate-90"/>
                                 </span>
                             </div>
                         </button>
@@ -445,16 +413,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                              <div className="text-center relative z-10 p-8 max-w-sm">
                                  <div className="relative inline-block mb-6">
                                      <Loader2 size={48} className="text-vingi-400 animate-spin"/>
-                                     <div className="absolute inset-0 flex items-center justify-center">
-                                         <BrainCircuit size={20} className="text-white animate-pulse" />
-                                     </div>
                                  </div>
                                  <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
-                                     {isEnhancing ? "Refinando Detalhes..." : GENERATION_STEPS[genStep]}
+                                     {isEnhancing ? "Polindo Imagem..." : GENERATION_STEPS[genStep]}
                                  </h2>
-                                 <p className="text-slate-400 text-sm">
-                                     {isEnhancing ? "Aplicando vetorização e limpeza de ruído..." : "A IA está negociando a semântica visual para máxima fidelidade."}
-                                 </p>
                                  <div className="mt-8 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
                                      <div className="h-full bg-vingi-500 animate-progress-indeterminate"></div>
                                  </div>
@@ -478,30 +440,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                 ))}
                                              </div>
                                          </div>
-                                         {textureType !== 'None' && (
-                                             <>
-                                                 <div className="w-px h-8 bg-gray-700 mx-2 shrink-0"></div>
-                                                 <div className="flex flex-col w-20 shrink-0">
-                                                     <span className="text-[9px] font-bold text-gray-400 mb-1 flex justify-between">Opacity <span>{Math.round(textureOpacity*100)}%</span></span>
-                                                     <input type="range" min="0" max="1" step="0.1" value={textureOpacity} onChange={e => setTextureOpacity(parseFloat(e.target.value))} className="h-1 bg-gray-700 rounded-lg appearance-none accent-vingi-500"/>
-                                                 </div>
-                                             </>
-                                         )}
                                      </div>
                                 </div>
                              ) : (
                                 <div className="text-center opacity-30 select-none pointer-events-none">
-                                    {creationMode === 'TEXT' ? (
-                                        <>
-                                            <Type size={64} className="mx-auto mb-4 text-white"/>
-                                            <p className="text-white text-sm font-medium">Aguardando Prompt de Texto</p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Grid3X3 size={64} className="mx-auto mb-4 text-white"/>
-                                            <p className="text-white text-sm font-medium">Área de Renderização 4K</p>
-                                        </>
-                                    )}
+                                    <Grid3X3 size={64} className="mx-auto mb-4 text-white"/>
+                                    <p className="text-white text-sm font-medium">Área de Renderização</p>
                                 </div>
                              )
                          )}
@@ -511,7 +455,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                  <FileWarning size={18} className="shrink-0"/> 
                                  <div className="flex flex-col text-left">
                                      <span className="line-clamp-3">{error}</span>
-                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente remover palavras como 'Vestido', 'Corpo' ou 'Modelo'.</span>
+                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente remover termos complexos.</span>
                                  </div>
                              </div>
                          )}
@@ -519,57 +463,28 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     
                     <div className="order-2 md:order-1 w-full md:w-[380px] lg:w-[400px] bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col z-20 shadow-xl h-[45vh] md:h-full overflow-y-auto custom-scrollbar shrink-0">
                         <div className="p-5 space-y-6 pb-20">
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Ruler size={14} className="text-vingi-500"/> Dimensões Digitais
-                                </h3>
-                                <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group">
-                                        <span className="text-[9px] text-gray-400 font-bold block flex items-center gap-1">LARGURA ÚTIL</span>
-                                        <div className="flex items-end gap-1"><input type="number" value={widthCm} onChange={e => setWidthCm(Number(e.target.value))} className="w-full bg-transparent font-bold text-lg outline-none text-gray-800"/><span className="text-xs font-bold text-gray-400 mb-1">cm</span></div>
-                                    </div>
-                                    <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group">
-                                        <span className="text-[9px] text-gray-400 font-bold block flex items-center gap-1">ALTURA RAPPORT</span>
-                                        <div className="flex items-end gap-1"><input type="number" value={heightCm} onChange={e => setHeightCm(Number(e.target.value))} className="w-full bg-transparent font-bold text-lg outline-none text-gray-800"/><span className="text-xs font-bold text-gray-400 mb-1">cm</span></div>
-                                    </div>
-                                </div>
-                                <div className="flex bg-gray-50 rounded-lg p-1 gap-1 mb-3">
-                                    {[72, 150, 300].map(val => (
-                                        <button key={val} onClick={() => setDpi(val as any)} className={`flex-1 py-1.5 rounded text-[10px] font-bold ${dpi === val ? 'bg-white text-vingi-900 shadow-sm' : 'text-gray-400'}`}>{val}</button>
-                                    ))}
-                                </div>
-                            </div>
-
                             <div>
                                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Palette size={14} className="text-vingi-500"/> Direção Criativa
+                                    <Palette size={14} className="text-vingi-500"/> Configuração
                                 </h3>
-                                <div className="flex gap-2 mb-3">
-                                    {['Corrida', 'Barrada', 'Localizada'].map((type) => (
-                                        <button key={type} onClick={() => setLayoutType(type as any)} className={`flex-1 py-2 rounded-lg border text-[10px] font-bold transition-all ${layoutType === type ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>{type}</button>
-                                    ))}
-                                </div>
                                 
                                 <div className="relative">
                                      {creationMode === 'TEXT' && (
                                          <div className="flex justify-between items-center mb-1 px-1">
-                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
-                                             <button onClick={handlePromptEnhance} disabled={isEnhancingPrompt} className="flex items-center gap-1 text-[9px] font-bold text-vingi-600 bg-vingi-50 px-2 py-1 rounded-md hover:bg-vingi-100 transition-colors disabled:opacity-50">
-                                                {isEnhancingPrompt ? <Loader2 size={10} className="animate-spin"/> : <Sparkles size={10}/>} OTIMIZAR
-                                             </button>
+                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Prompt (Motivo Visual)</span>
                                          </div>
                                      )}
                                     <textarea 
                                         value={userInstruction}
                                         onChange={(e) => setUserInstruction(e.target.value)}
-                                        placeholder={creationMode === 'TEXT' ? "Ex: Floral tropical aquarela com fundo preto..." : "Instruções adicionais..."}
+                                        placeholder="Ex: Florais vermelhos, fundo branco, geométrico..."
                                         className={`w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all mb-4 ${creationMode === 'TEXT' ? 'h-32 border-vingi-200 shadow-inner' : 'h-20'}`}
                                     />
                                 </div>
                                 
                                 {creationMode === 'IMAGE' && (
                                     <div className="mb-4">
-                                         <label className="text-[9px] font-bold text-gray-400 uppercase flex justify-between items-center mb-1">DNA Técnico (IA)</label>
+                                         <label className="text-[9px] font-bold text-gray-400 uppercase flex justify-between items-center mb-1">IA Analysis</label>
                                          <textarea value={technicalPrompt} onChange={(e) => setTechnicalPrompt(e.target.value)} className="w-full h-16 p-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 resize-none outline-none"/>
                                     </div>
                                 )}
@@ -577,7 +492,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 {creationMode === 'IMAGE' && (
                                     <div className="space-y-2 animate-fade-in bg-gray-50 p-3 rounded-xl border border-gray-100">
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1"><Droplets size={10}/> Calibração de Cor</span>
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1"><Droplets size={10}/> Cores</span>
                                             {isAnalyzingColors && <Loader2 size={10} className="animate-spin text-vingi-500"/>}
                                         </div>
                                         <div className="grid grid-cols-3 gap-2 mb-3">
@@ -600,18 +515,15 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     className="w-full py-4 bg-gradient-to-r from-vingi-900 to-gray-800 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 text-sm mt-4 border border-gray-700"
                                 >
                                     <Wand2 size={18} className="text-purple-300"/>
-                                    {generatedPattern ? 'REPROCESSAR ESTAMPA' : (creationMode === 'TEXT' ? 'CRIAR ESTAMPA (TEXTO)' : 'RENDERIZAR (GPU)')}
+                                    {generatedPattern ? 'TENTAR NOVAMENTE' : 'GERAR ESTAMPA'}
                                 </button>
                             )}
 
                             {generatedPattern && !isGenerating && !isEnhancing && (
                                 <div className="space-y-2 animate-slide-up">
-                                    {!isEnhanced && (
-                                        <button onClick={handleEnhance} className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white border border-emerald-600 rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:shadow-lg transition-all"><Hammer size={14}/> MAGIC POLISH</button>
-                                    )}
                                     <button onClick={() => handleTransfer('MOCKUP')} className="w-full py-3 bg-white text-vingi-700 border border-gray-200 rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-gray-50"><Settings2 size={14}/> PROVAR NO MOCKUP</button>
-                                    <button onClick={() => handleTransfer('LAYER')} className="w-full py-3 bg-purple-50 text-purple-700 border border-purple-100 rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-purple-100"><Layers size={14}/> SEPARAR CAMADAS (IA)</button>
-                                    <button onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = 'vingi-pattern-master.png'; l.click(); }} className="w-full py-3 bg-gray-900 text-white border border-black rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-gray-800"><Download size={14}/> BAIXAR ARQUIVO TIFF</button>
+                                    <button onClick={() => handleTransfer('LAYER')} className="w-full py-3 bg-purple-50 text-purple-700 border border-purple-100 rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-purple-100"><Layers size={14}/> SEPARAR CAMADAS</button>
+                                    <button onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = 'vingi-pattern-master.png'; l.click(); }} className="w-full py-3 bg-gray-900 text-white border border-black rounded-xl font-bold flex items-center justify-center gap-2 text-xs hover:bg-gray-800"><Download size={14}/> BAIXAR ARQUIVO</button>
                                 </div>
                             )}
                         </div>
