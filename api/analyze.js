@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -109,8 +109,8 @@ export default async function handler(req, res) {
     // 3. Geração de Estampa
     if (action === 'GENERATE_PATTERN') {
         try {
-            // Agora passa 'selvedge' (Ourela) e 'colors' para o gerador
-            const image = await generatePattern(apiKey, prompt, colors, selvedge);
+            // Agora passa 'selvedge' (Ourela), 'colors' e 'technique' (Cilindro/Digital)
+            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique);
             return res.status(200).json({ success: true, image });
         } catch (genError) {
             console.error("Generation Failed:", genError);

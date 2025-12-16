@@ -1,14 +1,15 @@
+
 // api/modules/generator.js
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
 import { GoogleGenAI } from "@google/genai";
 
-export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo) => {
+export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER') => {
     const ai = new GoogleGenAI({ apiKey });
 
     // 1. Contexto de Cor (Se disponível)
     const colorContext = (colors && colors.length > 0) 
         ? `STRICT PALETTE: ${colors.map(c => c.name).join(', ')}. Dominant tones: ${colors.slice(0,2).map(c => c.hex).join(', ')}.` 
-        : "Use current fashion trend colors.";
+        : "Use colors that match the requested theme.";
 
     // 2. Contexto de Layout (Ourela/Barrado)
     let layoutInstruction = "Seamless repeat pattern (All-over).";
@@ -16,19 +17,42 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo) => {
         layoutInstruction = `BORDER PRINT (Barrado). The design must have a decorative border aligned to the ${selvedgeInfo === 'Inferior' ? 'BOTTOM' : selvedgeInfo === 'Superior' ? 'TOP' : 'SIDE'} edge. The rest is a filler pattern.`;
     }
 
-    // 3. Prompt Blindado com Contexto Técnico
-    const FULL_PROMPT = `Generate a professional high-definition textile pattern file.
+    // 3. SELEÇÃO DE TÉCNICA (CILINDRO VS DIGITAL)
+    let TECHNIQUE_RULES = "";
+    
+    if (technique === 'DIGITAL') {
+        // MODO DIGITAL: Profundidade, Detalhe, Sem Trama
+        TECHNIQUE_RULES = `
+        STYLE: High-Fidelity Digital Print.
+        FEATURES: Rich details, depth of field, volumetric lighting, gradients, soft shadows, tone-on-tone overlay, 3D relief effects.
+        CRITICAL FORBIDDEN: DO NOT RENDER FABRIC TEXTURE. DO NOT RENDER WEAVE. DO NOT RENDER CANVAS GRAIN. The artwork must be pure graphics on a smooth background.
+        VIBE: Luxurious, complex, cinematic lighting, sophisticated shading.
+        `;
+    } else {
+        // MODO CILINDRO (Padrão): Chapado, Vetorial
+        TECHNIQUE_RULES = `
+        STYLE: Flat 2D Vector Art, Screen Printing Style.
+        FEATURES: Clean lines, solid colors, high contrast, hard edges.
+        CRITICAL FORBIDDEN: NO Gradients, NO Shadows, NO Blur, NO 3D effects, NO Texture.
+        VIBE: Industrial, clean, ready for color separation/engraving.
+        `;
+    }
+
+    // 4. Prompt Final
+    const FULL_PROMPT = `Generate a professional textile pattern design.
     
     THEME/SUBJECT: ${prompt}.
-    STYLE: Flat 2D Vector Art, Clean Lines, Wallpaper style.
     LAYOUT: ${layoutInstruction}
     ${colorContext}
     
+    TECHNICAL SPECIFICATIONS (${technique} MODE):
+    ${TECHNIQUE_RULES}
+    
     VISUAL RULES:
-    - CLOSE-UP TEXTURE ONLY.
+    - CLOSE-UP ARTWORK.
     - NO human models, NO mannequins, NO 3D garments.
     - NO realistic photos of people.
-    - High contrast, ready for digital printing.
+    - Image must be a flat rectangular swatch.
     `;
 
     try {

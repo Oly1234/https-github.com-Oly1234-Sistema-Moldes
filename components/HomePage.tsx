@@ -113,13 +113,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
 
                     <ModuleCard 
-                        title="Criar Estampas"
-                        description="Desenhe estampas exclusivas ou recrie arquivos em alta resolução usando Inteligência Artificial."
+                        title="Estúdio de Criação"
+                        description="Crie estampas exclusivas com IA. Modos especializados para Cilindro (Rotativa) e Estamparia Digital 4K."
                         icon={<Palette size={24} />}
                         colorClass="from-amber-500 to-orange-400"
                         onClick={() => onNavigate('ATELIER')}
                         delay="300ms"
-                        stats="Criação Neural"
+                        stats="Cilindro & Digital"
                     />
 
                     <ModuleCard 

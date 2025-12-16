@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference } from '../components/Shared';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
@@ -55,9 +56,15 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [userPrompt, setUserPrompt] = useState<string>('');
     
     // --- ESTADOS TÉCNICOS ---
+    const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
     const [selvedgePos, setSelvedgePos] = useState<SelvedgePosition>('Inferior');
     const [useSelvedge, setUseSelvedge] = useState(false);
+    
+    // --- ESTADOS DE TEXTURA (DIGITAL MODE) ---
+    const [useTextureOverlay, setUseTextureOverlay] = useState(false);
+    const [textureOpacity, setTextureOpacity] = useState(30); // %
+    const [textureBlend, setTextureBlend] = useState<'multiply' | 'overlay' | 'soft-light'>('multiply');
     
     // --- ESTADOS DE STATUS ---
     const [isProcessing, setIsProcessing] = useState(false);
@@ -144,13 +151,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         if (!userPrompt.trim()) { setError("Por favor, descreva a estampa."); return; }
 
         setIsProcessing(true);
-        setStatusMessage("Otimizando Prompt...");
+        setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Detalhes 4K..." : "Gerando Vetores Chapados...");
         setGeneratedPattern(null);
         setError(null);
 
         // Feedback Visual
-        setTimeout(() => setStatusMessage("Injetando Pantones..."), 1000);
-        setTimeout(() => setStatusMessage("Gerando Textura 4K..."), 2500);
+        setTimeout(() => setStatusMessage(printTechnique === 'DIGITAL' ? "Aplicando Iluminação..." : "Separando Cores..."), 1500);
 
         try {
             const res = await fetch('/api/analyze', {
@@ -160,13 +166,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     action: 'GENERATE_PATTERN', 
                     prompt: userPrompt,
                     colors: colors, // Envia cores atuais
-                    selvedge: useSelvedge ? selvedgePos : 'NENHUMA' // Envia info técnica
+                    selvedge: useSelvedge ? selvedgePos : 'NENHUMA', // Envia info técnica
+                    technique: printTechnique // CYLINDER vs DIGITAL
                 })
             });
 
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
+                // Ativa overlay automaticamente se for Digital
+                if (printTechnique === 'DIGITAL') setUseTextureOverlay(true);
             } else {
                 throw new Error(data.error || "A IA não conseguiu gerar.");
             }
@@ -187,6 +196,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     };
 
     const handleTransfer = (target: string) => {
+        // Se estiver no modo Digital com Overlay, deveríamos idealmente "fundir" as imagens antes.
+        // Como simplificação, enviamos a base.
         if (!generatedPattern) return;
         triggerTransfer(target, generatedPattern);
         if (target === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
@@ -197,10 +208,26 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         <div className="h-full bg-[#f8fafc] flex flex-col overflow-hidden">
             <ModuleHeader 
                 icon={Palette} 
-                title="Atelier Criativo" 
-                subtitle="Criação Técnica"
+                title="Estúdio de Criação" 
+                subtitle={printTechnique === 'CYLINDER' ? "Modo Rotativo (Vetorial)" : "Modo Digital (Alta Definição)"}
                 actionLabel={referenceImage || generatedPattern ? "Reiniciar" : undefined}
                 onAction={resetSession}
+                rightContent={
+                    <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                        <button 
+                            onClick={() => setPrintTechnique('CYLINDER')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${printTechnique === 'CYLINDER' ? 'bg-white shadow-sm text-vingi-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <Cylinder size={12}/> ROTATIVA
+                        </button>
+                        <button 
+                            onClick={() => setPrintTechnique('DIGITAL')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${printTechnique === 'DIGITAL' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <Printer size={12}/> DIGITAL
+                        </button>
+                    </div>
+                }
             />
 
             {/* MODAL FLUTUANTE DE REFERÊNCIA (Só aparece se tiver imagem) */}
@@ -216,13 +243,28 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         <div className="text-center relative z-10 animate-fade-in">
                             <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-4"/>
                             <h2 className="text-white font-bold text-xl tracking-tight">{statusMessage}</h2>
-                            <p className="text-slate-400 text-sm mt-2">Engenharia em andamento...</p>
+                            <p className="text-slate-400 text-sm mt-2">Motor: {printTechnique === 'DIGITAL' ? 'Vingi DreamEngine 4K' : 'Vingi Vector Core'}</p>
                         </div>
                     ) : generatedPattern ? (
-                        <div className="relative shadow-2xl bg-white max-w-full max-h-full flex items-center justify-center border border-white/20 animate-fade-in group">
+                        <div className="relative shadow-2xl bg-white max-w-full max-h-full flex items-center justify-center border border-white/20 animate-fade-in group overflow-hidden">
                             <img src={generatedPattern} className="max-w-full max-h-[80vh] object-contain" />
-                            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[9px] px-2 py-1 rounded backdrop-blur font-mono">
-                                HQ TEXTURE • {useSelvedge ? `BARRADO ${selvedgePos.toUpperCase()}` : 'SEAMLESS'}
+                            
+                            {/* OVERLAY DE TEXTURA DIGITAL */}
+                            {printTechnique === 'DIGITAL' && useTextureOverlay && (
+                                <div 
+                                    className="absolute inset-0 pointer-events-none w-full h-full"
+                                    style={{
+                                        // Standard Noise/Weave Pattern simulation via CSS
+                                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+                                        opacity: textureOpacity / 100,
+                                        mixBlendMode: textureBlend
+                                    }}
+                                />
+                            )}
+
+                            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[9px] px-2 py-1 rounded backdrop-blur font-mono flex flex-col items-end">
+                                <span>{printTechnique} QUALITY</span>
+                                {useSelvedge && <span>BARRADO {selvedgePos.toUpperCase()}</span>}
                             </div>
                         </div>
                     ) : (
@@ -312,12 +354,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             />
                         </div>
 
-                        {/* 3. CORES & PANTONES (Só se tiver cores ou em modo Texto com geração manual futura) */}
-                        {(colors.length > 0 || creationMode === 'TEXT') && (
+                        {/* 3. CORES & PANTONES */}
+                        {(colors.length > 0 || creationMode === 'TEXT') && printTechnique === 'CYLINDER' && (
                             <div>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                        <Palette size={14}/> Paleta Técnica
+                                        <Palette size={14}/> Paleta Técnica (Cilindro)
                                     </h3>
                                     {creationMode === 'IMAGE' && referenceImage && (
                                         <div className="flex bg-gray-100 rounded-lg p-0.5">
@@ -338,7 +380,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         ))}
                                         {colors.length === 0 && creationMode === 'TEXT' && (
                                             <div className="col-span-4 text-center text-[10px] text-gray-400 py-2 border border-dashed rounded bg-gray-50">
-                                                Cores serão geradas automaticamente pelo prompt.
+                                                Cores automáticas.
                                             </div>
                                         )}
                                     </div>
@@ -346,22 +388,73 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             </div>
                         )}
 
-                        {/* 4. AÇÕES */}
+                        {/* 4. DIGITAL TEXTURE CONTROL (Somente no Modo Digital) */}
+                        {printTechnique === 'DIGITAL' && (
+                            <div className="animate-fade-in bg-purple-50 border border-purple-100 rounded-xl p-4">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="text-xs font-bold text-purple-700 uppercase tracking-widest flex items-center gap-2">
+                                        <Zap size={14}/> Acabamento Digital
+                                    </h3>
+                                    <button 
+                                        onClick={() => setUseTextureOverlay(!useTextureOverlay)}
+                                        className={`p-1 rounded transition-colors ${useTextureOverlay ? 'text-purple-600 bg-white shadow-sm' : 'text-gray-400'}`}
+                                        title={useTextureOverlay ? "Textura Ativa" : "Sem Textura"}
+                                    >
+                                        <Eye size={16}/>
+                                    </button>
+                                </div>
+                                
+                                {useTextureOverlay ? (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <div className="flex justify-between text-[9px] font-bold text-purple-400 uppercase mb-1">
+                                                <span>Intensidade da Trama</span>
+                                                <span>{textureOpacity}%</span>
+                                            </div>
+                                            <input 
+                                                type="range" min="0" max="100" 
+                                                value={textureOpacity} 
+                                                onChange={(e) => setTextureOpacity(parseInt(e.target.value))}
+                                                className="w-full h-1.5 bg-purple-200 rounded-lg appearance-none accent-purple-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="text-[9px] font-bold text-purple-400 uppercase mb-1 block">Modo de Fusão</span>
+                                            <div className="flex gap-1">
+                                                {['multiply', 'overlay', 'soft-light'].map((m) => (
+                                                    <button 
+                                                        key={m}
+                                                        onClick={() => setTextureBlend(m as any)}
+                                                        className={`flex-1 py-1.5 text-[9px] font-bold rounded border uppercase ${textureBlend === m ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-400 border-purple-200'}`}
+                                                    >
+                                                        {m.replace('-', ' ')}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-purple-400 text-center italic">Ative a textura para simular tecidos (Overlay).</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 5. AÇÕES */}
                         <div className="space-y-3 pt-4 border-t border-gray-100">
                             {!isProcessing && (
                                 <button 
                                     onClick={handleGenerate}
-                                    className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                    className={`w-full py-4 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 text-white ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-vingi-900'}`}
                                 >
-                                    <Wand2 size={18} className="text-purple-300"/>
-                                    {generatedPattern ? "GERAR NOVAMENTE" : "CRIAR ESTAMPA"}
+                                    <Wand2 size={18} className="text-white/80"/>
+                                    {generatedPattern ? "GERAR NOVAMENTE" : `CRIAR ESTAMPA ${printTechnique}`}
                                 </button>
                             )}
 
                             {generatedPattern && !isProcessing && (
                                 <div className="grid grid-cols-2 gap-2 animate-fade-in">
                                     <button onClick={() => handleTransfer('MOCKUP')} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Settings2 size={14}/> PROVAR</button>
-                                    <button onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = 'vingi-estampa.png'; l.click(); }} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Download size={14}/> BAIXAR</button>
+                                    <button onClick={() => { const l = document.createElement('a'); l.href = generatedPattern!; l.download = `vingi-estampa-${printTechnique.toLowerCase()}.png`; l.click(); }} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Download size={14}/> BAIXAR</button>
                                 </div>
                             )}
                         </div>
