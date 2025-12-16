@@ -16,7 +16,7 @@ import { HomePage } from './components/HomePage';
 import { LayerStudio } from './components/LayerStudio';
 import { VirtualRunway } from './features/VirtualRunway'; // NEW IMPORT
 import { ViewState } from './types';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Check, Bot } from 'lucide-react';
 
 // Componente para barrar navegadores não suportados (ex: webview dentro de app social)
 const InstallGatekeeper: React.FC<{ onInstall: () => void, isIOS: boolean }> = ({ onInstall, isIOS }) => (
@@ -29,18 +29,21 @@ const InstallGatekeeper: React.FC<{ onInstall: () => void, isIOS: boolean }> = (
     </div>
 );
 
-// HUD Toast for Voice Commands
+// HUD Contextual Moderno (Agent Success Modal)
 const ContextHUD: React.FC<{ message: string | null }> = ({ message }) => {
     if (!message) return null;
     return (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-slide-down-fade pointer-events-none w-[90%] md:w-auto">
-            <div className="bg-black/80 backdrop-blur-md text-white px-6 py-4 rounded-2xl border border-white/20 shadow-2xl flex items-center gap-4">
-                <div className="bg-vingi-500/20 p-2 rounded-full">
-                    <Sparkles size={20} className="text-vingi-400 animate-pulse"/>
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-slide-down-fade pointer-events-none max-w-sm w-[90%] md:w-auto">
+            <div className="bg-black/80 backdrop-blur-xl text-white px-5 py-4 rounded-2xl border border-green-500/30 shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-start gap-4">
+                <div className="bg-green-500/20 p-2.5 rounded-full border border-green-500/30 shrink-0">
+                    <Check size={20} className="text-green-400 animate-pulse"/>
                 </div>
-                <div>
-                    <p className="text-[10px] uppercase font-bold text-vingi-400 tracking-widest mb-0.5">Vingi Assistant</p>
-                    <p className="text-sm font-medium leading-tight">{message}</p>
+                <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Bot size={12} className="text-vingi-400"/>
+                        <p className="text-[10px] uppercase font-bold text-vingi-400 tracking-widest">VINGI AGENT</p>
+                    </div>
+                    <p className="text-sm font-medium leading-snug text-gray-100">{message}</p>
                 </div>
             </div>
         </div>
@@ -56,7 +59,7 @@ export default function App() {
       setView(newView);
       if (message) {
           setHudMessage(message);
-          setTimeout(() => setHudMessage(null), 5000); // Hide after 5s
+          setTimeout(() => setHudMessage(null), 4000); // Hide after 4s
       }
   };
 

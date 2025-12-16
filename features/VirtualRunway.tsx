@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 
 // --- HELPERS (COLOR & MASKING) ---
@@ -17,63 +17,6 @@ const rgbToLab = (r: number, g: number, b: number) => {
     y = (y > 0.008856) ? Math.pow(y, 1/3) : (7.787 * y) + 16/116;
     z = (z > 0.008856) ? Math.pow(z, 1/3) : (7.787 * z) + 16/116;
     return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
-};
-
-const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, toleranceVal: number) => {
-    const imgData = ctx.getImageData(0, 0, width, height);
-    const data = imgData.data;
-    const mask = new Uint8Array(width * height);
-    const visited = new Uint8Array(width * height);
-    
-    if (startX < 0 || startX >= width || startY < 0 || startY >= height) return null;
-
-    const p = (Math.floor(startY) * width + Math.floor(startX)) * 4;
-    const [l0, a0, b0] = rgbToLab(data[p], data[p+1], data[p+2]);
-    
-    const stack = [[Math.floor(startX), Math.floor(startY)]];
-    let minX = width, maxX = 0, minY = height, maxY = 0;
-    let pixelCount = 0;
-
-    while (stack.length) {
-        const [x, y] = stack.pop()!;
-        const idx = y * width + x;
-        if (visited[idx]) continue;
-        visited[idx] = 1;
-
-        const pos = idx * 4;
-        const [l, a, b] = rgbToLab(data[pos], data[pos+1], data[pos+2]);
-        const dist = Math.sqrt((l-l0)**2 + (a-a0)**2 + (b-b0)**2);
-
-        if (dist < toleranceVal) {
-            mask[idx] = 255;
-            pixelCount++;
-            if (x < minX) minX = x; if (x > maxX) maxX = x;
-            if (y < minY) minY = y; if (y > maxY) maxY = y;
-
-            if (x>0) stack.push([x-1,y]); if (x<width-1) stack.push([x+1,y]);
-            if (y>0) stack.push([x,y-1]); if (y<height-1) stack.push([x,y+1]);
-        }
-    }
-    
-    if (pixelCount < 50) return null;
-
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = width; maskCanvas.height = height;
-    const mCtx = maskCanvas.getContext('2d')!;
-    const mData = mCtx.createImageData(width, height);
-    for(let i=0; i<mask.length; i++) {
-        if (mask[i]) {
-            mData.data[i*4] = 0; mData.data[i*4+1] = 0; mData.data[i*4+2] = 0; mData.data[i*4+3] = 255;
-        }
-    }
-    mCtx.putImageData(mData, 0, 0);
-
-    return { 
-        maskCanvas,
-        bounds: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
-        centerX: minX + (maxX - minX)/2,
-        centerY: minY + (maxY - minY)/2
-    };
 };
 
 const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
@@ -93,6 +36,54 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
     });
 };
 
+const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tolerance: number) => {
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = width;
+    maskCanvas.height = height;
+    const maskCtx = maskCanvas.getContext('2d')!;
+    const maskImgData = maskCtx.createImageData(width, height);
+    const maskData = maskImgData.data;
+
+    const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
+    const r0 = data[startPos];
+    const g0 = data[startPos+1];
+    const b0 = data[startPos+2];
+
+    const visited = new Uint8Array(width * height);
+    const stack = [[Math.floor(startX), Math.floor(startY)]];
+
+    while (stack.length) {
+        const [x, y] = stack.pop()!;
+        const idx = y * width + x;
+        if (visited[idx]) continue;
+        visited[idx] = 1;
+
+        const pos = idx * 4;
+        const r = data[pos];
+        const g = data[pos+1];
+        const b = data[pos+2];
+
+        const diff = Math.abs(r - r0) + Math.abs(g - g0) + Math.abs(b - b0);
+
+        if (diff <= tolerance * 3) {
+            maskData[pos] = 255;
+            maskData[pos+1] = 255;
+            maskData[pos+2] = 255;
+            maskData[pos+3] = 255;
+
+            if (x > 0) stack.push([x-1, y]);
+            if (x < width - 1) stack.push([x+1, y]);
+            if (y > 0) stack.push([x, y-1]);
+            if (y < height - 1) stack.push([x, y+1]);
+        }
+    }
+
+    maskCtx.putImageData(maskImgData, 0, 0);
+    return { maskCanvas, referenceColor: {r: r0, g: g0, b: b0} };
+};
+
 interface VirtualRunwayProps {
     onNavigateToCreator: () => void;
 }
@@ -106,69 +97,98 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
+    const [isMaskReady, setIsMaskReady] = useState(false);
     
-    // --- STATE: STUDIO TOOLS ---
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // --- STATE: STUDIO ENGINE ---
+    const canvasRef = useRef<HTMLCanvasElement>(null); // Visual Canvas (Base + Pattern)
+    const maskCanvasRef = useRef<HTMLCanvasElement | null>(null); // Hidden Mask Canvas (Grayscale)
     const [baseImgObj, setBaseImgObj] = useState<HTMLImageElement | null>(null);
     const [patternImgObj, setPatternImgObj] = useState<HTMLImageElement | null>(null);
     
-    // MASKING STATES
-    const [appliedMasks, setAppliedMasks] = useState<any[]>([]); // Wand masks
-    const [drawingCanvas, setDrawingCanvas] = useState<HTMLCanvasElement | null>(null); // Manual drawing
-    
     // Controls
     const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER'>('WAND');
+    const [smartBrush, setSmartBrush] = useState(true); // Default to Smart
     const [brushSize, setBrushSize] = useState(20);
     const [patternScale, setPatternScale] = useState(0.5);
     const [patternRotation, setPatternRotation] = useState(0);
     const [patternOpacity, setPatternOpacity] = useState(1); 
     const [shadowIntensity, setShadowIntensity] = useState(0.8);
     const [wandTolerance, setWandTolerance] = useState(30);
-    const [edgeFeather, setEdgeFeather] = useState(2); // Suavização
+    const [edgeFeather, setEdgeFeather] = useState(2);
     
-    const refInputRef = useRef<HTMLInputElement>(null);
+    // SMART BRUSH REFERENCE
+    const targetColorRef = useRef<{r:number, g:number, b:number} | null>(null);
+
+    // Drawing & Interaction State
     const isDrawingRef = useRef(false);
     const lastPosRef = useRef<{x:number, y:number}|null>(null);
+    const [cursorPos, setCursorPos] = useState<{x: number, y: number} | null>(null);
+    
+    const refInputRef = useRef<HTMLInputElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
-    // --- AUTO-MAGIC MASKING ---
+    // Add Image Loading Effects
     useEffect(() => {
-        if (step === 'STUDIO' && baseImgObj && patternImgObj && appliedMasks.length === 0 && canvasRef.current) {
-            // Initialize Drawing Canvas
-            const dCanvas = document.createElement('canvas');
-            dCanvas.width = canvasRef.current.width;
-            dCanvas.height = canvasRef.current.height;
-            setDrawingCanvas(dCanvas);
+        if (referenceImage) {
+            const img = new Image();
+            img.src = referenceImage;
+            img.crossOrigin = "anonymous";
+            img.onload = () => setBaseImgObj(img);
+        }
+    }, [referenceImage]);
 
+    useEffect(() => {
+        if (selectedPattern) {
+            const img = new Image();
+            img.src = selectedPattern;
+            img.crossOrigin = "anonymous";
+            img.onload = () => setPatternImgObj(img);
+        }
+    }, [selectedPattern]);
+
+    // --- AUTO-MAGIC MASKING (INITIAL) ---
+    useEffect(() => {
+        if (step === 'STUDIO' && baseImgObj && patternImgObj && !maskCanvasRef.current) {
+            // Inicializar Canvas de Máscara (Mesmo tamanho da imagem base)
+            const mCanvas = document.createElement('canvas');
+            mCanvas.width = baseImgObj.width;
+            mCanvas.height = baseImgObj.height;
+            maskCanvasRef.current = mCanvas;
+
+            // Auto-Magic: Tenta achar a roupa branca
             setTimeout(() => {
-                const canvas = canvasRef.current;
-                if (!canvas) return;
+                const ctx = mCanvas.getContext('2d')!;
+                // Desenhar imagem base no canvas auxiliar para ler pixels
+                const tempC = document.createElement('canvas');
+                tempC.width = baseImgObj.width; tempC.height = baseImgObj.height;
+                const tCtx = tempC.getContext('2d')!;
+                tCtx.drawImage(baseImgObj, 0, 0);
                 
-                const cx = canvas.width / 2;
-                const cy = canvas.height / 2;
+                // Pontos de amostragem centrais (Chute inicial inteligente)
+                const cx = baseImgObj.width / 2;
+                const cy = baseImgObj.height / 2;
                 const points = [ { x: cx, y: cy }, { x: cx, y: cy * 0.8 }, { x: cx, y: cy * 1.2 } ];
 
-                const ctx = canvas.getContext('2d')!;
-                ctx.drawImage(baseImgObj, 0, 0, canvas.width, canvas.height);
-                
-                const cCtx = document.createElement('canvas').getContext('2d')!;
-                cCtx.canvas.width = canvas.width; cCtx.canvas.height = canvas.height;
-                cCtx.drawImage(baseImgObj, 0, 0, canvas.width, canvas.height);
-
+                let found = false;
                 for (const p of points) {
-                    const pixel = ctx.getImageData(p.x, p.y, 1, 1).data;
+                    const pixel = tCtx.getImageData(p.x, p.y, 1, 1).data;
                     const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
+                    
+                    // Se for claro (branco), tenta flood fill
                     if (brightness > 180) {
-                        const res = createMockupMask(cCtx, canvas.width, canvas.height, p.x, p.y, 40);
-                        if (res && res.bounds.w > canvas.width * 0.1) {
-                            setAppliedMasks(prev => [...prev, res]);
-                            break;
-                        }
+                        found = true;
+                        // Capture initial target color
+                        targetColorRef.current = { r: pixel[0], g: pixel[1], b: pixel[2] };
+                        break;
                     }
                 }
+                setIsMaskReady(true);
+                if (canvasRef.current) renderCanvas();
             }, 500);
         }
     }, [step, baseImgObj, patternImgObj]);
 
+    // Transfer Listener
     useEffect(() => {
         const transferPattern = localStorage.getItem('vingi_mockup_pattern') || localStorage.getItem('vingi_runway_pattern');
         if (transferPattern) {
@@ -179,158 +199,46 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     }, []);
 
-    const handleRefImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                setReferenceImage(ev.target?.result as string);
-                setSearchQuery('');
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const searchModels = async () => {
-        if (!searchQuery.trim() && !referenceImage) return;
-        setIsSearching(true);
-        setWhiteBases([]);
-        setLoadingMessage("Detectando Contraste...");
-
-        try {
-            let mainImageBase64 = null;
-            if (referenceImage) {
-                 const compressed = await compressImage(referenceImage);
-                 mainImageBase64 = compressed.split(',')[1];
-            }
-
-            const res = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'FIND_WHITE_MODELS', 
-                    prompt: searchQuery,
-                    mainImageBase64: mainImageBase64 
-                })
-            });
-            const data = await res.json();
-            
-            if (data.success && data.queries) {
-                setLoadingMessage("Filtrando Bases Claras...");
-                const uniqueImages = new Set();
-                const fetchWithRetry = async (q: string) => {
-                    const r = await fetch('/api/analyze', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'GET_LINK_PREVIEW', backupSearchTerm: q })
-                    });
-                    const j = await r.json();
-                    return j.image;
-                };
-                const promises = data.queries.map((q: string) => fetchWithRetry(q));
-                const results = await Promise.all(promises);
-                results.forEach((img: any) => { if(img) uniqueImages.add(img); });
-                setWhiteBases(Array.from(uniqueImages) as string[]);
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsSearching(false);
-            setLoadingMessage('');
-        }
-    };
-
-    const handleBaseSelect = (imgUrl: string) => {
-        setSelectedBase(imgUrl);
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.src = imgUrl;
-        img.onload = () => {
-            setBaseImgObj(img);
-            if (selectedPattern) {
-                const pImg = new Image();
-                pImg.src = selectedPattern;
-                pImg.onload = () => { setPatternImgObj(pImg); setStep('STUDIO'); };
-            } else {
-                setStep('SELECT_PATTERN');
-            }
-        };
-    };
-
-    const handlePatternUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const res = ev.target?.result as string;
-                setSelectedPattern(res);
-                const pImg = new Image();
-                pImg.src = res;
-                pImg.onload = () => { setPatternImgObj(pImg); setStep('STUDIO'); };
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    // --- RENDER ENGINE WITH MANUAL MASKING ---
+    // --- RENDER ENGINE ---
     useEffect(() => {
         if (step === 'STUDIO' && canvasRef.current && baseImgObj) {
-            const canvas = canvasRef.current;
-            // Resize canvas only if dimensions change to avoid clearing drawingCanvas
-            if (canvas.width !== Math.min(baseImgObj.width, 1200)) {
-                const maxW = 1200;
-                const ratio = baseImgObj.width / baseImgObj.height;
-                canvas.width = Math.min(baseImgObj.width, maxW);
-                canvas.height = canvas.width / ratio;
-                // Reset drawing canvas to match
-                if(drawingCanvas) {
-                    drawingCanvas.width = canvas.width;
-                    drawingCanvas.height = canvas.height;
-                }
+            // Resize display canvas to match logic canvas (but controlled via CSS)
+            // Mantemos a resolução interna alta (da imagem)
+            if (canvasRef.current.width !== baseImgObj.width) {
+                canvasRef.current.width = baseImgObj.width;
+                canvasRef.current.height = baseImgObj.height;
             }
             renderCanvas();
         }
-    }, [step, baseImgObj, patternImgObj, appliedMasks, drawingCanvas, patternScale, patternRotation, patternOpacity, shadowIntensity, edgeFeather]);
+    }, [step, baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, edgeFeather]);
 
     const renderCanvas = () => {
         const canvas = canvasRef.current;
-        if (!canvas || !baseImgObj) return;
+        const maskCanvas = maskCanvasRef.current;
+        if (!canvas || !baseImgObj || !maskCanvas) return;
+        
         const ctx = canvas.getContext('2d')!;
         const w = canvas.width;
         const h = canvas.height;
         
+        // 1. Limpa e desenha Base
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(baseImgObj, 0, 0, w, h);
 
         if (patternImgObj) {
-            // 1. COMPOSITE MASKS (Wand + Manual)
-            const finalMaskCanvas = document.createElement('canvas');
-            finalMaskCanvas.width = w; finalMaskCanvas.height = h;
-            const fmCtx = finalMaskCanvas.getContext('2d')!;
-            
-            // Add Wand Masks
-            appliedMasks.forEach(mask => {
-                fmCtx.drawImage(mask.maskCanvas, 0, 0);
-            });
-            // Add Manual Drawing
-            if (drawingCanvas) {
-                fmCtx.drawImage(drawingCanvas, 0, 0);
-            }
-
-            // 2. RENDER PATTERN
+            // 2. Prepara Camada de Estampa
             const patternLayer = document.createElement('canvas');
             patternLayer.width = w; patternLayer.height = h;
             const pCtx = patternLayer.getContext('2d')!;
             
-            // Apply Softness (Feather)
-            if (edgeFeather > 0) {
-                pCtx.filter = `blur(${edgeFeather}px)`;
-            }
-            pCtx.drawImage(finalMaskCanvas, 0, 0);
+            // Desenha a máscara atual (resultante de Wand + Brush + Eraser)
+            if (edgeFeather > 0) pCtx.filter = `blur(${edgeFeather}px)`;
+            pCtx.drawImage(maskCanvas, 0, 0);
             pCtx.filter = 'none';
-            pCtx.globalCompositeOperation = 'source-in';
             
+            // Recorta (Source-In): Onde tem máscara, desenha estampa
+            pCtx.globalCompositeOperation = 'source-in';
             pCtx.save();
-            // Centering logic approx
             pCtx.translate(w/2, h/2);
             pCtx.rotate((patternRotation * Math.PI) / 180); 
             pCtx.scale(patternScale, patternScale);         
@@ -341,20 +249,22 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             }
             pCtx.restore();
 
-            // Apply to Main Canvas
+            // Aplica ao Canvas Principal
             ctx.save();
             ctx.globalAlpha = patternOpacity; 
             ctx.drawImage(patternLayer, 0, 0);
             ctx.restore();
 
-            // 3. SHADOWS (Multiply)
+            // 3. Sombras (Multiply) para Realismo
+            // Usamos a mesma máscara para recortar a imagem original e aplicar como multiply
             const shadowLayer = document.createElement('canvas');
             shadowLayer.width = w; shadowLayer.height = h;
             const sCtx = shadowLayer.getContext('2d')!;
             if (edgeFeather > 0) sCtx.filter = `blur(${edgeFeather}px)`;
-            sCtx.drawImage(finalMaskCanvas, 0, 0);
+            sCtx.drawImage(maskCanvas, 0, 0);
             sCtx.filter = 'none';
             sCtx.globalCompositeOperation = 'source-in';
+            // Aumentamos o contraste da base para extrair sombras
             sCtx.filter = 'grayscale(100%) contrast(150%) brightness(110%)'; 
             sCtx.drawImage(baseImgObj, 0, 0, w, h);
             
@@ -364,12 +274,12 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             ctx.drawImage(shadowLayer, 0, 0);
             ctx.restore();
 
-            // 4. HIGHLIGHTS (Screen)
+            // 4. Highlight (Soft Light)
             const highlightLayer = document.createElement('canvas');
             highlightLayer.width = w; highlightLayer.height = h;
             const hCtx = highlightLayer.getContext('2d')!;
             if (edgeFeather > 0) hCtx.filter = `blur(${edgeFeather}px)`;
-            hCtx.drawImage(finalMaskCanvas, 0, 0);
+            hCtx.drawImage(maskCanvas, 0, 0);
             hCtx.filter = 'none';
             hCtx.globalCompositeOperation = 'source-in';
             hCtx.drawImage(baseImgObj, 0, 0, w, h);
@@ -382,82 +292,207 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     };
 
-    // --- INTERACTION HANDLERS ---
-    const handleMouseDown = (e: React.MouseEvent) => {
-        if (!canvasRef.current) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const scaleX = canvasRef.current.width / rect.width;
-        const scaleY = canvasRef.current.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
+    // --- INTERACTION LOGIC (WAND, BRUSH, ERASER) ---
+    
+    // Mapeamento de coordenadas preciso (compensando object-contain CSS)
+    const getPointerPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
+        if (!canvasRef.current) return { x: 0, y: 0 };
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        
+        let clientX, clientY;
+        if ('touches' in e) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = (e as React.MouseEvent).clientX;
+            clientY = (e as React.MouseEvent).clientY;
+        }
 
+        // Calcula a escala real de exibição
+        // Como usamos object-contain, o canvas pode não ocupar todo o rect
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        // Coordenadas relativas ao canvas interno (resolução real)
+        const x = (clientX - rect.left) * scaleX;
+        const y = (clientY - rect.top) * scaleY;
+        
+        return { x, y, clientX, clientY };
+    };
+
+    const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+        // Previne scroll em mobile ao desenhar
+        if (activeTool !== 'WAND') e.preventDefault();
+        
+        const { x, y, clientX, clientY } = getPointerPos(e);
+        
         if (activeTool === 'WAND') {
-            if (!baseImgObj) return;
-            const cCtx = document.createElement('canvas').getContext('2d')!;
-            cCtx.canvas.width = canvasRef.current.width;
-            cCtx.canvas.height = canvasRef.current.height;
-            cCtx.drawImage(baseImgObj, 0, 0, cCtx.canvas.width, cCtx.canvas.height);
-            const result = createMockupMask(cCtx, cCtx.canvas.width, cCtx.canvas.height, x, y, wandTolerance);
-            if (result && result.bounds.w > 5) setAppliedMasks(prev => [...prev, result]);
+            performFloodFill(x, y);
         } else {
             isDrawingRef.current = true;
             lastPosRef.current = { x, y };
-            draw(x, y);
+            drawStroke(x, y); // Ponto inicial
         }
     };
 
-    const handleMouseMove = (e: React.MouseEvent) => {
-        if (!isDrawingRef.current || !canvasRef.current) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const scaleX = canvasRef.current.width / rect.width;
-        const scaleY = canvasRef.current.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-        draw(x, y);
+    const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+        const { x, y, clientX, clientY } = getPointerPos(e);
+        
+        // Atualiza Cursor Visual
+        setCursorPos({ x: clientX, y: clientY });
+
+        if (!isDrawingRef.current) return;
+        
+        // Previne scroll
+        if (e.cancelable) e.preventDefault();
+        
+        drawStroke(x, y);
         lastPosRef.current = { x, y };
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
         isDrawingRef.current = false;
         lastPosRef.current = null;
-        renderCanvas(); // Re-render final result
     };
 
-    const draw = (x: number, y: number) => {
-        if (!drawingCanvas) return;
-        const ctx = drawingCanvas.getContext('2d')!;
+    const drawStroke = (x: number, y: number) => {
+        const maskCanvas = maskCanvasRef.current;
+        if (!maskCanvas || !baseImgObj) return;
+        const ctx = maskCanvas.getContext('2d')!;
+        
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.lineWidth = brushSize;
+        ctx.lineWidth = brushSize * 2; // Radius to Diameter
         
-        if (activeTool === 'BRUSH') {
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.strokeStyle = 'white'; // Mask color
+        if (smartBrush && targetColorRef.current) {
+            // SMART BRUSH LOGIC (Pixel-by-pixel check)
+            // Instead of standard stroke, we need to manually process the area under the brush.
+            // For performance, we only do this when moving or clicking.
+            
+            // 1. Get Base Image Data under brush area
+            const r = brushSize;
+            const startX = Math.floor(x - r);
+            const startY = Math.floor(y - r);
+            const diam = Math.ceil(r * 2);
+            
+            // Create a temporary canvas to read base image data efficiently
+            const tempC = document.createElement('canvas');
+            tempC.width = diam; tempC.height = diam;
+            const tCtx = tempC.getContext('2d')!;
+            tCtx.drawImage(baseImgObj, startX, startY, diam, diam, 0, 0, diam, diam);
+            const baseData = tCtx.getImageData(0, 0, diam, diam).data;
+            
+            // Get Mask Data
+            const maskDataImg = ctx.getImageData(startX, startY, diam, diam);
+            const maskData = maskDataImg.data;
+            
+            const target = targetColorRef.current;
+            const tol = wandTolerance * 2; // Allow some flex
+            
+            for (let i = 0; i < diam; i++) { // y inside patch
+                for (let j = 0; j < diam; j++) { // x inside patch
+                    const dx = j - r;
+                    const dy = i - r;
+                    if (dx*dx + dy*dy <= r*r) { // Inside brush circle
+                        const pIdx = (i * diam + j) * 4;
+                        const br = baseData[pIdx];
+                        const bg = baseData[pIdx+1];
+                        const bb = baseData[pIdx+2];
+                        
+                        const diff = Math.abs(br - target.r) + Math.abs(bg - target.g) + Math.abs(bb - target.b);
+                        
+                        if (diff <= tol) {
+                            // Pixel belongs to garment, apply brush action
+                            if (activeTool === 'BRUSH') {
+                                maskData[pIdx] = 255; maskData[pIdx+1] = 255; maskData[pIdx+2] = 255; maskData[pIdx+3] = 255;
+                            } else {
+                                maskData[pIdx+3] = 0; // Erase alpha
+                            }
+                        }
+                    }
+                }
+            }
+            ctx.putImageData(maskDataImg, startX, startY);
+
         } else {
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.strokeStyle = 'black';
+            // STANDARD DUMB BRUSH
+            if (activeTool === 'BRUSH') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = 'white'; 
+                ctx.fillStyle = 'white';
+            } else {
+                ctx.globalCompositeOperation = 'destination-out'; 
+                ctx.strokeStyle = 'black'; 
+                ctx.fillStyle = 'black';
+            }
+
+            ctx.beginPath();
+            if (lastPosRef.current) {
+                ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
+            } else {
+                ctx.moveTo(x, y); 
+            }
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            
+            // Dot for single click
+            if (!lastPosRef.current || (lastPosRef.current.x === x && lastPosRef.current.y === y)) {
+                ctx.beginPath();
+                ctx.arc(x, y, brushSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
-        ctx.beginPath();
-        if (lastPosRef.current) {
-            ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
-        } else {
-            ctx.moveTo(x, y);
-        }
-        ctx.lineTo(x, y);
-        ctx.stroke();
+        renderCanvas(); 
+    };
+
+    const performFloodFill = (startX: number, startY: number) => {
+        const maskCanvas = maskCanvasRef.current;
+        if (!baseImgObj || !maskCanvas) return;
         
-        // Immediate visual feedback by calling render
-        renderCanvas();
+        // Ler dados da imagem base
+        const tempC = document.createElement('canvas');
+        tempC.width = baseImgObj.width; tempC.height = baseImgObj.height;
+        const tCtx = tempC.getContext('2d')!;
+        tCtx.drawImage(baseImgObj, 0, 0);
+        
+        // Gera máscara baseada na tolerância de cor
+        const res = createMockupMask(tCtx, tempC.width, tempC.height, startX, startY, wandTolerance);
+        
+        if (res) {
+            // STORE REFERENCE COLOR FOR SMART BRUSH
+            if (res.referenceColor) targetColorRef.current = res.referenceColor;
+
+            // Desenha a nova área na máscara existente
+            const mCtx = maskCanvas.getContext('2d')!;
+            mCtx.globalCompositeOperation = 'source-over'; // Adiciona (União)
+            mCtx.drawImage(res.maskCanvas, 0, 0);
+            renderCanvas();
+        }
     };
 
     const clearMasks = () => {
-        setAppliedMasks([]);
-        if (drawingCanvas) {
-            const ctx = drawingCanvas.getContext('2d')!;
-            ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        const maskCanvas = maskCanvasRef.current;
+        if (maskCanvas) {
+            const ctx = maskCanvas.getContext('2d')!;
+            ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+            targetColorRef.current = null; // Reset smart color
+            renderCanvas();
         }
-        renderCanvas();
+    };
+
+    // --- OTHER HANDLERS ---
+    const handleRefImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setReferenceImage(ev.target?.result as string);
+                setSearchQuery('');
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const downloadResult = () => {
@@ -469,8 +504,69 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     };
 
-    // SEARCH BAR REF FOR AUTO-FOCUS
-    const searchInputRef = useRef<HTMLInputElement>(null);
+    // --- NEW FUNCTIONS ---
+    
+    const searchModels = async () => {
+        if (!searchQuery) return;
+        setIsSearching(true);
+        setLoadingMessage("Identificando estrutura...");
+        setWhiteBases([]);
+
+        try {
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'FIND_WHITE_MODELS',
+                    prompt: searchQuery
+                })
+            });
+            const data = await response.json();
+
+            if (data.success && data.queries) {
+                setLoadingMessage("Buscando imagens...");
+                const queries = data.queries.slice(0, 4);
+                const promises = queries.map(async (q: string) => {
+                    try {
+                        const res = await fetch('/api/analyze', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                action: 'GET_LINK_PREVIEW',
+                                targetUrl: '',
+                                backupSearchTerm: q
+                            })
+                        });
+                        const d = await res.json();
+                        return d.success ? d.image : null;
+                    } catch { return null; }
+                });
+                const results = await Promise.all(promises);
+                setWhiteBases(results.filter((url: string | null) => url !== null) as string[]);
+            }
+        } catch (e) {
+            console.error("Search failed", e);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleBaseSelect = (url: string) => {
+        setReferenceImage(url);
+        setSelectedBase(url);
+    };
+
+    const handlePatternUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setSelectedPattern(ev.target?.result as string);
+                setStep('STUDIO');
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden">
@@ -573,23 +669,37 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
 
             {step === 'STUDIO' && (
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden animate-fade-in">
-                    <div className="flex-1 bg-gray-200 relative flex items-center justify-center overflow-hidden cursor-crosshair group">
+                    <div className="flex-1 bg-gray-200 relative flex items-center justify-center overflow-hidden cursor-crosshair group touch-none">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-                        <div className="relative shadow-2xl max-w-full max-h-full">
+                        <div className="relative shadow-2xl max-w-full max-h-full flex items-center justify-center">
                             <canvas ref={canvasRef} 
-                                onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+                                onMouseDown={handlePointerDown} 
+                                onMouseMove={handlePointerMove} 
+                                onMouseUp={handlePointerUp}
+                                onTouchStart={handlePointerDown}
+                                onTouchMove={handlePointerMove}
+                                onTouchEnd={handlePointerUp}
                                 className="block max-w-full max-h-[85vh] object-contain bg-white" 
-                                style={{ cursor: activeTool === 'WAND' ? 'crosshair' : 'none' }}
+                                style={{ cursor: 'none' }} // Esconde cursor nativo
                             />
-                            {/* CUSTOM CURSOR FOR BRUSH */}
-                            {activeTool !== 'WAND' && (
-                                <div className="pointer-events-none fixed z-50 rounded-full border-2 border-black bg-white/30 mix-blend-difference" 
-                                     style={{ width: brushSize, height: brushSize, transform: 'translate(-50%, -50%)', left: lastPosRef.current?.x, top: lastPosRef.current?.y }}
+                            
+                            {/* CUSTOM TOOL CURSOR */}
+                            {activeTool !== 'WAND' && cursorPos && (
+                                <div className="pointer-events-none fixed z-50 rounded-full border border-black/50 bg-white/30 backdrop-invert" 
+                                     style={{ 
+                                         width: brushSize * 2, 
+                                         height: brushSize * 2, 
+                                         left: cursorPos.x, 
+                                         top: cursorPos.y,
+                                         transform: 'translate(-50%, -50%)',
+                                         boxShadow: '0 0 0 1px rgba(255,255,255,0.5)'
+                                     }}
                                 />
                             )}
-                             {appliedMasks.length === 0 && !drawingCanvas && (
+                            
+                             {!isMaskReady && (
                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white px-6 py-3 rounded-full text-sm font-bold pointer-events-none backdrop-blur animate-pulse flex items-center gap-2">
-                                    <Sparkles size={16} /> Aplicando Automaticamente...
+                                    <Sparkles size={16} /> Ajustando Modelo...
                                  </div>
                              )}
                         </div>
@@ -616,9 +726,25 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                             </div>
 
                             {activeTool !== 'WAND' && (
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><span>Tamanho Pincel</span><span>{brushSize}px</span></div>
-                                    <input type="range" min="5" max="100" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
+                                <div className="space-y-3">
+                                    {/* SMART BRUSH TOGGLE */}
+                                    <div onClick={() => setSmartBrush(!smartBrush)} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${smartBrush ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <ShieldCheck size={16} className={smartBrush ? 'text-blue-600' : 'text-gray-400'}/>
+                                            <div>
+                                                <span className={`text-[10px] font-bold uppercase block ${smartBrush ? 'text-blue-800' : 'text-gray-500'}`}>Proteção de Borda</span>
+                                                <span className="text-[9px] text-gray-400 leading-tight">Impede pintar fora da roupa</span>
+                                            </div>
+                                        </div>
+                                        <div className={`w-8 h-4 rounded-full relative transition-colors ${smartBrush ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                                            <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${smartBrush ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><span>Tamanho Pincel</span><span>{brushSize}px</span></div>
+                                        <input type="range" min="5" max="100" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
+                                    </div>
                                 </div>
                             )}
 
@@ -651,7 +777,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                             </div>
 
                             <div className="space-y-2 pt-4 border-t border-gray-100">
-                                <button onClick={clearMasks} disabled={appliedMasks.length === 0 && !drawingCanvas} className="w-full py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50"><Eraser size={14}/> Limpar Tudo</button>
+                                <button onClick={clearMasks} className="w-full py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50"><Eraser size={14}/> Limpar Tudo</button>
                                 <button onClick={downloadResult} className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 flex items-center justify-center gap-2 mt-2"><Download size={16}/> Salvar Mockup</button>
                             </div>
                         </div>

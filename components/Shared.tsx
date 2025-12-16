@@ -93,14 +93,14 @@ export const ModuleLandingPage: React.FC<ModuleLandingPageProps> = ({
 }) => {
     return (
         <div className="flex-1 flex flex-col relative overflow-y-auto overflow-x-hidden bg-[#f8fafc] w-full h-full">
-            {/* FUNDO TÉCNICO COM GRID E SCANLINE */}
-            <div className="absolute inset-0 pointer-events-none h-full w-full fixed">
+            {/* FUNDO TÉCNICO COM GRID E SCANLINE OTIMIZADA */}
+            <div className="absolute inset-0 pointer-events-none h-full w-full fixed z-0 overflow-hidden">
                 {/* Grid */}
                 <div className="absolute inset-0 opacity-[0.03]" 
                      style={{ backgroundImage: 'linear-gradient(#0f172a 1px, transparent 1px), linear-gradient(90deg, #0f172a 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
                 </div>
-                {/* Scan Line Animation */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-blue-400/50 shadow-[0_0_30px_rgba(59,130,246,0.6)] animate-scan z-0"></div>
+                {/* Scan Line Animation - JITTER FIXED (transform instead of top) */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-blue-400/50 shadow-[0_0_30px_rgba(59,130,246,0.6)] animate-scan will-change-transform"></div>
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 relative z-10 w-full max-w-[1600px] mx-auto min-h-min pb-32">

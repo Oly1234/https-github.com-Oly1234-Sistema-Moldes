@@ -3,7 +3,7 @@
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
 import { GoogleGenAI } from "@google/genai";
 
-export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL') => {
+export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '') => {
     const ai = new GoogleGenAI({ apiKey });
 
     // 1. Contexto de Cor (Se disponível)
@@ -11,30 +11,69 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
         ? `STRICT PALETTE: ${colors.map(c => c.name).join(', ')}. Dominant tones: ${colors.slice(0,2).map(c => c.hex).join(', ')}.` 
         : "Use colors that match the requested theme.";
 
-    // 2. Contexto de Layout (Substitui Ourela antiga se layoutStyle for definido)
+    // 2. Contexto de Layout (Aprimorado para Nível Profissional com Sub-Layouts)
     let layoutInstruction = "Seamless repeat pattern (All-over/Corrida).";
     
-    // Mapeamento de Estilos de Layout
+    // Mapeamento de Estilos de Layout com Estrutura Rígida
     if (layoutStyle && layoutStyle !== 'ORIGINAL') {
         switch (layoutStyle) {
             case 'BARRADO':
-                layoutInstruction = "BORDER PRINT (Barrado). The design must have a heavy, decorative border along one edge (bottom/side) transitioning into a lighter filler.";
+                layoutInstruction = `
+                LAYOUT: HORIZONTAL BORDER PRINT (Barrado). 
+                STRUCTURE:
+                - BOTTOM 35%: Heavy, intricate, highly detailed border artwork.
+                - TOP 65%: Lighter field, sparse motifs, or fading gradient.
+                - VISUAL GRAVITY: The visual weight must be at the bottom edge.
+                ${subLayoutStyle ? `SUB-STYLE: ${subLayoutStyle}.` : ''}
+                ${subLayoutStyle === 'DUPLO' ? 'MIRRORED BORDER: Identical heavy borders on BOTH Top and Bottom edges.' : ''}
+                ${subLayoutStyle === 'DEGRADE' ? 'GRADIENT FLOW: Motifs must visually dissolve/fade from heavy bottom to empty top.' : ''}
+                `;
                 break;
             case 'LENCO':
-                layoutInstruction = "ENGINEERED SCARF PRINT (Lenço). Symmetrical or placed layout composed inside a square, with framing borders and a central medallion/motif.";
+                layoutInstruction = `
+                LAYOUT: LUXURY SILK SCARF (Foulard/Carré Style).
+                GEOMETRY: Perfectly SYMMETRICAL Square Composition.
+                STRUCTURE:
+                1. FRAME: A distinct, ornate outer border (frame) running equally along ALL 4 EDGES.
+                2. CORNERS: Elaborate decorative motifs mirrored in all 4 corners.
+                3. CENTER: A strong central medallion or focal illustration.
+                4. FILLER: Connecting motifs between the center and the border.
+                VIBE: High-end fashion (Hermès/Versace style).
+                ${subLayoutStyle ? `SUB-STYLE: ${subLayoutStyle}.` : ''}
+                ${subLayoutStyle === 'MEDALHAO' ? 'FOCUS: Massive, intricate central medallion. Symmetrical radiation.' : ''}
+                ${subLayoutStyle === 'BANDANA' ? 'FOCUS: Paisley/Ornamental concentric frames. Classic Bandana layout.' : ''}
+                ${subLayoutStyle === 'GEOMETRICO' ? 'FOCUS: Art Deco/Bauhaus rigid symmetry. No organic flow.' : ''}
+                `;
                 break;
             case 'LOCALIZADA':
-                layoutInstruction = "PLACED PRINT (Localizada/T-shirt). Single isolated artwork centered on white background. Not a repeating pattern.";
+                layoutInstruction = `
+                LAYOUT: PLACED PRINT (Localizada/T-shirt Graphic).
+                STRUCTURE: Single isolated artwork centered on a solid background. 
+                - NOT a repeating pattern.
+                - NOT a full coverage print.
+                - Clear negative space around the central subject.
+                `;
                 break;
             case 'PAREO':
-                layoutInstruction = "BEACH COVER-UP (Pareô/Canga). Large scale panel design, highly decorative, filling the entire rectangular space.";
+                layoutInstruction = `
+                LAYOUT: BEACH PAREO/SARONG PANEL.
+                STRUCTURE: Large scale rectangular panel design.
+                - Highly decorative borders.
+                - Tropical/Summer flow.
+                - Designed to be worn wrapped around the body.
+                `;
                 break;
-            case 'CENTRALIZADA':
-                layoutInstruction = "CENTRALIZED MOTIF. The main element is in the center, radiating outwards.";
+            case 'CORRIDA':
+                layoutInstruction = `
+                LAYOUT: ALL-OVER SEAMLESS REPEAT.
+                ${subLayoutStyle === 'TOSS' ? 'STYLE: Tossed layout. Motifs scattered randomly with varying rotations. No obvious grid.' : ''}
+                ${subLayoutStyle === 'GRID' ? 'STYLE: Grid/Geometric alignment. Motifs aligned in rows/columns.' : ''}
+                ${subLayoutStyle === 'ORGANIC' ? 'STYLE: Organic Flow. Vines/Waves connecting motifs continuously.' : ''}
+                `;
                 break;
         }
     } else if (selvedgeInfo && selvedgeInfo !== 'NENHUMA') {
-        // Fallback para a lógica antiga de Ourela se layoutStyle não for usado
+        // Fallback para a lógica antiga de Ourela
         layoutInstruction = `BORDER PRINT (Barrado). The design must have a decorative border aligned to the ${selvedgeInfo === 'Inferior' ? 'BOTTOM' : selvedgeInfo === 'Superior' ? 'TOP' : 'SIDE'} edge.`;
     }
 
@@ -76,10 +115,10 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     ${TECHNIQUE_RULES}
     
     VISUAL RULES:
-    - CLOSE-UP ARTWORK.
+    - CLOSE-UP ARTWORK (Top-down view).
     - NO human models, NO mannequins, NO 3D garments.
     - NO realistic photos of people.
-    - Image must be a flat rectangular swatch.
+    - Image must be a flat rectangular/square swatch ready for printing.
     `;
 
     try {
@@ -87,7 +126,7 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
             model: 'gemini-2.5-flash-image',
             contents: { parts: [{ text: FULL_PROMPT }] },
             config: {
-                imageConfig: { aspectRatio: "1:1" }
+                imageConfig: { aspectRatio: layoutStyle === 'PAREO' ? "9:16" : "1:1" } // Pareô vertical, resto quadrado
             }
         });
 

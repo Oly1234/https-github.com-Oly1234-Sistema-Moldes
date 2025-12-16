@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage } from '../components/Shared';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
@@ -50,13 +50,33 @@ interface AtelierSystemProps {
 
 // --- LAYOUT TYPES ---
 const LAYOUT_OPTIONS = [
-    { id: 'ORIGINAL', label: 'Conforme Original' },
-    { id: 'CORRIDA', label: 'Corrida (All-over)' },
-    { id: 'BARRADO', label: 'Barrado (Border)' },
-    { id: 'LENCO', label: 'Lenço (Scarf)' },
-    { id: 'PAREO', label: 'Pareô/Canga' },
-    { id: 'LOCALIZADA', label: 'Localizada (T-shirt)' },
+    { id: 'ORIGINAL', label: 'Original', desc: 'Rapport Padrão' },
+    { id: 'CORRIDA', label: 'Corrida', desc: 'All-over Repeat' },
+    { id: 'BARRADO', label: 'Barrado', desc: 'Border Print' },
+    { id: 'LENCO', label: 'Lenço', desc: 'Engineered Scarf' },
+    { id: 'PAREO', label: 'Pareô', desc: 'Painel Canga' },
+    { id: 'LOCALIZADA', label: 'Localizada', desc: 'T-Shirt Placement' },
 ];
+
+// --- SUB-LAYOUT VISUAL CONFIG ---
+const SUB_LAYOUT_CONFIG: Record<string, { id: string, label: string, icon: any }[]> = {
+    'LENCO': [
+        { id: 'MEDALHAO', label: 'Medalhão (Carré)', icon: Target },
+        { id: 'BANDANA', label: 'Bandana (Paisley)', icon: BoxSelect },
+        { id: 'GEOMETRICO', label: 'Geométrico', icon: Grid3X3 },
+        { id: 'MOLDURA', label: 'Moldura Simples', icon: Maximize },
+    ],
+    'BARRADO': [
+        { id: 'SIMPLES', label: 'Simples (Barra)', icon: ArrowDownToLine },
+        { id: 'DUPLO', label: 'Duplo (Espelhado)', icon: ArrowDownToLine }, // Using standard icon, could be improved
+        { id: 'DEGRADE', label: 'Degradê (Fading)', icon: Droplets },
+    ],
+    'CORRIDA': [
+        { id: 'TOSS', label: 'Toss (Aleatório)', icon: Sparkles },
+        { id: 'GRID', label: 'Grid (Alinhado)', icon: Grid3X3 },
+        { id: 'ORGANIC', label: 'Orgânico (Flow)', icon: Droplets },
+    ]
+};
 
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
     // --- ESTADOS GERAIS ---
@@ -69,7 +89,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
     const [colorCount, setColorCount] = useState<number>(0); // 0 = Auto
+    
+    // --- NOVO: LAYOUTS E SUB-LAYOUTS ---
     const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
+    const [subLayout, setSubLayout] = useState<string>(''); // Novo estado para estilo visual
+    const [dimensions, setDimensions] = useState({ w: '', h: '' });
     
     // --- ESTADOS DE TEXTURA (AGORA PARA AMBOS) ---
     const [useTextureOverlay, setUseTextureOverlay] = useState(false);
@@ -94,6 +118,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         }
     }, []);
 
+    // Reset SubLayout when Layout Changes
+    useEffect(() => {
+        setSubLayout('');
+    }, [targetLayout]);
+
     const resetSession = () => {
         setReferenceImage(null);
         setGeneratedPattern(null);
@@ -103,8 +132,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setCreationMode('IMAGE');
         // Reset defaults
         setTargetLayout('ORIGINAL');
+        setSubLayout('');
         setColorCount(0);
         setUseTextureOverlay(false);
+        setDimensions({ w: '', h: '' });
     };
 
     // --- ANALISADORES MODULARES ---
@@ -170,6 +201,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setGeneratedPattern(null);
         setError(null);
 
+        // Append Dimensions to Prompt implicitly
+        let finalPrompt = userPrompt;
+        if (dimensions.w && dimensions.h) {
+            finalPrompt += ` REQUIRED DIMENSIONS: ${dimensions.w}cm x ${dimensions.h}cm.`;
+        }
+
         // Feedback Visual
         setTimeout(() => setStatusMessage(printTechnique === 'DIGITAL' ? "Aplicando Iluminação..." : `Separando em ${colorCount || 'Auto'} cores...`), 1500);
 
@@ -179,12 +216,13 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     action: 'GENERATE_PATTERN', 
-                    prompt: userPrompt,
-                    colors: colors, // Envia cores atuais
-                    selvedge: 'NENHUMA', // Deprecated in favor of layoutStyle
-                    layoutStyle: targetLayout, // Novo: Corrida, Lenço, etc.
-                    colorCount: colorCount, // Novo: 1-12
-                    technique: printTechnique // CYLINDER vs DIGITAL
+                    prompt: finalPrompt,
+                    colors: colors, 
+                    selvedge: 'NENHUMA',
+                    layoutStyle: targetLayout, 
+                    subLayoutStyle: subLayout, // PASSANDO O SUB-LAYOUT
+                    colorCount: colorCount,
+                    technique: printTechnique 
                 })
             });
 
@@ -374,6 +412,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[9px] px-2 py-1 rounded backdrop-blur font-mono flex flex-col items-end">
                                     <span>{printTechnique} QUALITY</span>
                                     {targetLayout !== 'ORIGINAL' && <span>LAYOUT: {targetLayout}</span>}
+                                    {dimensions.w && dimensions.h && <span>{dimensions.w}x{dimensions.h}cm</span>}
                                 </div>
                             </div>
                         ) : (
@@ -446,19 +485,77 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             {/* 3. CONTROLE DE LAYOUT (Estilo da Estampa) */}
                             <div>
                                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <LayoutTemplate size={14}/> Formato de Saída
+                                    <LayoutTemplate size={14}/> Formato & Dimensão
                                 </h3>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-2 gap-2 mb-4">
                                     {LAYOUT_OPTIONS.map((opt) => (
-                                        <button
-                                            key={opt.id}
-                                            onClick={() => setTargetLayout(opt.id)}
-                                            className={`py-2 px-3 rounded-lg text-[10px] font-bold border transition-all truncate ${targetLayout === opt.id ? 'bg-vingi-600 text-white border-vingi-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                        >
-                                            {opt.label}
-                                        </button>
+                                        <div key={opt.id} className="relative">
+                                            <button
+                                                onClick={() => setTargetLayout(opt.id)}
+                                                className={`w-full py-3 px-3 rounded-lg text-left border transition-all ${
+                                                    targetLayout === opt.id 
+                                                        ? 'bg-vingi-900 border-vingi-900 ring-2 ring-offset-1 ring-vingi-900 shadow-md' 
+                                                        : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-[11px] font-bold ${targetLayout === opt.id ? 'text-white' : 'text-gray-700'}`}>{opt.label}</span>
+                                                    {targetLayout === opt.id && <Check size={12} className="text-white"/>}
+                                                </div>
+                                                <p className={`text-[9px] mt-0.5 ${targetLayout === opt.id ? 'text-gray-300' : 'text-gray-400'}`}>{opt.desc}</p>
+                                            </button>
+                                        </div>
                                     ))}
                                 </div>
+
+                                {/* VISUAL SUB-LAYOUT SELECTOR (GRID) */}
+                                {SUB_LAYOUT_CONFIG[targetLayout] && (
+                                    <div className="mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200 animate-fade-in">
+                                        <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-2">Estilo Visual do {LAYOUT_OPTIONS.find(l => l.id === targetLayout)?.label}</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {SUB_LAYOUT_CONFIG[targetLayout].map(sub => (
+                                                <button
+                                                    key={sub.id}
+                                                    onClick={() => setSubLayout(sub.id)}
+                                                    className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${subLayout === sub.id ? 'bg-white border-vingi-500 shadow-md text-vingi-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                                                >
+                                                    <sub.icon size={20} className={subLayout === sub.id ? 'text-vingi-500' : 'text-gray-400'}/>
+                                                    <span className="text-[10px] font-bold text-center">{sub.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* INPUTS DE MEDIDA (CONDITIONAL) */}
+                                {['BARRADO', 'LENCO', 'PAREO', 'LOCALIZADA'].includes(targetLayout) && (
+                                    <div className="flex gap-2 animate-fade-in">
+                                        <div className="flex-1 relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                                <Ruler size={12} className="rotate-90"/>
+                                            </div>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Largura (cm)" 
+                                                value={dimensions.w}
+                                                onChange={(e) => setDimensions(p => ({...p, w: e.target.value}))}
+                                                className="w-full bg-white border border-gray-200 rounded-lg pl-8 pr-2 py-2 text-xs font-bold text-gray-800"
+                                            />
+                                        </div>
+                                        <div className="flex-1 relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                                <Ruler size={12}/>
+                                            </div>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Altura (cm)" 
+                                                value={dimensions.h}
+                                                onChange={(e) => setDimensions(p => ({...p, h: e.target.value}))}
+                                                className="w-full bg-white border border-gray-200 rounded-lg pl-8 pr-2 py-2 text-xs font-bold text-gray-800"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* 4. CORES & PANTONES (CILINDRO ONLY) */}

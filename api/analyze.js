@@ -73,28 +73,29 @@ export default async function handler(req, res) {
             if (descText) finalPrompt = descText;
         }
 
-        // 2. Geração de Queries "Contrast Hunter 2.0"
-        // Lógica aprimorada: Buscar fundos escuros e pele com contraste para destacar o branco.
+        // 2. Geração de Queries "Contrast Hunter 3.0 - Edge Detection Optimized"
+        // Lógica aprimorada: Solicita iluminação de borda (Rim Light) e fundos sólidos escuros.
         const MOCKUP_PROMPT = `
-        CONTEXT: We need images of models wearing PLAIN WHITE versions of a specific garment to apply digital patterns.
+        CONTEXT: We need images of models wearing PLAIN WHITE versions of a specific garment. 
+        GOAL: These images will be used for AI pattern mapping, so the BOUNDARIES of the white garment must be RAZOR SHARP against the background.
+        
         GARMENT: "${finalPrompt}"
         
-        TASK: Generate 8 HIGHLY VISUAL search queries to find the perfect base image.
+        TASK: Generate 8 HIGHLY TECHNICAL search queries to find the perfect base image.
         
-        CRITICAL "CONTRAST HUNTER" RULES:
-        1. CLOTHING MUST BE WHITE.
-        2. BACKGROUND MUST BE DARK, GREY, or COLORED (Never white background).
-        3. MODEL MUST HAVE TANNED, DEEP, OR DARK SKIN TONE (To create edge contrast with the white dress).
-        4. LIGHTING: Studio lighting, high contrast, sharp edges.
-        5. KEYWORDS: Use "dark background", "studio shot", "fashion editorial", "ghost mannequin".
+        CRITICAL RULES FOR "EASY MASKING":
+        1. **CONTRAST:** White Garment vs. DARK/SOLID Background (Grey, Black, Blue). NO WHITE BACKGROUNDS.
+        2. **LIGHTING:** Studio lighting, hard light, "Rim Lighting" (to separate edges), no soft blur.
+        3. **MODEL:** Distinct skin tone contrast against the white cloth.
+        4. **VIEW:** Full view or clear torso view, minimal hand obstruction over the fabric.
         
         OUTPUT JSON: { "queries": ["string"] }
         
-        Example Queries to generate:
-        - "white maxi dress dark grey studio background tanned skin model"
-        - "plain white slip dress deep skin tone model high contrast photography"
-        - "white gown black background studio shot editorial"
-        - "white summer dress street style dark environment"
+        Example Queries:
+        - "white silk slip dress on model dark studio background hard rim lighting"
+        - "plain white t-shirt fashion photography black background sharp focus"
+        - "white linen maxi dress editorial shot dark grey backdrop contrast"
+        - "white couture gown studio lighting solid dark background ghost mannequin style"
         `;
         
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
