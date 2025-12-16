@@ -130,7 +130,9 @@ export const ScannerSystem: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXACT' | 'CLOSE' | 'VIBE'>('ALL');
-  const [visibleCount, setVisibleCount] = useState(25);
+  
+  // PAGINATION CONTROL - START AT 10
+  const [visibleCount, setVisibleCount] = useState(10);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -183,7 +185,7 @@ export const ScannerSystem: React.FC = () => {
     if (!uploadedImage) return;
     setState(AppState.ANALYZING);
     setErrorMsg(null);
-    setVisibleCount(25); 
+    setVisibleCount(10); // Reset to first batch
     
     setTimeout(async () => {
         try {
@@ -214,7 +216,7 @@ export const ScannerSystem: React.FC = () => {
     setUploadedImage(null);
     setUploadedSecondaryImage(null);
     setActiveTab('ALL');
-    setVisibleCount(25);
+    setVisibleCount(10);
     setErrorMsg(null);
   };
 
@@ -407,9 +409,9 @@ export const ScannerSystem: React.FC = () => {
                     <div className="flex items-center justify-between overflow-x-auto pb-2 sticky top-16 bg-[#f8fafc]/90 backdrop-blur z-20 py-2">
                         <h3 className="text-lg font-bold text-gray-800 mr-4 whitespace-nowrap">Resultados ({filteredData.length})</h3>
                         <div className="flex gap-2">
-                            <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => { setActiveTab('ALL'); setVisibleCount(25); }} icon={Layers} />
-                            <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => { setActiveTab('EXACT'); setVisibleCount(25); }} icon={CheckCircle2} />
-                            <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => { setActiveTab('CLOSE'); setVisibleCount(25); }} icon={Sparkles} />
+                            <FilterTab label="Todos" count={allMatches.length} active={activeTab === 'ALL'} onClick={() => { setActiveTab('ALL'); setVisibleCount(10); }} icon={Layers} />
+                            <FilterTab label="Exatos" count={exactMatches.length} active={activeTab === 'EXACT'} onClick={() => { setActiveTab('EXACT'); setVisibleCount(10); }} icon={CheckCircle2} />
+                            <FilterTab label="Estilo" count={closeMatches.length} active={activeTab === 'CLOSE'} onClick={() => { setActiveTab('CLOSE'); setVisibleCount(10); }} icon={Sparkles} />
                         </div>
                     </div>
 

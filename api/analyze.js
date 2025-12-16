@@ -6,6 +6,7 @@ import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern } from './modules/generator.js'; 
 import { reconstructElement, transformElement, decomposePattern } from './modules/departments/layerLab.js'; 
+import { enhancePatternQuality } from './modules/departments/qualityControl.js'; // NOVO MÓDULO
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -41,15 +42,12 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, image });
     }
 
-    // --- NOVO: LAYER LAB V2 ---
     if (action === 'RECONSTRUCT_ELEMENT') {
-        // "Isolar e Completar": Recebe o recorte cru, devolve o objeto inteiro vetorizado
         const result = await reconstructElement(apiKey, cropBase64);
         return res.status(200).json({ success: true, ...result });
     }
 
     if (action === 'TRANSFORM_ELEMENT') {
-        // "Transformar": Recebe recorte + prompt do usuário
         const result = await transformElement(apiKey, cropBase64, prompt);
         return res.status(200).json({ success: true, ...result });
     }
@@ -59,10 +57,22 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
 
+    // GERAÇÃO PRIMÁRIA (DRAFT)
     if (action === 'GENERATE_PATTERN') {
         const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
         const image = await generatePattern(apiKey, prompt, colors, specs);
         return res.status(200).json({ success: true, image });
+    }
+
+    // NOVO: REFINAMENTO DE QUALIDADE (FINAL POLISH)
+    if (action === 'ENHANCE_PATTERN') {
+        // Recebe a imagem gerada (draft) e o prompt original para contexto
+        // Remove cabeçalho data:image se existir para envio limpo, mas a função qualityControl espera base64
+        let cleanBase64 = mainImageBase64;
+        if (cleanBase64.includes(',')) cleanBase64 = cleanBase64.split(',')[1];
+        
+        const refinedImage = await enhancePatternQuality(apiKey, cleanBase64, prompt);
+        return res.status(200).json({ success: true, image: refinedImage });
     }
 
     if (action === 'DESCRIBE_PATTERN') {

@@ -207,7 +207,10 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
     const [fabricMatches, setFabricMatches] = useState<ExternalPatternMatch[]>([]);
+    
+    // PAGINATION CONTROL - START AT 10
     const [visibleMatchesCount, setVisibleMatchesCount] = useState(10); 
+    
     const [technicalSpecs, setTechnicalSpecs] = useState<any>(null);
     const [genError, setGenError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -235,6 +238,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
                 if (res) {
                     setReferenceImage(res);
                     setFabricMatches([]); setDetectedColors([]); setTechnicalSpecs(null); setPrompt(''); setGenError(null);
+                    setVisibleMatchesCount(10); // Reset pagination
                 }
             };
             reader.readAsDataURL(file);
@@ -245,6 +249,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
         if (!referenceImage) return;
         setIsAnalyzing(true);
         setGenError(null);
+        setVisibleMatchesCount(10);
         try {
             const compressedBase64 = await compressImage(referenceImage);
             const data = compressedBase64.split(',')[1];
@@ -432,6 +437,19 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
                                             {visibleData.map((match, i) => (
                                                 <PatternVisualCard key={i} match={match} userReferenceImage={referenceImage} />
                                             ))}
+                                            
+                                            {/* LOAD MORE BUTTON */}
+                                            {visibleMatchesCount < uniqueMatches.length && (
+                                                <div className="mt-8 flex justify-center flex-col items-center col-span-full">
+                                                    <p className="text-xs text-gray-400 mb-2">Exibindo {visibleMatchesCount} de {uniqueMatches.length} resultados</p>
+                                                    <button 
+                                                        onClick={() => setVisibleMatchesCount(p => p + 10)} 
+                                                        className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all transform hover:-translate-y-1 flex items-center gap-2"
+                                                    >
+                                                        <Plus size={16}/> Carregar Mais (+10)
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="p-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-center text-gray-400">

@@ -7,35 +7,36 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
 
     if (context === 'TEXTURE') {
         // ABA DE CRIADOR / ATELIER: Foco na Arte/Superfície & Criação
-        const userContext = userHints ? `IMPORTANT - USER OVERRIDE/INSTRUCTION: "${userHints}". CONSIDER THIS IN THE STYLE GUIDE.` : '';
+        // SEGURANÇA: Instruímos a IA a usar termos de ARTE, não termos realistas que confundem o filtro.
+        const userContext = userHints ? `IMPORTANT USER HINT: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
-        ACT AS: Senior Surface Designer & Prompt Engineer.
-        TASK: Analyze the artwork to enable a High-Definition Recreation by an AI Image Generator.
-        ${userContext}
+        ACT AS: Senior Surface Designer (Textile Industry).
+        TASK: Analyze the artwork to generate a TECHNICAL PROMPT for a Vector Generation AI.
         
-        ANALYSIS REQUIRED:
-        1. VISUAL DESCRIPTION (ENGLISH): A highly optimized, comma-separated list of visual descriptors. Format: "Subject, Adjectives, Colors, Artistic Technique, Vibe".
-           - Example: "Watercolor floral motif, pastel pink and sage green, wet-on-wet technique, soft dreamy vibe, seamless pattern".
-           - AVOID: Complex sentences. Use Keywords.
-        2. LAYOUT TYPE: "Corrida" (Seamless), "Barrada" (Border), or "Localizada" (Placement).
+        SAFETY PROTOCOL:
+        - Describe shapes geometrically (e.g. "organic curves" instead of "body shapes").
+        - Use art terms (watercolor, gouache, vector, screen print).
+        - AVOID: Words related to biology, skin, violence, or photorealism.
+        
+        ${userContext}
         
         OUTPUT JSON:
         {
-            "visualDescription": "Subject description, Color palette, Technique details, Composition style",
+            "visualDescription": "A technical, comma-separated list of visual elements. Subject + Style + Technique + Colors.",
             "printLayout": "Corrida",
             "searchKeywords": [
-                "Main Subject (EN)",
-                "Technique (EN)",
-                "Vibe (EN)"
+                "Main Motif (Art term)",
+                "Technique Name",
+                "Color Palette Style"
             ],
             "technicalSpecs": { 
-                "technique": "Technique Name", 
-                "motifs": ["Motif 1", "Motif 2"], 
-                "complexity": "Medium",
-                "vibe": "Mood",
+                "technique": "Vector/Watercolor", 
+                "motifs": ["Floral", "Geometric"], 
+                "complexity": "High",
+                "vibe": "Modern",
                 "layout": "Corrida",
-                "restorationInstructions": "Vectorize, sharpen edges, remove noise"
+                "restorationInstructions": "Vectorize, sharpen edges, flat color fill"
             }
         }
         `;
@@ -81,7 +82,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         // Fallback robusto se a descrição vier vazia
         if (!result.visualDescription || result.visualDescription.length < 5) {
-            result.visualDescription = "High quality seamless textile pattern with artistic motifs";
+            result.visualDescription = "Abstract geometric textile pattern, vector style, flat colors";
         }
         
         return result;
