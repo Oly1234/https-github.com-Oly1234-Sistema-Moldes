@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera } from 'lucide-react';
+import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera, Scissors } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -43,31 +43,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<ScanLine size={24} />} 
             active={currentView === 'SCANNER'} 
             onClick={() => onViewChange('SCANNER')}
-            tooltip="1. Encontrar Moldes"
+            tooltip="Caçador de Moldes"
           />
           <NavItem 
             icon={<Globe size={24} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
-            tooltip="2. Buscar Estampas"
+            tooltip="Radar de Estampas"
           />
           <NavItem 
             icon={<Palette size={24} />} 
             active={currentView === 'ATELIER'} 
             onClick={() => onViewChange('ATELIER')}
-            tooltip="3. Criar Estampas"
+            tooltip="Criação Ilimitada"
           />
            <NavItem 
             icon={<Layers size={24} />} 
             active={currentView === 'LAYER_STUDIO'} 
             onClick={() => onViewChange('LAYER_STUDIO')}
-            tooltip="4. Editar & Separar"
+            tooltip="Lab de Imagem"
+          />
+          
+          <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
+
+          <NavItem 
+            icon={<Shirt size={24} />} 
+            active={currentView === 'MOCKUP'} 
+            onClick={() => onViewChange('MOCKUP')}
+            tooltip="Estúdio 2D (Clássico)"
           />
           <NavItem 
             icon={<Camera size={24} />} 
             active={currentView === 'RUNWAY'} 
             onClick={() => onViewChange('RUNWAY')}
-            tooltip="5. Realism Studio (Novo)"
+            tooltip="Provador Mágico"
           />
           
           <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
@@ -76,19 +85,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<History size={24} />} 
             active={currentView === 'HISTORY'} 
             onClick={() => onViewChange('HISTORY')}
-            tooltip="Meu Acervo"
+            tooltip="Meus Projetos"
           />
         </nav>
       </div>
 
-      {/* Mobile Nav - Otimizado para 5+ itens */}
-      <div className="flex md:hidden w-full justify-between items-center overflow-x-auto no-scrollbar gap-1 px-1">
+      {/* Mobile Nav - Otimizado para 7+ itens com Scroll */}
+      <div className="flex md:hidden w-full justify-start items-center overflow-x-auto no-scrollbar gap-2 px-4">
           <NavItem 
             icon={<LayoutGrid size={20} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
             isMobile
           />
+          <div className="w-[1px] h-6 bg-vingi-700 flex-shrink-0"></div>
           <NavItem 
             icon={<ScanLine size={20} />} 
             active={currentView === 'SCANNER'} 
@@ -111,6 +121,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<Layers size={20} />} 
             active={currentView === 'LAYER_STUDIO'} 
             onClick={() => onViewChange('LAYER_STUDIO')}
+            isMobile
+          />
+          <div className="w-[1px] h-6 bg-vingi-700 flex-shrink-0"></div>
+          <NavItem 
+            icon={<Shirt size={20} />} 
+            active={currentView === 'MOCKUP'} 
+            onClick={() => onViewChange('MOCKUP')}
             isMobile
           />
           <NavItem 
@@ -151,7 +168,7 @@ const NavItem: React.FC<{
       active 
         ? 'text-vingi-400 bg-vingi-800/50 shadow-inner' 
         : 'text-slate-500 hover:text-slate-300 hover:bg-vingi-800/30'
-    } ${isMobile ? 'active:scale-95 flex-1 min-w-[44px]' : ''}`}
+    } ${isMobile ? 'active:scale-95 min-w-[48px]' : ''}`}
   >
     {icon}
     {active && !isMobile && (

@@ -73,15 +73,16 @@ export default async function handler(req, res) {
             if (descText) finalPrompt = descText;
         }
 
-        // PASSO 2: Transformar a descrição (ou texto do usuário) em busca de Mockup Branco (Ghost Mannequin)
+        // PASSO 2: Transformar a descrição em busca de Mockup Branco (Ghost Mannequin)
+        // ATUALIZAÇÃO: Gerar 8 queries para maior volume de resultados.
         const MOCKUP_PROMPT = `
         CONTEXT: The user wants to apply a digital pattern on a real model.
         INPUT: "${finalPrompt}"
         
-        TASK: Generate 4 distinct search queries to find HIGH QUALITY, WHITE, BLANK, UNPATTERNED versions of this garment.
-        Use terms like: "ghost mannequin", "white mockup", "studio shot", "front view", "blank clothing".
+        TASK: Generate 8 DISTINCT search queries to find HIGH QUALITY, WHITE, BLANK, UNPATTERNED versions of this garment.
+        Vary the angles and context (Front, Back, Studio, Street, Folded).
         
-        OUTPUT JSON: { "queries": ["white maxi dress mockup front view", "blank white slip dress studio shot", "white gown ghost mannequin", "plain white dress model"] }
+        OUTPUT JSON: { "queries": ["white maxi dress front view mockup", "blank white slip dress studio shot", "white gown ghost mannequin", "plain white dress model back view", ...] }
         `;
         
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;

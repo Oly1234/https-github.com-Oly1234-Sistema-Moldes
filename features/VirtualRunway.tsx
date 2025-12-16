@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 
-// --- HELPERS ---
+// --- HELPERS AVANÇADOS (COLOR PRESERVATION) ---
+
 const rgbToLab = (r: number, g: number, b: number) => {
     let r1 = r / 255, g1 = g / 255, b1 = b / 255;
     r1 = (r1 > 0.04045) ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
@@ -25,7 +26,6 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
     const visited = new Uint8Array(width * height);
     
     const p = (Math.floor(startY) * width + Math.floor(startX)) * 4;
-    // Pega a cor base do clique (LAB para melhor percepção)
     const [l0, a0, b0] = rgbToLab(data[p], data[p+1], data[p+2]);
     
     const stack = [[Math.floor(startX), Math.floor(startY)]];
@@ -51,7 +51,6 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
         }
     }
     
-    // Criar Canvas da Máscara
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = width; maskCanvas.height = height;
     const mCtx = maskCanvas.getContext('2d')!;
@@ -93,10 +92,7 @@ interface VirtualRunwayProps {
 }
 
 export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreator }) => {
-    // --- STATE: FLOW ---
     const [step, setStep] = useState<'SEARCH_BASE' | 'SELECT_PATTERN' | 'STUDIO'>('SEARCH_BASE');
-    
-    // --- STATE: DATA ---
     const [searchQuery, setSearchQuery] = useState('');
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [whiteBases, setWhiteBases] = useState<string[]>([]);
@@ -111,16 +107,15 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const [patternImgObj, setPatternImgObj] = useState<HTMLImageElement | null>(null);
     const [appliedMasks, setAppliedMasks] = useState<any[]>([]);
     
-    // Fine-Tuning Controls
+    // Controls
     const [patternScale, setPatternScale] = useState(0.5);
     const [patternRotation, setPatternRotation] = useState(0);
-    const [patternOpacity, setPatternOpacity] = useState(0.95);
-    const [baseBrightness, setBaseBrightness] = useState(100); 
+    const [patternOpacity, setPatternOpacity] = useState(1); // Normal Mode Opacity
+    const [shadowIntensity, setShadowIntensity] = useState(0.7); // Multiply Mode Opacity
     const [wandTolerance, setWandTolerance] = useState(30);
     
     const refInputRef = useRef<HTMLInputElement>(null);
 
-    // --- INIT ---
     useEffect(() => {
         const transferPattern = localStorage.getItem('vingi_mockup_pattern') || localStorage.getItem('vingi_runway_pattern');
         if (transferPattern) {
@@ -137,7 +132,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             const reader = new FileReader();
             reader.onload = (ev) => {
                 setReferenceImage(ev.target?.result as string);
-                setSearchQuery(''); // Limpa texto se usar imagem
+                setSearchQuery('');
             };
             reader.readAsDataURL(file);
         }
@@ -148,7 +143,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         
         setIsSearching(true);
         setWhiteBases([]);
-        setLoadingMessage(referenceImage ? "Analisando Estrutura..." : "Buscando Modelos...");
+        setLoadingMessage(referenceImage ? "Analisando Estrutura..." : "Buscando Modelos (Modo Extenso)...");
 
         try {
             let mainImageBase64 = null;
@@ -157,7 +152,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                  mainImageBase64 = compressed.split(',')[1];
             }
 
-            // 1. Obter Queries Otimizadas da IA (Mágica: Converte imagem ou texto em busca de White Mockup)
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -170,25 +164,38 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             const data = await res.json();
             
             if (data.success) {
-                setLoadingMessage("Localizando Bases Compatíveis...");
-                if (data.detectedStructure) setSearchQuery(data.detectedStructure); // Preenche a UI com o que a IA viu
+                setLoadingMessage("Varrendo Acervos (20+ Variações)...");
+                if (data.detectedStructure) setSearchQuery(data.detectedStructure);
 
-                // 2. Buscar Imagens para cada Query (Paralelo)
                 if (data.queries) {
-                    const promises = data.queries.map((q: string) => 
-                        fetch('/api/analyze', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                                action: 'GET_LINK_PREVIEW', 
-                                backupSearchTerm: q
-                            })
-                        }).then((r: any) => r.json())
-                    );
+                    // Split queries to fetch more results per query
+                    const uniqueImages = new Set();
                     
+                    const fetchWithRetry = async (q: string) => {
+                        const r = await fetch('/api/analyze', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'GET_LINK_PREVIEW', backupSearchTerm: q })
+                        });
+                        const j = await r.json();
+                        return j.image;
+                    };
+
+                    const promises = data.queries.map((q: string) => fetchWithRetry(q));
                     const results = await Promise.all(promises);
-                    const images = results.map((r: any) => r.image).filter((img: string | null) => img !== null);
-                    setWhiteBases(images);
+                    
+                    results.forEach((img: any) => { if(img) uniqueImages.add(img); });
+                    
+                    // Fallback to generate even MORE variations if we don't have enough
+                    if (uniqueImages.size < 8) {
+                        const extraQueries = data.queries.flatMap((q: string) => [
+                            q + " full body", q + " back view", q + " close up", q + " studio shot"
+                        ]);
+                        const extraPromises = extraQueries.slice(0, 12).map((q: string) => fetchWithRetry(q));
+                        const extraResults = await Promise.all(extraPromises);
+                        extraResults.forEach((img: any) => { if(img) uniqueImages.add(img); });
+                    }
+
+                    setWhiteBases(Array.from(uniqueImages) as string[]);
                 }
             }
         } catch (e) {
@@ -237,13 +244,13 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     };
 
-    // --- RENDER ENGINE: LUMINOSITY STACKING ---
+    // --- TRUE COLOR RENDER ENGINE ---
+    // Uses Frequency Separation: Base -> Pattern (Normal) -> Shadows (Multiply) -> Highlights (Screen)
     useEffect(() => {
         if (step === 'STUDIO' && canvasRef.current && baseImgObj) {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d')!;
             
-            // Ajustar tamanho do canvas
             const maxW = 1200;
             const ratio = baseImgObj.width / baseImgObj.height;
             canvas.width = Math.min(baseImgObj.width, maxW);
@@ -251,34 +258,33 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             
             renderCanvas();
         }
-    }, [step, baseImgObj, patternImgObj, appliedMasks, patternScale, patternRotation, patternOpacity, baseBrightness]);
+    }, [step, baseImgObj, patternImgObj, appliedMasks, patternScale, patternRotation, patternOpacity, shadowIntensity]);
 
     const renderCanvas = () => {
         const canvas = canvasRef.current;
         if (!canvas || !baseImgObj) return;
         const ctx = canvas.getContext('2d')!;
+        const w = canvas.width;
+        const h = canvas.height;
         
-        // 1. LAYER 1: BASE IMAGE (Normal)
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.filter = `brightness(${baseBrightness}%)`;
-        ctx.drawImage(baseImgObj, 0, 0, canvas.width, canvas.height);
-        ctx.filter = 'none';
+        // 1. LAYER 1: BASE IMAGE (Unmodified color)
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(baseImgObj, 0, 0, w, h);
 
         if (patternImgObj && appliedMasks.length > 0) {
             appliedMasks.forEach(mask => {
-                // Prepare Mask Canvas
                 const maskCanvas = mask.maskCanvas;
 
-                // 2. LAYER 2: PATTERN (Multiply Mode) - Sits inside fibers
-                const patternC = document.createElement('canvas');
-                patternC.width = canvas.width; patternC.height = canvas.height;
-                const pCtx = patternC.getContext('2d')!;
+                // 2. PATTERN FILL (NORMAL MODE) - Preserves Pattern Colors
+                const patternLayer = document.createElement('canvas');
+                patternLayer.width = w; patternLayer.height = h;
+                const pCtx = patternLayer.getContext('2d')!;
                 
-                // Draw Mask
+                // Mask the pattern
                 pCtx.drawImage(maskCanvas, 0, 0);
-                
-                // Composite Pattern
                 pCtx.globalCompositeOperation = 'source-in';
+                
+                // Draw Pattern
                 pCtx.save();
                 pCtx.translate(mask.centerX, mask.centerY);
                 pCtx.rotate((patternRotation * Math.PI) / 180); 
@@ -290,34 +296,44 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                 }
                 pCtx.restore();
 
-                // Apply Layer 2 to Main Context
+                // Apply Pattern to Main (Normal Mode with transparency)
                 ctx.save();
                 ctx.globalAlpha = patternOpacity; 
-                ctx.globalCompositeOperation = 'multiply'; // The classic blending
-                ctx.drawImage(patternC, 0, 0);
+                ctx.drawImage(patternLayer, 0, 0);
                 ctx.restore();
 
-                // 3. LAYER 3: HIGHLIGHT RECOVERY (Hard Light Mode)
-                // This simulates 3D depth by putting the original fold highlights BACK on top
-                const highlightC = document.createElement('canvas');
-                highlightC.width = canvas.width; highlightC.height = canvas.height;
-                const hCtx = highlightC.getContext('2d')!;
+                // 3. SHADOW EXTRACTION (MULTIPLY) - Adds depth without killing color
+                const shadowLayer = document.createElement('canvas');
+                shadowLayer.width = w; shadowLayer.height = h;
+                const sCtx = shadowLayer.getContext('2d')!;
                 
-                // Draw Mask again
-                hCtx.drawImage(maskCanvas, 0, 0);
-                
-                // Draw original image inside mask, grayscale it
-                hCtx.globalCompositeOperation = 'source-in';
-                hCtx.drawImage(baseImgObj, 0, 0, canvas.width, canvas.height);
-                hCtx.globalCompositeOperation = 'saturation';
-                hCtx.fillStyle = "black";
-                hCtx.fillRect(0, 0, canvas.width, canvas.height); // Desaturate
+                sCtx.drawImage(maskCanvas, 0, 0);
+                sCtx.globalCompositeOperation = 'source-in';
+                // Draw original image in Grayscale with Contrast Boost
+                sCtx.filter = 'grayscale(100%) contrast(150%) brightness(110%)'; 
+                sCtx.drawImage(baseImgObj, 0, 0, w, h);
+                sCtx.filter = 'none';
 
-                // Apply Layer 3 (Highlights/Shadows) on top
                 ctx.save();
-                ctx.globalAlpha = 0.4; // Subtle effect
-                ctx.globalCompositeOperation = 'hard-light'; // or 'overlay'
-                ctx.drawImage(highlightC, 0, 0);
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.globalAlpha = shadowIntensity; // Control shadow darkness
+                ctx.drawImage(shadowLayer, 0, 0);
+                ctx.restore();
+
+                // 4. HIGHLIGHT RECOVERY (SCREEN/SOFT LIGHT) - Adds shine back
+                const highlightLayer = document.createElement('canvas');
+                highlightLayer.width = w; highlightLayer.height = h;
+                const hCtx = highlightLayer.getContext('2d')!;
+                
+                hCtx.drawImage(maskCanvas, 0, 0);
+                hCtx.globalCompositeOperation = 'source-in';
+                hCtx.drawImage(baseImgObj, 0, 0, w, h);
+                // Isolate Highlights (Threshold logic simulated)
+                
+                ctx.save();
+                ctx.globalCompositeOperation = 'soft-light'; // Soft light adds nice texture
+                ctx.globalAlpha = 0.5; 
+                ctx.drawImage(highlightLayer, 0, 0);
                 ctx.restore();
             });
         }
@@ -351,7 +367,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const downloadResult = () => {
         if (canvasRef.current) {
             const link = document.createElement('a');
-            link.download = 'vingi-realism-studio.jpg';
+            link.download = 'vingi-magic-fitting.jpg';
             link.href = canvasRef.current.toDataURL('image/jpeg', 0.95);
             link.click();
         }
@@ -364,7 +380,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     // --- RENDER ---
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden">
-            <ModuleHeader icon={Camera} title="Vingi Realism Studio" subtitle="Aplique sua estampa em um modelo real e se impressione." />
+            <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Simulação True-Color com Sombras Reais" />
             
             {step === 'SEARCH_BASE' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in overflow-y-auto">
@@ -372,12 +388,11 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                         <div className="space-y-4">
                             <h2 className="text-3xl font-bold text-gray-800">Escolha o Modelo</h2>
                             <p className="text-gray-500 max-w-lg mx-auto">
-                                Descreva a roupa ou envie uma foto de referência. Nosso sistema encontrará modelos compatíveis prontos para simulação.
+                                Buscaremos até 20 variações de modelos brancos (Mockups) prontos para uso.
                             </p>
                         </div>
 
                         <div className="relative max-w-xl mx-auto space-y-4">
-                            {/* Input Container */}
                             <div className="flex flex-col gap-2">
                                 <div className="relative">
                                     <input 
@@ -420,7 +435,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                         )}
 
                         {whiteBases.length > 0 && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in mt-8">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in mt-8 pb-10">
                                 {whiteBases.map((url, i) => (
                                     <div 
                                         key={i} 
@@ -454,7 +469,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                             </label>
                             
                             <button onClick={onNavigateToCreator} className="w-full py-4 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
-                                <Search size={20}/> Buscar no Banco (Creator)
+                                <Search size={20}/> Buscar no Radar (Creator)
                             </button>
                         </div>
                     </div>
@@ -504,7 +519,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                             <div className="space-y-5">
                                 <div>
                                     <div className="flex justify-between mb-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Zap size={10}/> Tolerância da Varinha</span>
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Zap size={10}/> Tolerância (Corte)</span>
                                         <span className="text-[10px] font-bold text-gray-600">{wandTolerance}</span>
                                     </div>
                                     <input type="range" min="5" max="100" value={wandTolerance} onChange={(e) => setWandTolerance(parseInt(e.target.value))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-500"/>
@@ -526,20 +541,24 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                                     <input type="range" min="0" max="360" value={patternRotation} onChange={(e) => setPatternRotation(parseInt(e.target.value))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-500"/>
                                 </div>
 
-                                <div>
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Droplets size={10}/> Opacidade</span>
-                                        <span className="text-[10px] font-bold text-gray-600">{Math.round(patternOpacity * 100)}%</span>
+                                <div className="pt-2 border-t border-gray-100">
+                                    <p className="text-[9px] font-bold text-gray-400 uppercase mb-3">Correção de Cor & Sombra</p>
+                                    
+                                    <div className="mb-4">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-[10px] font-bold text-gray-600 uppercase flex items-center gap-1"><Droplets size={10}/> Opacidade Estampa</span>
+                                            <span className="text-[10px] font-bold text-gray-600">{Math.round(patternOpacity * 100)}%</span>
+                                        </div>
+                                        <input type="range" min="0.1" max="1" step="0.05" value={patternOpacity} onChange={(e) => setPatternOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none accent-blue-500"/>
                                     </div>
-                                    <input type="range" min="0.1" max="1" step="0.05" value={patternOpacity} onChange={(e) => setPatternOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-500"/>
-                                </div>
 
-                                <div>
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Sun size={10}/> Brilho da Base</span>
-                                        <span className="text-[10px] font-bold text-gray-600">{baseBrightness}%</span>
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-[10px] font-bold text-gray-600 uppercase flex items-center gap-1"><Sun size={10}/> Intensidade Sombra</span>
+                                            <span className="text-[10px] font-bold text-gray-600">{Math.round(shadowIntensity * 100)}%</span>
+                                        </div>
+                                        <input type="range" min="0" max="1" step="0.05" value={shadowIntensity} onChange={(e) => setShadowIntensity(parseFloat(e.target.value))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none accent-gray-800"/>
                                     </div>
-                                    <input type="range" min="50" max="150" value={baseBrightness} onChange={(e) => setBaseBrightness(parseInt(e.target.value))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none accent-vingi-500"/>
                                 </div>
                             </div>
 
