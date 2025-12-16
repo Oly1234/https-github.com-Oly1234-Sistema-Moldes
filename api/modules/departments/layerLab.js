@@ -20,12 +20,21 @@ const generateImage = async (apiKey, prompt) => {
             body: JSON.stringify(payload) 
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            console.error(`LayerLab API Error: ${response.status}`);
+            return null;
+        }
 
         const data = await response.json();
-        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+        const candidate = data.candidates?.[0]?.content?.parts;
+        const imagePart = candidate?.find(p => p.inline_data);
         
         if (imagePart) return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
+        
+        // Log se houver recusa textual
+        const textPart = candidate?.find(p => p.text);
+        if (textPart) console.warn("LayerLab Refusal:", textPart.text);
+        
         return null;
     } catch (e) {
         console.error("LayerLab Gen Error:", e);
@@ -45,27 +54,34 @@ export const reconstructElement = async (apiKey, cropBase64, originalPrompt) => 
         generation_config: { response_mime_type: "application/json" }
     };
     
-    let analysis = { wholeObject: "object", style: "vector" };
+    let analysis = { wholeObject: "abstract shape", style: "vector flat style" };
     try {
         const descRes = await fetch(descEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(descPayload) });
         const descData = await descRes.json();
         const descText = descData.candidates?.[0]?.content?.parts?.[0]?.text;
         if (descText) {
              const clean = descText.replace(/```json/g, '').replace(/```/g, '');
-             analysis = JSON.parse(clean);
+             const first = clean.indexOf('{'); const last = clean.lastIndexOf('}');
+             if (first !== -1 && last !== -1) {
+                const parsed = JSON.parse(clean.substring(first, last+1));
+                if (parsed.wholeObject) analysis = parsed;
+             }
         }
     } catch (e) {
-        console.error("Analysis failed, using generic prompt");
+        console.error("Analysis failed, using fallback");
     }
 
     // Passo 2: Gerar o Objeto INTEIRO (Usa Flash Image)
     const reconstructionPrompt = `
     Generate a vector illustration of a ${analysis.wholeObject}.
     Style: ${analysis.style}, isolated on WHITE background.
-    View: Flat 2D.
+    View: Flat 2D, no shadows.
     `;
 
     const newImage = await generateImage(apiKey, reconstructionPrompt);
+    
+    if (!newImage) throw new Error("Falha na reconstrução do elemento.");
+
     return { 
         src: newImage, 
         name: analysis.wholeObject || "Elemento Reconstruído"
@@ -80,6 +96,8 @@ export const transformElement = async (apiKey, cropBase64, userPrompt) => {
     `;
     
     const newImage = await generateImage(apiKey, transformPrompt);
+    if (!newImage) throw new Error("Falha na transformação do elemento.");
+
     return { src: newImage };
 };
 

@@ -15,21 +15,18 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         ${userContext}
         
         ANALYSIS REQUIRED:
-        1. VISUAL DESCRIPTION (ENGLISH): A highly detailed, descriptive prompt for an AI model. Include:
-           - Subject (e.g., "watercolor floral", "geometric ikat").
-           - Colors (e.g., "pastel pink and sage green on navy").
-           - Technique (e.g., "wet-on-wet watercolor", "crisp vector lines").
-           - Composition (e.g., "dense seamless repeat", "minimalist scattered").
+        1. VISUAL DESCRIPTION (ENGLISH): A highly optimized, comma-separated list of visual descriptors. Format: "Subject, Adjectives, Colors, Artistic Technique, Vibe".
+           - Example: "Watercolor floral motif, pastel pink and sage green, wet-on-wet technique, soft dreamy vibe, seamless pattern".
         2. LAYOUT TYPE: "Corrida" (Seamless), "Barrada" (Border), or "Localizada" (Placement).
         
         OUTPUT JSON:
         {
-            "visualDescription": "A professional seamless pattern design featuring [subject] in [style]. The palette consists of [colors]. [Technique details]. High resolution, textile texture.",
+            "visualDescription": "Subject description, Color palette, Technique details, Composition style",
             "printLayout": "Corrida",
             "searchKeywords": [
-                "Termo principal (EN)",
-                "Termo técnico (EN)",
-                "Termo visual (EN)"
+                "Main Subject (EN)",
+                "Technique (EN)",
+                "Vibe (EN)"
             ],
             "technicalSpecs": { 
                 "technique": "Technique Name", 

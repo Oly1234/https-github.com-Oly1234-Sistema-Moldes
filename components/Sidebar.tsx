@@ -82,35 +82,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Mobile Nav */}
-      <div className="flex md:hidden w-full justify-between items-center px-4">
+      {/* Mobile Nav - Agora inclui Atelier e scroll horizontal se necessário */}
+      <div className="flex md:hidden w-full justify-between items-center px-2 overflow-x-auto no-scrollbar gap-1">
           <NavItem 
-            icon={<LayoutGrid size={24} />} 
+            icon={<LayoutGrid size={22} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
             isMobile
           />
           <NavItem 
-            icon={<ScanLine size={24} />} 
+            icon={<ScanLine size={22} />} 
             active={currentView === 'SCANNER'} 
             onClick={() => onViewChange('SCANNER')}
             isMobile
           />
-          {/* Agrupamento Visual no Mobile se necessário, ou mantemos todos */}
           <NavItem 
-            icon={<Globe size={24} />} 
+            icon={<Globe size={22} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
             isMobile
           />
           <NavItem 
-            icon={<Layers size={24} />} 
+            icon={<Palette size={22} />} 
+            active={currentView === 'ATELIER'} 
+            onClick={() => onViewChange('ATELIER')}
+            isMobile
+          />
+          <NavItem 
+            icon={<Layers size={22} />} 
             active={currentView === 'LAYER_STUDIO'} 
             onClick={() => onViewChange('LAYER_STUDIO')}
             isMobile
           />
            <NavItem 
-            icon={<Shirt size={24} />} 
+            icon={<Shirt size={22} />} 
             active={currentView === 'MOCKUP'} 
             onClick={() => onViewChange('MOCKUP')}
             isMobile
@@ -143,7 +148,7 @@ const NavItem: React.FC<{
   <button 
     onClick={onClick}
     title={tooltip}
-    className={`p-3 rounded-xl transition-all duration-300 group relative ${
+    className={`p-3 rounded-xl transition-all duration-300 group relative flex-shrink-0 ${
       active 
         ? 'text-vingi-400 bg-vingi-800/50 shadow-inner' 
         : 'text-slate-500 hover:text-slate-300 hover:bg-vingi-800/30'

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard } from 'lucide-react';
+import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap } from 'lucide-react';
 import { DesignLayer } from '../types';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
@@ -267,6 +267,53 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         addToHistory(newLayers);
     };
 
+    // --- AI RECONSTRUCTION ---
+    const handleSmartReconstruct = async () => {
+        if (!selectedLayerId) return;
+        const layer = layers.find(l => l.id === selectedLayerId);
+        if (!layer) return;
+        
+        setIsProcessing(true);
+        setProcessStatus('Analizando & Reconstruindo (IA)...');
+
+        try {
+            // Need to get base64 of the image without prefix
+            let base64 = layer.src;
+            if (base64.includes(',')) base64 = base64.split(',')[1];
+
+            const res = await fetch('/api/analyze', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({
+                     action: 'RECONSTRUCT_ELEMENT',
+                     cropBase64: base64
+                 })
+            });
+            const data = await res.json();
+            
+            if (data.success && data.src) {
+                const newLayer: DesignLayer = {
+                    ...layer,
+                    id: `reconst-${Date.now()}`,
+                    name: `${data.name} (IA)`,
+                    src: data.src,
+                    x: layer.x + 20,
+                    y: layer.y + 20
+                };
+                const newLayers = [...layers, newLayer];
+                setLayers(newLayers);
+                addToHistory(newLayers);
+                setSelectedLayerId(newLayer.id);
+            } else {
+                alert("Não foi possível reconstruir o elemento.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Erro na conexão com a IA.");
+        }
+        setIsProcessing(false);
+    };
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -443,21 +490,12 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         if (tool === 'SMART_EXTRACT') {
              if (!containerRef.current) return;
              const rect = containerRef.current.getBoundingClientRect();
-             // Adjust for view transform: translate(view.x, view.y) scale(view.k) centered
-             // The container is flex centered, so the div is centered in container.
-             // rect is container.
              const centerX = rect.width / 2 + view.x;
              const centerY = rect.height / 2 + view.y;
-             
-             // Client coords relative to container
              const relX = e.clientX - rect.left;
              const relY = e.clientY - rect.top;
-             
-             // Coords relative to centered transformed div
              const rawX = (relX - centerX) / view.k;
              const rawY = (relY - centerY) / view.k;
-             
-             // Coords relative to image top-left (since image is centered in div with w,h)
              const finalX = rawX + canvasSize.w/2;
              const finalY = rawY + canvasSize.h/2;
              
@@ -598,7 +636,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                     />
                 </div>
             ) : (
-                // WORKSPACE STATE (Keep existing workspace)
+                // WORKSPACE STATE
                 <>
                     <div className="h-14 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-3 z-30 justify-between overflow-x-auto">
                         <div className="flex items-center gap-3">
@@ -614,6 +652,8 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                             </div>
                             {selectedLayerId && (
                                 <div className="flex items-center gap-1 animate-fade-in">
+                                    <button onClick={handleSmartReconstruct} className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md text-[10px] font-bold flex items-center gap-1 shadow-md hover:brightness-110 mr-2"><Zap size={12}/> RECONSTRUIR</button>
+                                    <div className="w-px h-6 bg-gray-700 mr-2"></div>
                                     <button onClick={() => transformSelected('FLIP_H')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><FlipHorizontal size={18}/></button>
                                     <button onClick={() => transformSelected('FLIP_V')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><FlipVertical size={18}/></button>
                                     <button onClick={() => transformSelected('ROT_90')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><RotateCw size={18}/></button>

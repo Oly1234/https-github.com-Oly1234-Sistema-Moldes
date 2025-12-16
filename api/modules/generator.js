@@ -16,40 +16,35 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
-    // Engenharia de Prompt
-    let layoutInstruction = "";
+    // Engenharia de Prompt (Optimized for Flash Image)
+    let layoutInstruction = "Seamless Repeat Pattern";
     if (layout === 'Barrada') {
-        layoutInstruction = "TYPE: ENGINEERED BORDER PRINT. Asymmetrical composition with heavy details at the bottom edge.";
+        layoutInstruction = "Engineered Border Print (Heavy bottom, open top)";
     } else if (layout === 'Localizada') {
-        layoutInstruction = "TYPE: PLACEMENT PRINT. Single central artwork, centered, no repeat.";
-    } else {
-        layoutInstruction = `TYPE: SEAMLESS REPEAT PATTERN. ${repeat === 'Half-Drop' ? 'Half-drop repeat' : 'Grid repeat'}. Edges must match perfectly.`;
+        layoutInstruction = "Placement Print (Centralized motif, isolated)";
     }
 
-    // CORREÇÃO CRÍTICA: Fallback para prompt vazio
-    // Se 'prompt' for null/vazio, a IA recusa. Forçamos um assunto padrão.
+    // Fallback para prompt vazio
     const safeSubject = prompt && prompt.trim().length > 2 
         ? prompt 
-        : "A sophisticated abstract textile pattern with elegant motifs";
+        : "Abstract textile pattern with elegant motifs";
 
+    // PROMPT OTIMIZADO (Tag-based vs Conversational)
     const RAW_DIGITAL_PROMPT = `
-    TASK: Generate a professional textile pattern design.
-    SUBJECT: ${safeSubject}.
-    PALETTE: ${colorList}.
-    
-    TECHNICAL SPECS:
-    - ${layoutInstruction}
-    - STYLE: ${styleGuide}.
-    - VIEW: Flat 2D texture swatch. NO perspective, NO shadows, NO fabric grain.
-    - QUALITY: Vector-like crispness, high contrast.
+    Generate a professional textile pattern.
+    Subject: ${safeSubject}.
+    Colors: ${colorList}.
+    Style: ${styleGuide}, Flat 2D vector graphic, No shadows, No photorealism.
+    Layout: ${layoutInstruction}, ${repeatTypeToText(repeat)}.
+    Quality: High resolution, sharp edges, professional fabric print.
     `;
 
     try {
         const payload = {
             contents: [{ parts: [{ text: RAW_DIGITAL_PROMPT }] }],
-            // NÃO USAR 'responseMimeType' ou 'imageSize' com este modelo.
+            // Flash Image não suporta responseMimeType nem imageSize config
             generationConfig: {
-                // imageConfig opcional: aspectRatio padrão é 1:1
+                // imageConfig opcional se necessário, mas flash-image prefere defaults
             }
         };
 
@@ -80,13 +75,23 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         // Se não tem imagem, verifica se tem texto de recusa (Safety/Refusal)
         const textPart = candidate.find(p => p.text);
         if (textPart) {
-            throw new Error(`A IA recusou gerar a imagem. Motivo: "${textPart.text}". Tente simplificar o prompt.`);
+            // Tratamento específico para recusas
+            console.warn("AI Refusal:", textPart.text);
+            throw new Error(`A IA não pôde gerar esta estampa (Política de Segurança). Tente simplificar o prompt ou remover termos sensíveis.`);
         }
         
-        throw new Error("Falha desconhecida: A IA não gerou imagem nem erro explícito.");
+        throw new Error("Falha na geração: A IA não retornou imagem.");
 
     } catch (e) {
         console.error("Generator Module Error:", e);
         throw e;
+    }
+};
+
+const repeatTypeToText = (type) => {
+    switch(type) {
+        case 'Half-Drop': return 'Half-drop repeat alignment';
+        case 'Mirror': return 'Mirrored repeat alignment';
+        default: return 'Straight grid repeat';
     }
 };

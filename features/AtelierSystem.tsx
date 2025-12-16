@@ -295,11 +295,101 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     />
                 </>
             ) : (
-                // WORKSPACE
-                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                // WORKSPACE - MOBILE OPTIMIZED LAYOUT (LIKE MOCKUP STUDIO)
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                     
-                    {/* LEFT PANEL: ENGINEERING CONTROLS */}
-                    <div className="w-full lg:w-[400px] bg-white border-r border-gray-200 flex flex-col z-20 shadow-xl h-[40vh] lg:h-full overflow-y-auto custom-scrollbar shrink-0">
+                    {/* VISUALIZATION PANEL */}
+                    {/* Mobile: Order 1, Height 55vh */}
+                    {/* Desktop: Order 2, Full Height */}
+                    <div className="order-1 md:order-2 flex-1 bg-slate-900 relative flex items-center justify-center overflow-hidden min-w-0 h-[55vh] md:h-full">
+                         <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#ffffff_1px,transparent_1px),linear-gradient(90deg,#ffffff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+
+                         {isGenerating ? (
+                             <div className="text-center relative z-10 p-8 max-w-sm">
+                                 <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-6"/>
+                                 <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">{GENERATION_STEPS[genStep]}</h2>
+                                 <p className="text-slate-400 text-sm">Gerando arquivo RAW VECTOR...</p>
+                                 <div className="mt-8 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                                     <div className="h-full bg-vingi-500 animate-progress-indeterminate"></div>
+                                 </div>
+                             </div>
+                         ) : (
+                             generatedPattern ? (
+                                <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
+                                     {/* IMAGE CONTAINER */}
+                                     <div className="relative shadow-2xl rounded-sm border border-white/10 overflow-hidden group flex justify-center items-center" 
+                                          style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}>
+                                         
+                                         <img src={generatedPattern} className="block w-auto h-auto max-w-full max-h-[85vh] bg-white" style={{ objectFit: 'contain' }} />
+                                         
+                                         {/* TEXTURE OVERLAY LAYER */}
+                                         {textureType !== 'None' && (
+                                             <div 
+                                                className="absolute inset-0 pointer-events-none z-10 transition-all duration-300"
+                                                style={getTextureStyle()}
+                                             ></div>
+                                         )}
+                                     </div>
+                                     
+                                     {/* TEXTURE CONTROLS (FLOATING) */}
+                                     <div className="absolute bottom-4 bg-gray-900/90 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-700 flex items-center gap-4 animate-slide-up z-50 overflow-x-auto max-w-[90%]">
+                                         <div className="flex flex-col gap-1 shrink-0">
+                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Acabamento</span>
+                                             <div className="flex gap-1">
+                                                {['None', 'Cotton', 'Linen', 'Silk', 'Canvas'].map(t => (
+                                                    <button 
+                                                        key={t}
+                                                        onClick={() => setTextureType(t as any)}
+                                                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${textureType === t ? 'bg-vingi-500 text-white shadow-sm' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                                                    >
+                                                        {t}
+                                                    </button>
+                                                ))}
+                                             </div>
+                                         </div>
+
+                                         {textureType !== 'None' && (
+                                             <>
+                                                 <div className="w-px h-8 bg-gray-700 mx-2 shrink-0"></div>
+                                                 <div className="flex flex-col w-20 shrink-0">
+                                                     <span className="text-[9px] font-bold text-gray-400 mb-1 flex justify-between">Opacity <span>{Math.round(textureOpacity*100)}%</span></span>
+                                                     <input type="range" min="0" max="1" step="0.1" value={textureOpacity} onChange={e => setTextureOpacity(parseFloat(e.target.value))} className="h-1 bg-gray-700 rounded-lg appearance-none accent-vingi-500"/>
+                                                 </div>
+                                                 <div className="flex flex-col gap-1 shrink-0">
+                                                     <span className="text-[9px] font-bold text-gray-400">Mix</span>
+                                                     <select value={textureBlend} onChange={e => setTextureBlend(e.target.value as any)} className="bg-gray-800 text-white text-[10px] rounded p-1 border border-gray-700 outline-none">
+                                                         <option value="multiply">Multiply</option>
+                                                         <option value="overlay">Overlay</option>
+                                                         <option value="screen">Screen</option>
+                                                     </select>
+                                                 </div>
+                                             </>
+                                         )}
+                                     </div>
+
+                                     <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-mono border border-white/10 z-30">
+                                         {widthCm}x{heightCm}cm | {dpi} DPI
+                                     </div>
+                                </div>
+                             ) : (
+                                <div className="text-center opacity-30 select-none pointer-events-none">
+                                    <Grid3X3 size={64} className="mx-auto mb-4 text-white"/>
+                                    <p className="text-white text-sm font-medium">Área de Renderização 4K</p>
+                                </div>
+                             )
+                         )}
+
+                         {error && (
+                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold flex items-center gap-2 animate-bounce-subtle z-50">
+                                 <FileWarning size={14}/> {error}
+                             </div>
+                         )}
+                    </div>
+                    
+                    {/* CONTROLS PANEL */}
+                    {/* Mobile: Order 2, Height 45vh */}
+                    {/* Desktop: Order 1, Width fixed, Full Height */}
+                    <div className="order-2 md:order-1 w-full md:w-[380px] lg:w-[400px] bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col z-20 shadow-xl h-[45vh] md:h-full overflow-y-auto custom-scrollbar shrink-0">
                         <div className="p-5 space-y-6 pb-20">
                             
                             {/* SECTION 1: DIMENSÕES & SUBSTRATO */}
@@ -500,93 +590,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             )}
                         </div>
                     </div>
-
-                    {/* RIGHT PANEL: VISUALIZATION */}
-                    <div className="flex-1 bg-slate-900 relative flex items-center justify-center overflow-hidden min-w-0">
-                         <div className="absolute inset-0 opacity-10 bg-[linear-gradient(#ffffff_1px,transparent_1px),linear-gradient(90deg,#ffffff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
-
-                         {isGenerating ? (
-                             <div className="text-center relative z-10 p-8 max-w-sm">
-                                 <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-6"/>
-                                 <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">{GENERATION_STEPS[genStep]}</h2>
-                                 <p className="text-slate-400 text-sm">Gerando arquivo RAW VECTOR...</p>
-                                 <div className="mt-8 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
-                                     <div className="h-full bg-vingi-500 animate-progress-indeterminate"></div>
-                                 </div>
-                             </div>
-                         ) : (
-                             generatedPattern ? (
-                                <div className="relative w-full h-full flex flex-col items-center justify-center p-8">
-                                     {/* IMAGE CONTAINER */}
-                                     <div className="relative shadow-2xl rounded-sm border border-white/10 overflow-hidden group flex justify-center items-center" 
-                                          style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}>
-                                         
-                                         <img src={generatedPattern} className="block w-auto h-auto max-w-full max-h-[85vh] bg-white" style={{ objectFit: 'contain' }} />
-                                         
-                                         {/* TEXTURE OVERLAY LAYER */}
-                                         {textureType !== 'None' && (
-                                             <div 
-                                                className="absolute inset-0 pointer-events-none z-10 transition-all duration-300"
-                                                style={getTextureStyle()}
-                                             ></div>
-                                         )}
-                                     </div>
-                                     
-                                     {/* TEXTURE CONTROLS (FLOATING) */}
-                                     <div className="absolute bottom-4 bg-gray-900/90 backdrop-blur-md px-4 py-3 rounded-xl border border-gray-700 flex items-center gap-4 animate-slide-up z-50">
-                                         <div className="flex flex-col gap-1">
-                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Acabamento Têxtil</span>
-                                             <div className="flex gap-1">
-                                                {['None', 'Cotton', 'Linen', 'Silk', 'Canvas'].map(t => (
-                                                    <button 
-                                                        key={t}
-                                                        onClick={() => setTextureType(t as any)}
-                                                        className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${textureType === t ? 'bg-vingi-500 text-white shadow-sm' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-                                                    >
-                                                        {t}
-                                                    </button>
-                                                ))}
-                                             </div>
-                                         </div>
-
-                                         {textureType !== 'None' && (
-                                             <>
-                                                 <div className="w-px h-8 bg-gray-700 mx-2"></div>
-                                                 <div className="flex flex-col w-24">
-                                                     <span className="text-[9px] font-bold text-gray-400 mb-1 flex justify-between">Opacidade <span>{Math.round(textureOpacity*100)}%</span></span>
-                                                     <input type="range" min="0" max="1" step="0.1" value={textureOpacity} onChange={e => setTextureOpacity(parseFloat(e.target.value))} className="h-1 bg-gray-700 rounded-lg appearance-none accent-vingi-500"/>
-                                                 </div>
-                                                 <div className="flex flex-col gap-1">
-                                                     <span className="text-[9px] font-bold text-gray-400">Mix</span>
-                                                     <select value={textureBlend} onChange={e => setTextureBlend(e.target.value as any)} className="bg-gray-800 text-white text-[10px] rounded p-1 border border-gray-700 outline-none">
-                                                         <option value="multiply">Multiply</option>
-                                                         <option value="overlay">Overlay</option>
-                                                         <option value="screen">Screen</option>
-                                                     </select>
-                                                 </div>
-                                             </>
-                                         )}
-                                     </div>
-
-                                     <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-mono border border-white/10 z-30">
-                                         {widthCm}x{heightCm}cm | {dpi} DPI
-                                     </div>
-                                </div>
-                             ) : (
-                                <div className="text-center opacity-30 select-none pointer-events-none">
-                                    <Grid3X3 size={64} className="mx-auto mb-4 text-white"/>
-                                    <p className="text-white text-sm font-medium">Área de Renderização 4K</p>
-                                </div>
-                             )
-                         )}
-
-                         {error && (
-                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold flex items-center gap-2 animate-bounce-subtle z-50">
-                                 <FileWarning size={14}/> {error}
-                             </div>
-                         )}
-                    </div>
-
                 </div>
             )}
         </div>
