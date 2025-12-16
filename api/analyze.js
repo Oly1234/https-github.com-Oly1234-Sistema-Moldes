@@ -1,12 +1,11 @@
 
 import { analyzeColorTrend } from './modules/departments/color.js';
-import { refineDesignPrompt } from './modules/departments/atelier.js'; // Agora faz Vision Analysis
+import { refineDesignPrompt } from './modules/departments/atelier.js'; 
 import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern } from './modules/generator.js'; 
-import { reconstructElement, transformElement, decomposePattern } from './modules/departments/layerLab.js'; 
-import { enhancePatternQuality } from './modules/departments/qualityControl.js'; 
+import { reconstructElement } from './modules/departments/layerLab.js'; 
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -28,7 +27,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, textileSpecs, userHints, cropBase64, commandText } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -37,11 +36,7 @@ export default async function handler(req, res) {
     // --- ROTEAMENTO ---
 
     if (action === 'VOICE_COMMAND') {
-        const ROUTER_PROMPT = `
-        ACT AS: Vingi OS Navigation System.
-        USER SAID: "${commandText}"
-        OUTPUT JSON: { "targetView": "MODULE_NAME", "message": "Context message" }
-        `;
+        const ROUTER_PROMPT = `ACT AS: Vingi OS Navigation. USER: "${commandText}". OUTPUT JSON: { "targetView": "MODULE_NAME", "message": "Context message" }`;
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT }] }] }) });
         const data = await response.json();
@@ -61,26 +56,25 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
 
-    // --- GERAÇÃO DE ESTAMPAS (SIMPLIFICADO) ---
+    // --- ATELIER DE ESTAMPARIA ---
     
-    // 1. ANÁLISE DE REFERÊNCIA (Imagem -> Prompt)
+    // 1. Extração de Prompt (Visão)
     if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {
-        // Usa a função atualizada em atelier.js que imita 'analyzePatternFromImage'
         const extractedPrompt = await refineDesignPrompt(apiKey, mainImageBase64);
-        // Extrai cores também para ajudar
-        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, 'image/jpeg', cleanJson);
-        
-        return res.status(200).json({ 
-            success: true, 
-            prompt: extractedPrompt,
-            colors: colorData.colors 
-        });
+        return res.status(200).json({ success: true, prompt: extractedPrompt });
     }
 
-    // 2. GERAÇÃO (Prompt -> Imagem)
+    // 2. Análise de Cor (Separada para permitir variações)
+    if (action === 'ANALYZE_COLOR_TREND') {
+        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, 'image/jpeg', cleanJson, variation || 'NATURAL');
+        return res.status(200).json({ success: true, colors: colorData.colors });
+    }
+
+    // 3. Geração de Estampa
     if (action === 'GENERATE_PATTERN') {
         try {
-            const image = await generatePattern(apiKey, prompt, colors);
+            // Agora passa 'selvedge' (Ourela) e 'colors' para o gerador
+            const image = await generatePattern(apiKey, prompt, colors, selvedge);
             return res.status(200).json({ success: true, image });
         } catch (genError) {
             console.error("Generation Failed:", genError);
@@ -88,11 +82,11 @@ export default async function handler(req, res) {
         }
     }
 
-    // --- FIM GERAÇÃO ---
+    // --- FIM ATELIER ---
 
     if (action === 'DESCRIBE_PATTERN') {
-        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson, (userHints && userHints.includes('VARIATION') ? userHints.split(':')[1].trim() : 'NATURAL'));
-        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE', userHints);
+        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson, 'NATURAL');
+        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE');
         const matches = generateMarketLinks(visualData, 'TEXTURE');
         return res.status(200).json({ success: true, colors: colorData.colors, prompt: visualData.visualDescription, technicalSpecs: visualData.technicalSpecs, stockMatches: matches });
     }
