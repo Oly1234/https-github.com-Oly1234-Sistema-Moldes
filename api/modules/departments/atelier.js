@@ -1,39 +1,31 @@
 // api/modules/departments/atelier.js
 // DEPARTAMENTO: ANÁLISE DE REFERÊNCIA (Vision to Prompt)
+import { GoogleGenAI } from "@google/genai";
 
-// Substitui a tradução simples pela análise visual completa conforme referência
+// Análise Visual para extrair Prompt da Imagem
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
-    const MODEL_NAME = 'gemini-2.5-flash'; 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    const ai = new GoogleGenAI({ apiKey });
 
-    // PROMPT CONFORME REFERÊNCIA 'analyzePatternFromImage'
     const SYSTEM_PROMPT = `
-    Atue como um Diretor de Arte Têxtil Sênior. Analise esta imagem para reprodução técnica.
+    Act as a Senior Textile Art Director. Analyze this image for technical reproduction.
     
-    Retorne APENAS um texto descritivo (PROMPT) detalhado para gerar uma estampa idêntica a esta.
-    Descreva elementos, fundo, estilo artístico e cores.
-    Seja direto, sem introduções.
-    Exemplo: "Estampa floral aquarela com hibiscos vermelhos e folhas de palmeira verde escura sobre fundo creme, estilo tropical vintage."
+    OUTPUT: A single, detailed prompt description to recreate this exact pattern style.
+    Include: Elements, background color, art style (watercolor/vector/geometric).
+    Keep it direct. No intro.
     `;
 
-    const payload = {
-        contents: [{ 
-            parts: [
-                { text: SYSTEM_PROMPT },
-                { inline_data: { mime_type: "image/jpeg", data: imageBase64 } }
-            ] 
-        }]
-    };
-
     try {
-        const response = await fetch(endpoint, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payload) 
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    { text: SYSTEM_PROMPT },
+                    { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
+                ]
+            }
         });
 
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
         return text ? text.trim() : "Estampa geométrica abstrata.";
 
     } catch (e) {

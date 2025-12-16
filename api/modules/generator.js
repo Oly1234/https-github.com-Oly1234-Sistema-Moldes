@@ -1,67 +1,66 @@
 // api/modules/generator.js
-// MOTOR DE GERAÇÃO: VINGI DIRECT (Baseado no Core funcional)
-
-const callGeminiImage = async (apiKey, prompt) => {
-    const MODEL_NAME = 'gemini-2.5-flash-image'; 
-    const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
-    
-    const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-            candidateCount: 1,
-            // Configuração conforme referência: AspectRatio 1:1 é padrão implícito se não enviado,
-            // mas o modelo flash-image aceita prompts diretos.
-        }
-    };
-
-    try {
-        const response = await fetch(endpointImg, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payload) 
-        });
-        
-        if (!response.ok) {
-            console.error("Gemini API Error Status:", response.status);
-            throw new Error(`Erro na API Google: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        if (data.promptFeedback?.blockReason) {
-             throw new Error("Conteúdo bloqueado por segurança. Tente termos mais simples.");
-        }
-
-        const candidate = data.candidates?.[0]?.content?.parts;
-        if (!candidate) throw new Error("A IA não gerou conteúdo visual.");
-
-        const imagePart = candidate.find(p => p.inline_data);
-        if (imagePart) {
-            return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
-        }
-        
-        throw new Error("A IA respondeu apenas com texto, sem imagem.");
-    } catch (e) {
-        throw e;
-    }
-};
+// MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
+import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors) => {
-    // LÓGICA FIEL AO 'generatePatternDraft'
-    
-    // Constrói contexto de cores se houver
+    const ai = new GoogleGenAI({ apiKey });
+
+    // 1. Contexto de Cor
     const colorContext = (colors && colors.length > 0) 
         ? `Paleta de cores: ${colors.map(c => c.hex).join(', ')}.` 
         : "Use cores de tendência atuais.";
 
-    // PROMPT EM PORTUGUÊS (Conforme referência que funcionava)
-    const FULL_PROMPT = `Crie uma estampa têxtil profissional seamless (sem emendas) com o tema: "${prompt}".
-    
-    Especificações Técnicas: Estilo Digital, Alta Definição, Rapport de Repetição.
+    // 2. Prompt "Blindado" para Textura
+    // Força o modelo a focar em textura 2D e não em 'criar um design de roupa' (que gera alucinações de pessoas)
+    // O comando "Texture Swatch" é mais seguro que "Fashion Print".
+    const FULL_PROMPT = `Generate a seamless professional textile pattern (texture swatch).
+    THEME: ${prompt}.
+    STYLE: Flat 2D Vector Art, High Definition, Wallpaper style.
     ${colorContext}
-    Evite marca d'água.
     
-    IMPORTANTE: Gere apenas a textura plana 2D.`;
+    VISUAL RULES:
+    - CLOSE-UP TEXTURE ONLY.
+    - NO human models, NO mannequins, NO 3D garments.
+    - NO realistic photos of people.
+    - Seamless repeat.
+    `;
 
-    return await callGeminiImage(apiKey, FULL_PROMPT);
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [{ text: FULL_PROMPT }]
+            },
+            config: {
+                // Configuração CRÍTICA para garantir que a IA gere imagem e não texto.
+                imageConfig: {
+                    aspectRatio: "1:1"
+                }
+            }
+        });
+
+        // Extração de Imagem (Compatível com SDK)
+        let imageUrl = null;
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                    break;
+                }
+            }
+        }
+
+        if (!imageUrl) {
+            // Se falhar, tenta capturar o texto de recusa para logar (mas lança erro amigável)
+            const textPart = response.candidates?.[0]?.content?.parts?.find(p => p.text);
+            if (textPart) console.warn("Recusa da IA:", textPart.text);
+            throw new Error("A IA não conseguiu gerar esta imagem. Tente termos mais simples como 'Floral' ou 'Listras'.");
+        }
+
+        return imageUrl;
+
+    } catch (e) {
+        console.error("Erro no Gerador SDK:", e);
+        throw e;
+    }
 };

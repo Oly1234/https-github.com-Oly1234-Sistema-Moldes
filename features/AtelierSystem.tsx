@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw } from 'lucide-react';
 import { PantoneColor } from '../types';
-import { ModuleHeader, FloatingReference } from '../components/Shared';
+import { ModuleHeader } from '../components/Shared';
 
 // --- HELPERS ---
 const triggerTransfer = (targetModule: string, imageData: string) => {
@@ -67,7 +67,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const handleReferenceUpload = async (imgBase64: string) => {
         setReferenceImage(imgBase64);
         setIsProcessing(true);
-        setStatusMessage("Analisando referência...");
+        setStatusMessage("Extraindo DNA Visual...");
         setError(null);
 
         try {
@@ -111,9 +111,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         }
 
         setIsProcessing(true);
-        setStatusMessage("Criando estampa...");
+        setStatusMessage("Preparando Estúdio AI...");
         setGeneratedPattern(null);
         setError(null);
+
+        // Feedback visual progressivo
+        setTimeout(() => setStatusMessage("Desenhando Textura..."), 1500);
 
         try {
             const res = await fetch('/api/analyze', {
@@ -130,7 +133,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
             } else {
-                throw new Error(data.error || "Não foi possível gerar a estampa.");
+                throw new Error(data.error || "A IA não conseguiu gerar a imagem. Tente termos mais simples.");
             }
         } catch (err: any) {
             setError(err.message);
@@ -164,12 +167,13 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     <div className="absolute inset-0 opacity-10 bg-[linear-gradient(45deg,#ffffff_1px,transparent_1px)] bg-[size:24px_24px]"></div>
                     
                     {isProcessing ? (
-                        <div className="text-center relative z-10">
+                        <div className="text-center relative z-10 animate-fade-in">
                             <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-4"/>
-                            <h2 className="text-white font-bold text-xl">{statusMessage}</h2>
+                            <h2 className="text-white font-bold text-xl tracking-tight">{statusMessage}</h2>
+                            <p className="text-slate-400 text-sm mt-2">Isso pode levar alguns segundos.</p>
                         </div>
                     ) : generatedPattern ? (
-                        <div className="relative shadow-2xl bg-white max-w-full max-h-full flex items-center justify-center border border-white/20">
+                        <div className="relative shadow-2xl bg-white max-w-full max-h-full flex items-center justify-center border border-white/20 animate-fade-in">
                             <img src={generatedPattern} className="max-w-full max-h-[80vh] object-contain" />
                         </div>
                     ) : (
@@ -180,8 +184,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     )}
 
                     {error && (
-                        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-xl text-sm font-bold flex items-center gap-3 animate-bounce-subtle z-50">
-                            <FileWarning size={18}/> {error}
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400 max-w-md">
+                            <FileWarning size={20} className="shrink-0"/> 
+                            <div>
+                                <p className="leading-tight">{error}</p>
+                                <p className="text-[10px] opacity-70 mt-1 font-normal">Dica: Evite palavras como "mulher", "vestido" ou "corpo".</p>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -205,7 +213,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                             </div>
                             {referenceImage && (
-                                <p className="text-[10px] text-green-600 mt-2 font-medium flex items-center gap-1">
+                                <p className="text-[10px] text-green-600 mt-2 font-medium flex items-center gap-1 animate-fade-in">
                                     <Sparkles size={10}/> Prompt extraído da imagem com sucesso.
                                 </p>
                             )}
