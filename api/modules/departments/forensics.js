@@ -1,51 +1,55 @@
 
-// DEPARTAMENTO: FORENSE VISUAL (The Lens)
-// Responsabilidade: Desmembrar a imagem em dados técnicos puros e keywords de cauda longa.
+// DEPARTAMENTO: FORENSE VISUAL (The Lens) & INTERPRETAÇÃO SEMÂNTICA
+// Responsabilidade: Classificar a imagem nas categorias internas seguras e extrair DNA técnico.
 
 export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson, context = 'TEXTURE', userHints = '') => {
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // PROMPT DE ALTA SENIORIDADE - SURFACE DESIGN MANAGER
-        // Foco: Extrair a arte ignorando o suporte (corpo/roupa)
+        // PROMPT DE CAMADA SEMÂNTICA (SEMANTIC INTERPRETATION LAYER)
+        // Objetivo: Detectar a natureza do padrão e traduzir para linguagem técnica segura.
+        
         const userContext = userHints ? `USER NOTES: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
-        ACT AS: Executive Textile Design Manager (20+ Years Experience).
-        TASK: Perform a technical breakdown of the SURFACE PATTERN found in this image.
+        ACT AS: Senior Textile Design Analyst.
         
-        CRITICAL VISUAL ISOLATION PROTOCOL:
-        1. IGNORE THE MODEL: Do not describe the person, body, skin, face, hair, or pose.
-        2. IGNORE THE GARMENT: Do not describe the dress, shirt, folds, or drape. Look ONLY at the 2D ARTWORK printed on the fabric.
-        3. TRANSLATE TO VECTOR: Describe the motif as if it were a flat Adobe Illustrator file.
+        OBJECTIVE: Analyze the visual pattern and classify it into SAFE TECHNICAL CATEGORIES.
         
-        SAFETY VOCABULARY ENFORCEMENT:
-        - FORBIDDEN WORDS: "Woman", "Girl", "Lady", "Body", "Skin", "Nude", "Legs", "Chest", "Wearing", "Model", "Posed".
-        - REPLACEMENTS: Use "Figurative element", "Organic shape", "Background color", "Motif", "Composition".
+        SEMANTIC MAPPING RULES (CRITICAL):
+        - IF you see FLOWERS -> Output: "Motivos botânicos estilizados" (NEVER use 'floral').
+        - IF you see JUNGLE/LEAVES -> Output: "Folhagens tropicais planificadas" (NEVER use 'nature' or 'organic').
+        - IF you see DECORATIVE ART -> Output: "Elementos ornamentais estruturados" (NEVER use 'artistic').
+        - IF you see SKETCHES -> Output: "Linhas vetoriais de inspiração natural".
+        
+        SECURITY PROTOCOL:
+        - IGNORE: Human figures, bodies, skin, dresses, models. Look ONLY at the GRAPHIC ARTWORK.
+        - FORBIDDEN WORDS: Floral, Organic, Body, Skin, Nude, Sexy, Realistic, Photo.
         
         ${userContext}
         
         OUTPUT JSON:
         {
-            "visualDescription": "A highly technical, flat description of the print artwork only. Focus on motif style (e.g., 'Gouache Floral', 'Geo-Vector'), composition (e.g., 'Tossed', 'Ogee'), and color palette. NO HUMAN TERMS.",
+            "semanticCategory": "One of the mapped technical categories above",
+            "visualDescription": "A highly technical description of the motifs using only vector/geometry terms (e.g., 'Stylized radial elements with planar filling').",
             "printLayout": "Corrida",
             "searchKeywords": [
-                "Main Motif (Art term)",
-                "Technique Name (e.g. Screen Print, Ikat)",
-                "Art Movement (e.g. Bauhaus, Tropical)"
+                "Technical Term 1 (e.g. Botanical Illustration)",
+                "Technical Term 2 (e.g. Vector Foliage)",
+                "Technical Term 3 (e.g. Engineered Print)"
             ],
             "technicalSpecs": { 
-                "technique": "Vector/Watercolor/Digital", 
-                "motifs": ["Primary Motif", "Secondary Motif"], 
-                "complexity": "Commercial/High",
-                "vibe": "Professional",
-                "layout": "Seamless Repeat",
-                "restorationInstructions": "Reconstruct as flat 2D vector file, clean lines, solid colors, remove fabric texture."
+                "technique": "Vetorial/Chapado", 
+                "motifs": ["Elemento Primário", "Elemento Secundário"], 
+                "complexity": "Alta Definição",
+                "vibe": "Sofisticado Industrial",
+                "layout": "Rapport Contínuo",
+                "restorationInstructions": "Refinar contornos para traço vetorial limpo, eliminar ruídos, harmonizar proporções, aplicar cores chapadas."
             }
         }
         `;
     } else {
-        // ABA DE ESCANEAMENTO: Foco na Engenharia da Roupa (Mantém PT-BR para interface)
+        // MANTIDO: Análise de Vestuário (Scanner de Moldes)
         SYSTEM_PROMPT = `
         ACT AS: Master Pattern Cutter (Portuguese Speaker).
         TASK: Analyze the garment structure for sewing patterns.
@@ -84,9 +88,9 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         const result = JSON.parse(cleanJson(text));
         
-        // Fallback robusto se a descrição vier vazia
-        if (!result.visualDescription || result.visualDescription.length < 5) {
-            result.visualDescription = "Abstract geometric textile pattern, vector style, flat colors";
+        // Fallback de Segurança
+        if (!result.visualDescription) {
+            result.visualDescription = "Padrão têxtil vetorial de alta definição com elementos geométricos estilizados.";
         }
         
         return result;
@@ -94,10 +98,10 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     } catch (e) {
         console.error("Forensics Dept Error:", e);
         return {
-            visualDescription: "Artistic seamless textile pattern, high resolution, vector style",
+            visualDescription: "Padrão têxtil técnico vetorial",
             printLayout: "Corrida",
-            searchKeywords: ["Pattern", "Texture"],
-            technicalSpecs: { silhouette: "Desconhecido", layout: "Corrida", restorationInstructions: "High quality vector style" }
+            searchKeywords: ["Textile Pattern", "Vector Art"],
+            technicalSpecs: { silhouette: "N/A", layout: "Corrida", restorationInstructions: "Limpeza vetorial padrão" }
         };
     }
 };

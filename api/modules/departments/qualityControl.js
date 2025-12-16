@@ -1,32 +1,32 @@
 
 // api/modules/departments/qualityControl.js
 // DEPARTAMENTO: CONTROLE DE QUALIDADE & REFINAMENTO (The Polisher)
-// Responsabilidade: Transformar rascunhos em arquivos prontos para estamparia (Upscaling & Denoising via img2img).
+// Responsabilidade: Refinar o desenho gerado, aplicando limpeza vetorial e proporção.
 
 export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    const TECH_PROMPT = `
-    ACT AS: Senior Textile Pre-Press Technician.
-    TASK: Vectorize and Refine this textile pattern swatch.
+    const POLISHER_PROMPT = `
+    ATUE COMO: Técnico de Pré-Impressão Têxtil.
+    TAREFA: Vetorizar e Refinar esta amostra de estampa (Image-to-Image).
     
-    STRICT PROCESSING RULES:
-    1. INPUT IS ARTWORK: This image is a design file, NOT a photo of a person. Treat all colors (even beige/pink) as ink/paint.
-    2. VECTORIZE: Sharpen edges, remove JPEG artifacts, remove noise/grain.
-    3. FLATTEN: Remove 3D shading. Make it look like a screen print (Flat Color).
-    4. PRESERVE: Keep the exact motif shapes. Do not hallucinate new objects.
+    DIRETRIZES DE MELHORIA VISUAL:
+    1. LIMPEZA: Refinar contornos para obter traços limpos e contínuos (Clean Vector Lines).
+    2. REDUÇÃO DE RUÍDO: Eliminar imperfeições, granulação e borrões não intencionais.
+    3. COR: Achatar as cores para "Solid Flat Colors" (simulando separação de quadricromia).
+    4. PROPORÇÃO: Harmonizar as proporções entre os elementos gráficos mantendo a composição original.
     
-    CONTEXT: ${contextPrompt || "Textile pattern design"}
+    CONTEXTO DO DESENHO: ${contextPrompt || "Estampa técnica vetorial"}
     
-    OUTPUT: High-resolution 2D flat textile file.
+    OBJETIVO: Entregar um arquivo final de alta definição pronto para gravação de cilindro.
+    IMPORTANTE: Mantenha a imagem como SWATCH 2D PLANO. Não adicione dobras ou efeitos 3D.
     `;
 
-    // CRITICAL: Adicionar Safety Settings aqui também, pois o Image-to-Image é rigoroso com "pele".
     const payload = {
         contents: [{ 
             parts: [
-                { text: TECH_PROMPT },
+                { text: POLISHER_PROMPT },
                 { inline_data: { mime_type: "image/png", data: imageBase64 } }
             ] 
         }],
@@ -45,20 +45,12 @@ export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) 
             body: JSON.stringify(payload) 
         });
 
-        if (!response.ok) {
-            const errText = await response.text();
-            console.warn("Quality Control Glitch:", errText);
-            // Se falhar o refinamento, retornamos erro mas o frontend pode manter a imagem original
-            throw new Error("Refinamento indisponível. A imagem original foi mantida.");
-        }
+        if (!response.ok) throw new Error("Falha no refinamento.");
 
         const data = await response.json();
         const candidate = data.candidates?.[0]?.content?.parts;
         
-        // Verifica bloqueio de segurança na resposta
-        if (data.promptFeedback?.blockReason) {
-            throw new Error("SAFETY_BLOCK_QC");
-        }
+        if (data.promptFeedback?.blockReason) throw new Error("SAFETY_BLOCK_QC");
 
         const imagePart = candidate?.find(p => p.inline_data);
 
@@ -66,7 +58,7 @@ export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) 
             return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         }
         
-        throw new Error("O refinamento não gerou uma imagem válida.");
+        throw new Error("Refinamento falhou.");
 
     } catch (e) {
         console.error("QC Department Error:", e);

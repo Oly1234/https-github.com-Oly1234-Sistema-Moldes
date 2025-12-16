@@ -1,95 +1,13 @@
 
 // api/modules/generator.js
-// DEPARTAMENTO: ATELIER DIGITAL (Geração & Restauração de Estampas)
-// TECNOLOGIA: Vingi Neuro-Bridge (Semantic Safety Negotiation)
-
-const SANITIZATION_MAP = {
-    // Anatomia & Corpo (Inglês)
-    "hot pink": "vibrant magenta",
-    "flesh tone": "warm beige",
-    "skin color": "sand",
-    "skin tone": "tan",
-    "skin": "texture",
-    "nude": "soft beige",
-    "naked": "bare",
-    "flesh": "organic",
-    "body": "form",
-    "face": "visage",
-    "human": "figure",
-    "sexy": "elegant",
-    "breast": "chest",
-    "chest": "torso",
-    "nipple": "dot",
-    "legs": "stripes",
-    "woman": "pattern",
-    "girl": "motif",
-    "lady": "style",
-    "model": "composition",
-    "wearing": "featuring",
-    // MODA 3D -> SUPERFÍCIE 2D (Crucial para evitar geração de pessoas)
-    "dress": "seamless pattern file", 
-    "vestido": "seamless pattern file",
-    "shirt": "fabric print design",
-    "camisa": "fabric print design",
-    "skirt": "surface pattern",
-    "saia": "surface pattern",
-    "roupa": "textile texture",
-    "clothing": "textile texture",
-    
-    // Anatomia & Corpo (Português - CRUCIAL)
-    "pele": "bege areia",
-    "corpo": "forma orgânica",
-    "mulher": "arte abstrata",
-    "menina": "motivo delicado",
-    "seios": "curvas",
-    "peito": "busto",
-    "mamilo": "ponto",
-    "nu": "natural",
-    "nuda": "natural",
-    "pelada": "natural",
-    "sensual": "elegante",
-    "humano": "figura",
-    "pessoa": "elemento",
-    
-    // Violência & Armas
-    "blood": "crimson",
-    "sangue": "carmesim",
-    "kill": "remove",
-    "matar": "remover",
-    "gun": "device",
-    "arma": "objeto",
-    "war": "conflict",
-    "guerra": "conflito",
-    
-    // Termos de Realismo (Gatilhos de Deepfake)
-    "realistic": "detailed vector illustration",
-    "realista": "ilustração vetorial detalhada",
-    "photorealistic": "high definition digital art",
-    "fotorealista": "arte digital alta definição",
-    "photo": "image",
-    "foto": "imagem",
-    "photography": "art",
-    "fotografia": "arte"
-};
-
-const sanitizeText = (text) => {
-    if (!text) return "";
-    let safeText = text.toLowerCase();
-    Object.keys(SANITIZATION_MAP).forEach(forbidden => {
-        const safe = SANITIZATION_MAP[forbidden];
-        // Regex com word boundary para evitar substituir partes de palavras
-        const regex = new RegExp(`\\b${forbidden}\\b`, 'gi');
-        safeText = safeText.replace(regex, safe);
-    });
-    return safeText;
-};
+// DEPARTAMENTO: FABRICAÇÃO DE ESTAMPAS (The Loom)
+// TECNOLOGIA: Master Textile Prompt v2.0 (Industrial Standard)
 
 const callGeminiImage = async (apiKey, prompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
-    // CONFIGURAÇÃO SEGURA: Bloqueio apenas em ALTA probabilidade.
-    // Isso permite que a IA gere "pele" em contextos artísticos sem bloquear imediatamente.
+    // SAFETY: Relaxada para permitir "pele" como cor, pois o prompt técnico já removeu o contexto humano.
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -109,8 +27,6 @@ const callGeminiImage = async (apiKey, prompt) => {
     if (!response.ok) {
         const errText = await response.text();
         console.error("Gemini API Error:", errText);
-        if (response.status === 400) throw new Error("Erro 400: Parâmetros inválidos na IA.");
-        if (response.status === 503) throw new Error("Erro 503: IA sobrecarregada.");
         throw new Error(`Erro na API (${response.status})`);
     }
 
@@ -134,53 +50,44 @@ const callGeminiImage = async (apiKey, prompt) => {
 };
 
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
-    const { layout = "Corrida", repeat = "Straight", styleGuide = "Vector Art" } = textileSpecs || {};
+    const { layout = "Corrida", repeat = "Straight" } = textileSpecs || {};
     
-    // 1. SANITIZAÇÃO DE CORES
-    const safeColors = (colors || []).map(c => {
-        return sanitizeText(c.name) + ` (${c.hex})`; 
-    }).join(', ');
+    // 1. DEFINIÇÃO DE PALETA (Cores Chapadas)
+    // Se houver cores definidas, forçamos "Solid Flat Colors"
+    const colorString = (colors || []).map(c => `${c.name} (${c.hex})`).join(', ');
+    const paletteInstruction = colorString 
+        ? `PALETA CROMÁTICA TÉCNICA: Utilizar estritamente as cores: ${colorString}. Cores chapadas (Solid Colors), sem degradês, prontas para separação de cilindro.`
+        : `PALETA CROMÁTICA TÉCNICA: Cores harmoniosas, chapadas e contrastantes, adequadas para coleção comercial.`;
 
-    const colorInstruction = safeColors 
-        ? `Palette: ${safeColors}. Use flat, solid colors.` 
-        : "Palette: Harmonious commercial trend colors.";
-
-    // 2. SANITIZAÇÃO DO PROMPT
-    let safePrompt = sanitizeText(prompt);
-    if (!safePrompt || safePrompt.length < 3) safePrompt = "Abstract artistic textile pattern";
-
-    // 3. CONSTRUÇÃO TÉCNICA
-    let constructionPrompt = "";
-    switch(layout) {
-        case 'Barrada':
-            constructionPrompt = "Layout: Engineered Border Print (Barrado). Main motif at bottom, lighter texture at top.";
-            break;
-        case 'Localizada':
-            constructionPrompt = "Layout: Placed Motif (Localizada). Centralized artwork with negative space.";
-            break;
-        default: 
-            constructionPrompt = "Layout: Seamless All-Over Repeat (Rapport). Continuous pattern with no visible seams.";
-            break;
-    }
-
-    // 4. PROMPT MESTRE (TEXTILE DESIGNER PERSONA)
-    // Focamos em "Flat 2D" para evitar que a IA tente desenhar uma pessoa vestindo a roupa.
+    // 2. MONTAGEM DO PROMPT MESTRE INDUSTRIAL
+    // A estrutura segue exatamente o pedido: Definição -> Estilo -> Técnica -> Saída.
+    
     const MASTER_PROMPT = `
-    ACT AS: Senior Textile Designer (Surface Design Specialist).
-    TASK: Create a Production-Ready Textile File (Swatch).
+    ATUE COMO: Designer Têxtil Sênior (Especialista em Estamparia Industrial).
+    OBJETIVO: Gerar arquivo de estampa final (Pattern Swatch) em alta resolução.
     
-    ARTWORK BRIEF:
-    - Subject: ${safePrompt}.
-    - Style: ${styleGuide}, Clean Vector aesthetic, High Definition.
-    - ${colorInstruction}
-    - ${constructionPrompt}
+    --- DEFINIÇÃO DO PADRÃO ---
+    MOTIVO PRINCIPAL: ${prompt}
+    ESTRUTURA: Estampa têxtil de padrão ${layout === 'Barrada' ? 'BARRADO (Border Print)' : 'CORRIDO (All-over Repeat)'} com repetição contínua e encaixe técnico regular.
     
-    TECHNICAL CONSTRAINTS (CRITICAL):
-    - VIEW: TOP-DOWN FLAT 2D TEXTURE ONLY. 
-    - NO MODELS: Do not draw people, mannequins, or bodies.
-    - NO 3D RENDERING: Do not render folds, shadows, or garment shapes. This is the raw print file.
-    - NO TEXT: Do not include watermarks or text.
-    - QUALITY: Sharp edges, no blur, no noise.
+    --- DIRETRIZES DE REFINO VISUAL (O QUE FAZER) ---
+    1. TRAÇO: Desenvolver em linguagem vetorial, com contornos limpos e bem definidos.
+    2. ESTILO: Elementos estilizados e planificados (Flat Design).
+    3. ACABAMENTO: Eliminar ruídos e texturas pictóricas. O preenchimento deve ser predominantemente chapado.
+    4. DETALHE: Variação sutil e controlada de espessura de linha, simulando desenho técnico refinado.
+    5. COMPOSIÇÃO: Distribuição rítmica e equilibrada, garantindo leitura contínua.
+    
+    --- REGRAS DE SEGURANÇA E TÉCNICA (O QUE NÃO FAZER) ---
+    - NÃO gerar pessoas, corpos, modelos ou manequins.
+    - NÃO gerar fotografia ou renderização 3D realista.
+    - NÃO usar efeito aquarela borrado (Watercolor Blur) ou granulação.
+    - NÃO incluir marcas d'água ou texto.
+    
+    --- ESPECIFICAÇÕES DE SAÍDA ---
+    ${paletteInstruction}
+    VISUALIZAÇÃO: SWATCH 2D PLANO (Top-down view).
+    RAPPORT: ${repeat}.
+    ARQUIVO: Pronto para produção industrial.
     `;
 
     try {
@@ -188,26 +95,16 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     } catch (e) {
         const errString = e.message || e.toString();
         
-        // 5. FALLBACK SEGURO
-        if (errString.includes("SAFETY_BLOCK") || errString.includes("400") || errString.includes("503") || errString.includes("Erro")) {
-            console.warn("Block detected. Engaging 'Safe Abstraction' Fallback...");
-            
-            const SAFE_FALLBACK_PROMPT = `
-            Abstract Textile Texture.
-            Theme: ${safePrompt.substring(0, 40)} inspired shapes.
-            Style: Geometric, Minimalist, Vector Art.
-            View: Flat 2D Swatch.
-            Colors: ${safeColors || "Multicolor"}.
+        // Fallback para geometria pura se falhar (Garantia de entrega)
+        if (errString.includes("SAFETY_BLOCK")) {
+            console.warn("Engaging Technical Fallback...");
+            const FALLBACK_PROMPT = `
+            Technical Textile Pattern.
+            Subject: Abstract geometric composition based on: ${prompt.substring(0, 30)}.
+            Style: Flat Vector, Solid Colors, Minimalist.
+            View: 2D Swatch.
             `;
-            
-            try {
-                return await callGeminiImage(apiKey, SAFE_FALLBACK_PROMPT);
-            } catch (retryError) {
-                const LAST_RESORT_PROMPT = `
-                Beautiful seamless fabric pattern, abstract floral shapes, colorful, vector style flat view.
-                `;
-                return await callGeminiImage(apiKey, LAST_RESORT_PROMPT);
-            }
+            return await callGeminiImage(apiKey, FALLBACK_PROMPT);
         }
         throw e;
     }

@@ -1,31 +1,56 @@
 
-// DEPARTAMENTO: ATELIER DIGITAL
-// Responsabilidade: Geração de Imagens (Estampas) via Prompt Direto
+// DEPARTAMENTO: ATELIER DIGITAL & MAPEAMENTO SEMÂNTICO
+// Responsabilidade: Traduzir intenção do usuário para "Safe Technical Prompt".
 
 export const createTextileDesign = async (apiKey, prompt, colors) => {
-    // ... mantido para compatibilidade, mas o fluxo principal agora usa generator.js ...
-    return null; 
+    return null; // Legacy stub
 };
 
-// NOVO: AUXILIAR DE PROMPT (Prompt Enhancement)
+// MAPEAMENTO SEMÂNTICO (Lógica "Hardcoded" para velocidade + IA para nuance)
+const SEMANTIC_MAP = {
+    "floral": "motivos botânicos estilizados e estruturados",
+    "flor": "elemento botânico radial",
+    "tropical": "folhagens planificadas de grande escala e alto contraste",
+    "folha": "forma vegetal vetorial",
+    "natureza": "inspiração natural geométrica",
+    "orgânico": "traços fluidos controlados",
+    "organic": "controlled fluid lines",
+    "abstrato": "composição não-figurativa geométrica",
+    "abstract": "geometric non-figurative composition",
+    "artistico": "estilo gráfico de alta definição",
+    "artistic": "high definition graphic style",
+    "pele": "tom areia neutro",
+    "skin": "neutral sand tone",
+    "corpo": "forma estrutural",
+    "body": "structural form"
+};
+
 export const refineDesignPrompt = async (apiKey, rawInput) => {
+    // 1. SUBSTITUIÇÃO IMEDIATA (Hardcoded Safety)
+    let safeInput = rawInput.toLowerCase();
+    Object.keys(SEMANTIC_MAP).forEach(key => {
+        if (safeInput.includes(key)) {
+            safeInput = safeInput.replace(new RegExp(key, 'g'), SEMANTIC_MAP[key]);
+        }
+    });
+
     const MODEL_NAME = 'gemini-2.5-flash'; 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     const SYSTEM_PROMPT = `
-    ACT AS: Senior Textile Designer & Prompt Engineer.
+    ACT AS: Textile Prompt Engineer.
     
-    TASK: Translate the user's raw idea into a "PROMPT BASE" for high-end textile generation.
+    OBJECTIVE: Translate the user's input into a technical description for the "Master Textile Prompt".
     
-    GUIDELINES (Based on Vingi System v6.4 Standards):
-    1. STYLE: "Contemporary decorative", "Stylized clean illustration", "Organic vector trace".
-    2. NEGATIVES: Explicitly mention "No watercolor blur", "No grain", "Solid colors", "No people", "No bodies".
-    3. STRUCTURE: Define the motifs clearly (e.g., "Medium scale floral elements", "Organic leaves").
-    4. TRANSLATION: Convert fashion terms to texture terms. "Floral Dress" -> "Floral Seamless Pattern".
+    INPUT: "${safeInput}"
     
-    USER INPUT: "${rawInput}"
+    RULES:
+    1. CATEGORIZE: Is it "Botânico", "Tropical", "Ornamental" or "Geométrico"?
+    2. DESCRIBE: Use terms like "vetorial", "chapado", "planificado", "estilizado".
+    3. FORBIDDEN: Do NOT use "floral", "organic", "watercolor", "realistic".
     
-    OUTPUT: A concise, technical prompt in English suitable for a generative model. Do not add intro text.
+    OUTPUT: A single paragraph in Portuguese describing the motifs technically.
+    Example output: "Motivos botânicos estilizados com folhas planificadas em composição rítmica."
     `;
 
     const payload = {
@@ -41,10 +66,10 @@ export const refineDesignPrompt = async (apiKey, rawInput) => {
 
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        return text ? text.trim() : rawInput;
+        return text ? text.trim() : safeInput;
 
     } catch (e) {
         console.error("Prompt Refiner Error:", e);
-        return rawInput; // Fallback
+        return safeInput; // Retorna o input sanitizado manualmente se a IA falhar
     }
 };
