@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Texture } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage } from '../components/Shared';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
@@ -514,7 +514,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             <div className="animate-fade-in bg-gray-50 border border-gray-200 rounded-xl p-4">
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className="text-xs font-bold text-gray-700 uppercase tracking-widest flex items-center gap-2">
-                                        <Texture size={14}/> Textura & Acabamento
+                                        <Layers size={14}/> Textura & Acabamento
                                     </h3>
                                     <button 
                                         onClick={() => setUseTextureOverlay(!useTextureOverlay)}
