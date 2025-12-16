@@ -39,6 +39,33 @@ const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => (
     </div>
 );
 
+// Helper de compressão (Mesma lógica do PatternCreator que funciona)
+const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        if (!base64Str) { reject(new Error("Imagem vazia")); return; }
+        const img = new Image(); 
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.8)); }
+            else reject(new Error("Canvas error"));
+        };
+        img.onerror = () => reject(new Error("Load error"));
+    });
+};
+
+// Sanitização Frontend (Dupla camada de segurança)
+const sanitizePrompt = (text: string) => {
+    return text
+        .replace(/\b(dress|shirt|garment|model|body|person|skin|face|human|woman|man|girl|boy)\b/gi, "abstract shape")
+        .replace(/\s+/g, " ")
+        .trim();
+};
+
 interface AtelierSystemProps {
     onNavigateToMockup?: () => void;
     onNavigateToLayerStudio?: () => void;
@@ -148,13 +175,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setIsAnalyzingColors(true);
         setActiveColorMode(variation); 
         try {
-            const compressedBase64 = imgBase64.includes(',') ? imgBase64.split(',')[1] : imgBase64;
+            // USO CRÍTICO DE COMPRESSÃO
+            const compressed = await compressImage(imgBase64);
+            const cleanBase64 = compressed.split(',')[1];
+            
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     action: 'DESCRIBE_PATTERN', 
-                    mainImageBase64: compressedBase64, 
+                    mainImageBase64: cleanBase64, 
                     mainMimeType: 'image/jpeg',
                     userHints: variation === 'NATURAL' ? '' : `VARIATION: ${variation}`
                 })
@@ -166,9 +196,14 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     harmony: variation === 'NATURAL' ? "Paleta Original" : `Variação: ${variation}`, 
                     suggestion: "Cores calibradas." 
                 });
-                if (data.prompt) setTechnicalPrompt(data.prompt);
+                if (data.prompt) {
+                    // SANITIZAÇÃO DE SEGURANÇA
+                    setTechnicalPrompt(sanitizePrompt(data.prompt));
+                }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error("Analysis Error:", e);
+        }
         setIsAnalyzingColors(false);
     };
 
@@ -229,6 +264,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 finalPrompt = userInstruction || technicalPrompt;
                 if (finalPrompt.length < 5) throw new Error("A descrição está muito curta. Detalhe mais sua ideia.");
             }
+
+            // Sanitização final antes de enviar
+            finalPrompt = sanitizePrompt(finalPrompt);
 
             const genRes = await fetch('/api/analyze', {
                 method: 'POST',

@@ -1,7 +1,6 @@
-
 // api/modules/generator.js
 // DEPARTAMENTO: FABRICAÇÃO DE ESTAMPAS (The Loom)
-// TECNOLOGIA: Clean Vector Prompt v3.0 (No Negative Constraints)
+// TECNOLOGIA: Clean Vector Prompt v3.2 (Stable)
 
 const callGeminiImage = async (apiKey, prompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
@@ -17,7 +16,7 @@ const callGeminiImage = async (apiKey, prompt) => {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
         ],
         generationConfig: {
-            temperature: 0.4, // Baixa temperatura para seguir o prompt fielmente (menos alucinação)
+            temperature: 0.4, 
             topK: 32,
             topP: 0.95,
             candidateCount: 1
@@ -59,18 +58,15 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const { layout = "Corrida", repeat = "Straight" } = textileSpecs || {};
     
     // 1. PALETTE DEFINITION (Solid Flat Colors)
-    // Forçamos "Flat Solid Colors" para evitar que a IA tente misturar cores de pele realistas
     const colorString = (colors || []).map(c => `${c.name} (${c.hex})`).join(', ');
     const paletteInstruction = colorString 
         ? `COLORS: Use strictly these solid flat colors: ${colorString}. High contrast, no shading.`
         : `COLORS: High contrast flat vector colors.`;
 
     // 2. INDUSTRIAL MASTER PROMPT (CLEAN VERSION)
-    // REMOVIDO: "NO PEOPLE", "NO BODIES" (Isso ativava o filtro de segurança)
-    // ADICIONADO: Termos fortes de design gráfico abstrato.
-    
     const layoutTerm = layout === 'Barrada' ? 'Engineered border print design' : 'Seamless all-over repeat pattern';
     
+    // FIX: Usando a variável correta 'repeat' em vez de 'repeatType'
     const MASTER_PROMPT = `
     Professional Textile Surface Design.
     
@@ -85,7 +81,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     - High resolution vector graphics.
     - Sharp defined edges.
     - Solid fills (Screen print style).
-    - Composition: Balanced, rhythmic, professional ${repeatType === 'Half-Drop' ? 'half-drop' : 'straight'} repeat.
+    - Composition: Balanced, rhythmic, professional ${repeat === 'Half-Drop' ? 'half-drop' : 'straight'} repeat.
     
     ${paletteInstruction}
     `;
@@ -96,11 +92,10 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         const errString = e.message || e.toString();
         
         // Fallback: Simplificação Extrema
-        // Se der erro, tentamos um prompt puramente geométrico/botânico sem adjetivos complexos.
         if (errString.includes("SAFETY_BLOCK")) {
             console.warn("Engaging Technical Fallback (Pure Abstract)...");
             
-            // Extraímos apenas os substantivos principais para limpar "lixo" semântico
+            // Limpa o prompt para evitar gatilhos
             const cleanSubject = prompt.split('.')[0].substring(0, 100); 
             
             const FALLBACK_PROMPT = `
@@ -112,6 +107,6 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
             `;
             return await callGeminiImage(apiKey, FALLBACK_PROMPT);
         }
-        throw e;
+        throw e; // Repassa erro original (incluindo ReferenceError se houver, mas agora corrigido)
     }
 };
