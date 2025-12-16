@@ -71,11 +71,11 @@ export const reconstructElement = async (apiKey, cropBase64, originalPrompt) => 
         console.error("Analysis failed, using fallback");
     }
 
-    // Passo 2: Gerar o Objeto INTEIRO (Usa Flash Image)
+    // Passo 2: Gerar o Objeto INTEIRO (Usa Flash Image com Prompt Estruturado)
     const reconstructionPrompt = `
-    Generate a vector illustration of a ${analysis.wholeObject}.
-    Style: ${analysis.style}, isolated on WHITE background.
-    View: Flat 2D, no shadows.
+    Generate a vector illustration.
+    Subject: ${analysis.wholeObject}.
+    Style: ${analysis.style}, isolated on WHITE background, Flat 2D, No shadows.
     `;
 
     const newImage = await generateImage(apiKey, reconstructionPrompt);
@@ -91,8 +91,9 @@ export const reconstructElement = async (apiKey, cropBase64, originalPrompt) => 
 // 2. TRANSFORMAÇÃO MÁGICA
 export const transformElement = async (apiKey, cropBase64, userPrompt) => {
     const transformPrompt = `
-    Generate a vector illustration: ${userPrompt}.
-    Style: Flat textile print motif, isolated on WHITE background.
+    Generate a vector illustration.
+    Subject: ${userPrompt}.
+    Style: Flat textile print motif, isolated on WHITE background, No photorealism.
     `;
     
     const newImage = await generateImage(apiKey, transformPrompt);

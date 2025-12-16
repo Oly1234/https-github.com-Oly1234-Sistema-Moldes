@@ -16,7 +16,8 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         ? colors.map(c => `${c.name} (Hex: ${c.hex})`).join(', ') 
         : 'harmonious trend colors';
 
-    // Engenharia de Prompt (Optimized for Flash Image)
+    // Engenharia de Prompt (Optimized for Flash Image - Structured Tags)
+    // Avoids conversational text to reduce Safety Refusals
     let layoutInstruction = "Seamless Repeat Pattern";
     if (layout === 'Barrada') {
         layoutInstruction = "Engineered Border Print (Heavy bottom, open top)";
@@ -29,12 +30,12 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         ? prompt 
         : "Abstract textile pattern with elegant motifs";
 
-    // PROMPT OTIMIZADO (Tag-based vs Conversational)
+    // PROMPT OTIMIZADO (Tag-based)
     const RAW_DIGITAL_PROMPT = `
     Generate a professional textile pattern.
     Subject: ${safeSubject}.
     Colors: ${colorList}.
-    Style: ${styleGuide}, Flat 2D vector graphic, No shadows, No photorealism.
+    Style: ${styleGuide}, Flat 2D vector graphic, No shadows, No photorealism, Illustration.
     Layout: ${layoutInstruction}, ${repeatTypeToText(repeat)}.
     Quality: High resolution, sharp edges, professional fabric print.
     `;

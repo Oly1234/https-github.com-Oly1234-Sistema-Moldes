@@ -17,6 +17,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         ANALYSIS REQUIRED:
         1. VISUAL DESCRIPTION (ENGLISH): A highly optimized, comma-separated list of visual descriptors. Format: "Subject, Adjectives, Colors, Artistic Technique, Vibe".
            - Example: "Watercolor floral motif, pastel pink and sage green, wet-on-wet technique, soft dreamy vibe, seamless pattern".
+           - AVOID: Complex sentences. Use Keywords.
         2. LAYOUT TYPE: "Corrida" (Seamless), "Barrada" (Border), or "Localizada" (Placement).
         
         OUTPUT JSON:
