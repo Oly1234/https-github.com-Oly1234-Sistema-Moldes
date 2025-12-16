@@ -57,6 +57,7 @@ const callGeminiImage = async (apiKey, prompt) => {
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
     // Configuração de segurança permissiva ao máximo permitido para Arte
+    // REMOVIDO generationConfig inválido que causava erro 400
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -64,11 +65,7 @@ const callGeminiImage = async (apiKey, prompt) => {
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-        ],
-        // Otimização para Vetores
-        generationConfig: {
-            response_mime_type: "image/jpeg"
-        }
+        ]
     };
 
     const response = await fetch(endpointImg, { 
@@ -131,9 +128,10 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     try {
         return await callGeminiImage(apiKey, RAW_DIGITAL_PROMPT);
     } catch (e) {
-        // Se for bloqueio de segurança ou erro 500 do Google
-        if (e.message.includes("SAFETY_BLOCK") || e.message.includes("500") || e.message.includes("503")) {
-            console.warn("Safety/Server Block detected. Engaging Instant Quantum Fallback...");
+        // Se for bloqueio de segurança ou erro 500 do Google ou erro 400 (Bad Request) que pode ser contornado
+        const errString = e.message || e.toString();
+        if (errString.includes("SAFETY_BLOCK") || errString.includes("500") || errString.includes("503") || errString.includes("400")) {
+            console.warn("Block detected. Engaging Instant Quantum Fallback...");
             
             // 2. FALLBACK IMEDIATO (QUANTUM ABSTRACTION)
             // Pulamos a "Neuro-Negociação" de texto (LLM) para evitar Timeout (503) da Vercel.
