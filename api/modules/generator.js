@@ -1,13 +1,13 @@
 
 // api/modules/generator.js
 // DEPARTAMENTO: FABRICAÇÃO DE ESTAMPAS (The Loom)
-// TECNOLOGIA: Master Textile Prompt v2.0 (Industrial Standard)
+// TECNOLOGIA: Master Textile Prompt v2.0 (Industrial Standard - English)
 
 const callGeminiImage = async (apiKey, prompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
-    // SAFETY: Relaxada para permitir "pele" como cor, pois o prompt técnico já removeu o contexto humano.
+    // SAFETY: Relaxada para permitir cores de pele em contexto vetorial/botânico.
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -52,42 +52,38 @@ const callGeminiImage = async (apiKey, prompt) => {
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const { layout = "Corrida", repeat = "Straight" } = textileSpecs || {};
     
-    // 1. DEFINIÇÃO DE PALETA (Cores Chapadas)
-    // Se houver cores definidas, forçamos "Solid Flat Colors"
+    // 1. PALETTE DEFINITION (Solid Flat Colors)
     const colorString = (colors || []).map(c => `${c.name} (${c.hex})`).join(', ');
     const paletteInstruction = colorString 
-        ? `PALETA CROMÁTICA TÉCNICA: Utilizar estritamente as cores: ${colorString}. Cores chapadas (Solid Colors), sem degradês, prontas para separação de cilindro.`
-        : `PALETA CROMÁTICA TÉCNICA: Cores harmoniosas, chapadas e contrastantes, adequadas para coleção comercial.`;
+        ? `TECHNICAL COLOR PALETTE: Strictly use colors: ${colorString}. Flat Solid Colors, no gradients, ready for screen separation.`
+        : `TECHNICAL COLOR PALETTE: Harmonious, flat and contrasting colors suitable for commercial collection.`;
 
-    // 2. MONTAGEM DO PROMPT MESTRE INDUSTRIAL
-    // A estrutura segue exatamente o pedido: Definição -> Estilo -> Técnica -> Saída.
-    
+    // 2. INDUSTRIAL MASTER PROMPT (ENGLISH)
     const MASTER_PROMPT = `
-    ATUE COMO: Designer Têxtil Sênior (Especialista em Estamparia Industrial).
-    OBJETIVO: Gerar arquivo de estampa final (Pattern Swatch) em alta resolução.
+    ACT AS: Senior Textile Designer (Industrial Print Specialist).
+    OBJECTIVE: Generate a high-resolution final textile pattern swatch file.
     
-    --- DEFINIÇÃO DO PADRÃO ---
-    MOTIVO PRINCIPAL: ${prompt}
-    ESTRUTURA: Estampa têxtil de padrão ${layout === 'Barrada' ? 'BARRADO (Border Print)' : 'CORRIDO (All-over Repeat)'} com repetição contínua e encaixe técnico regular.
+    --- PATTERN DEFINITION ---
+    MAIN MOTIF: ${prompt}
+    STRUCTURE: Textile engineered ${layout === 'Barrada' ? 'BORDER PRINT (Barrado)' : 'ALL-OVER REPEAT (Corrido)'} pattern with seamless continuity and regular technical repeat. ${repeat === 'Half-Drop' ? 'Half-drop repeat.' : 'Straight repeat.'}
     
-    --- DIRETRIZES DE REFINO VISUAL (O QUE FAZER) ---
-    1. TRAÇO: Desenvolver em linguagem vetorial, com contornos limpos e bem definidos.
-    2. ESTILO: Elementos estilizados e planificados (Flat Design).
-    3. ACABAMENTO: Eliminar ruídos e texturas pictóricas. O preenchimento deve ser predominantemente chapado.
-    4. DETALHE: Variação sutil e controlada de espessura de linha, simulando desenho técnico refinado.
-    5. COMPOSIÇÃO: Distribuição rítmica e equilibrada, garantindo leitura contínua.
+    --- VISUAL REFINEMENT GUIDELINES (MUST FOLLOW) ---
+    1. LINE WORK: Develop in a clean vector-like language with crisp, well-defined outlines.
+    2. STYLE: Stylized and planar elements (Flat Design).
+    3. FINISH: Eliminate noise and painterly textures. Filling must be predominantly solid/flat.
+    4. DETAIL: Subtle and controlled line weight variation, simulating refined technical hand-drawing.
+    5. COMPOSITION: Rhythmic and balanced distribution, ensuring continuous reading.
     
-    --- REGRAS DE SEGURANÇA E TÉCNICA (O QUE NÃO FAZER) ---
-    - NÃO gerar pessoas, corpos, modelos ou manequins.
-    - NÃO gerar fotografia ou renderização 3D realista.
-    - NÃO usar efeito aquarela borrado (Watercolor Blur) ou granulação.
-    - NÃO incluir marcas d'água ou texto.
+    --- SECURITY & TECHNICAL RULES (NEGATIVE CONSTRAINTS) ---
+    - DO NOT generate people, bodies, models, or mannequins.
+    - DO NOT generate photographic or realistic 3D rendering.
+    - DO NOT use blurry watercolor effects or grain.
+    - DO NOT include watermarks or text.
     
-    --- ESPECIFICAÇÕES DE SAÍDA ---
+    --- OUTPUT SPECIFICATIONS ---
     ${paletteInstruction}
-    VISUALIZAÇÃO: SWATCH 2D PLANO (Top-down view).
-    RAPPORT: ${repeat}.
-    ARQUIVO: Pronto para produção industrial.
+    VIEW: TOP-DOWN FLAT 2D SWATCH.
+    FILE TYPE: Industrial production ready.
     `;
 
     try {
@@ -95,9 +91,9 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     } catch (e) {
         const errString = e.message || e.toString();
         
-        // Fallback para geometria pura se falhar (Garantia de entrega)
+        // Fallback técnico em Inglês
         if (errString.includes("SAFETY_BLOCK")) {
-            console.warn("Engaging Technical Fallback...");
+            console.warn("Engaging Technical Fallback (English)...");
             const FALLBACK_PROMPT = `
             Technical Textile Pattern.
             Subject: Abstract geometric composition based on: ${prompt.substring(0, 30)}.

@@ -8,19 +8,19 @@ export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     const POLISHER_PROMPT = `
-    ATUE COMO: Técnico de Pré-Impressão Têxtil.
-    TAREFA: Vetorizar e Refinar esta amostra de estampa (Image-to-Image).
+    ACT AS: Textile Pre-Press Technician.
+    TASK: Vectorize and Refine this pattern swatch (Image-to-Image).
     
-    DIRETRIZES DE MELHORIA VISUAL:
-    1. LIMPEZA: Refinar contornos para obter traços limpos e contínuos (Clean Vector Lines).
-    2. REDUÇÃO DE RUÍDO: Eliminar imperfeições, granulação e borrões não intencionais.
-    3. COR: Achatar as cores para "Solid Flat Colors" (simulando separação de quadricromia).
-    4. PROPORÇÃO: Harmonizar as proporções entre os elementos gráficos mantendo a composição original.
+    VISUAL IMPROVEMENT GUIDELINES:
+    1. CLEANUP: Refine contours to obtain clean, continuous lines (Clean Vector Lines).
+    2. DENOISE: Eliminate imperfections, grain, and unintended blur.
+    3. COLOR: Flatten colors to "Solid Flat Colors" (simulating screen print separation).
+    4. PROPORTION: Harmonize proportions between graphic elements while maintaining original composition.
     
-    CONTEXTO DO DESENHO: ${contextPrompt || "Estampa técnica vetorial"}
+    DESIGN CONTEXT: ${contextPrompt || "Technical vector pattern"}
     
-    OBJETIVO: Entregar um arquivo final de alta definição pronto para gravação de cilindro.
-    IMPORTANTE: Mantenha a imagem como SWATCH 2D PLANO. Não adicione dobras ou efeitos 3D.
+    OBJECTIVE: Deliver a high-definition final file ready for cylinder engraving.
+    IMPORTANT: Keep image as FLAT 2D SWATCH. Do not add folds or 3D effects.
     `;
 
     const payload = {

@@ -1,37 +1,37 @@
 
 // DEPARTAMENTO: FORENSE VISUAL (The Lens) & INTERPRETAÇÃO SEMÂNTICA
-// Responsabilidade: Classificar a imagem nas categorias internas seguras e extrair DNA técnico.
+// Responsabilidade: Classificar a imagem nas categorias internas seguras e extrair DNA técnico EM INGLÊS.
 
 export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson, context = 'TEXTURE', userHints = '') => {
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
         // PROMPT DE CAMADA SEMÂNTICA (SEMANTIC INTERPRETATION LAYER)
-        // Objetivo: Detectar a natureza do padrão e traduzir para linguagem técnica segura.
+        // Objetivo: Detectar a natureza do padrão e traduzir para linguagem técnica segura EM INGLÊS.
         
         const userContext = userHints ? `USER NOTES: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
         ACT AS: Senior Textile Design Analyst.
         
-        OBJECTIVE: Analyze the visual pattern and classify it into SAFE TECHNICAL CATEGORIES.
+        OBJECTIVE: Analyze the visual pattern and classify it into SAFE TECHNICAL CATEGORIES in ENGLISH.
         
         SEMANTIC MAPPING RULES (CRITICAL):
-        - IF you see FLOWERS -> Output: "Motivos botânicos estilizados" (NEVER use 'floral').
-        - IF you see JUNGLE/LEAVES -> Output: "Folhagens tropicais planificadas" (NEVER use 'nature' or 'organic').
-        - IF you see DECORATIVE ART -> Output: "Elementos ornamentais estruturados" (NEVER use 'artistic').
-        - IF you see SKETCHES -> Output: "Linhas vetoriais de inspiração natural".
+        - IF you see FLOWERS -> Output: "Stylized botanical motifs" (avoid generic 'floral', use 'botanical').
+        - IF you see JUNGLE/LEAVES -> Output: "Planar tropical foliage" (avoid 'nature').
+        - IF you see DECORATIVE ART -> Output: "Structured ornamental elements".
+        - IF you see SKETCHES -> Output: "Natural inspired vector lines".
         
         SECURITY PROTOCOL:
         - IGNORE: Human figures, bodies, skin, dresses, models. Look ONLY at the GRAPHIC ARTWORK.
-        - FORBIDDEN WORDS: Floral, Organic, Body, Skin, Nude, Sexy, Realistic, Photo.
+        - FORBIDDEN WORDS: Body, Skin, Nude, Sexy, Realistic, Photo, Girl, Woman, Man.
         
         ${userContext}
         
         OUTPUT JSON:
         {
-            "semanticCategory": "One of the mapped technical categories above",
-            "visualDescription": "A highly technical description of the motifs using only vector/geometry terms (e.g., 'Stylized radial elements with planar filling').",
+            "semanticCategory": "One of the mapped technical categories above (IN ENGLISH)",
+            "visualDescription": "A highly technical description of the motifs in ENGLISH using vector/geometry terms (e.g., 'Stylized radial elements with planar filling').",
             "printLayout": "Corrida",
             "searchKeywords": [
                 "Technical Term 1 (e.g. Botanical Illustration)",
@@ -39,17 +39,17 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
                 "Technical Term 3 (e.g. Engineered Print)"
             ],
             "technicalSpecs": { 
-                "technique": "Vetorial/Chapado", 
-                "motifs": ["Elemento Primário", "Elemento Secundário"], 
-                "complexity": "Alta Definição",
-                "vibe": "Sofisticado Industrial",
-                "layout": "Rapport Contínuo",
-                "restorationInstructions": "Refinar contornos para traço vetorial limpo, eliminar ruídos, harmonizar proporções, aplicar cores chapadas."
+                "technique": "Vector/Flat", 
+                "motifs": ["Primary Motif", "Secondary Motif"], 
+                "complexity": "High Definition",
+                "vibe": "Industrial Sophisticated",
+                "layout": "Continuous Repeat",
+                "restorationInstructions": "Refine contours for clean vector lines, remove noise, harmonize proportions, apply flat colors."
             }
         }
         `;
     } else {
-        // MANTIDO: Análise de Vestuário (Scanner de Moldes)
+        // MANTIDO: Análise de Vestuário (Scanner de Moldes) - Este pode manter PT-BR pois é exibido na UI
         SYSTEM_PROMPT = `
         ACT AS: Master Pattern Cutter (Portuguese Speaker).
         TASK: Analyze the garment structure for sewing patterns.
@@ -90,7 +90,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         // Fallback de Segurança
         if (!result.visualDescription) {
-            result.visualDescription = "Padrão têxtil vetorial de alta definição com elementos geométricos estilizados.";
+            result.visualDescription = "High definition vector textile pattern with stylized geometric elements.";
         }
         
         return result;
@@ -98,10 +98,10 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     } catch (e) {
         console.error("Forensics Dept Error:", e);
         return {
-            visualDescription: "Padrão têxtil técnico vetorial",
+            visualDescription: "Technical vector textile pattern",
             printLayout: "Corrida",
             searchKeywords: ["Textile Pattern", "Vector Art"],
-            technicalSpecs: { silhouette: "N/A", layout: "Corrida", restorationInstructions: "Limpeza vetorial padrão" }
+            technicalSpecs: { silhouette: "N/A", layout: "Corrida", restorationInstructions: "Standard vector cleanup" }
         };
     }
 };

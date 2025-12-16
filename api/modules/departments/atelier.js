@@ -1,27 +1,28 @@
 
 // DEPARTAMENTO: ATELIER DIGITAL & MAPEAMENTO SEMÂNTICO
-// Responsabilidade: Traduzir intenção do usuário para "Safe Technical Prompt".
+// Responsabilidade: Traduzir intenção do usuário para "Safe Technical Prompt" em INGLÊS.
 
 export const createTextileDesign = async (apiKey, prompt, colors) => {
     return null; // Legacy stub
 };
 
 // MAPEAMENTO SEMÂNTICO (Lógica "Hardcoded" para velocidade + IA para nuance)
+// Traduzindo gatilhos PT -> EN Técnico
 const SEMANTIC_MAP = {
-    "floral": "motivos botânicos estilizados e estruturados",
-    "flor": "elemento botânico radial",
-    "tropical": "folhagens planificadas de grande escala e alto contraste",
-    "folha": "forma vegetal vetorial",
-    "natureza": "inspiração natural geométrica",
-    "orgânico": "traços fluidos controlados",
+    "floral": "stylized botanical structures",
+    "flor": "radial botanical element",
+    "tropical": "large scale planar foliage",
+    "folha": "vector vegetal shape",
+    "natureza": "geometric natural inspiration",
+    "orgânico": "controlled fluid lines",
     "organic": "controlled fluid lines",
-    "abstrato": "composição não-figurativa geométrica",
+    "abstrato": "geometric non-figurative composition",
     "abstract": "geometric non-figurative composition",
-    "artistico": "estilo gráfico de alta definição",
+    "artistico": "high definition graphic style",
     "artistic": "high definition graphic style",
-    "pele": "tom areia neutro",
+    "pele": "neutral sand tone",
     "skin": "neutral sand tone",
-    "corpo": "forma estrutural",
+    "corpo": "structural form",
     "body": "structural form"
 };
 
@@ -40,17 +41,18 @@ export const refineDesignPrompt = async (apiKey, rawInput) => {
     const SYSTEM_PROMPT = `
     ACT AS: Textile Prompt Engineer.
     
-    OBJECTIVE: Translate the user's input into a technical description for the "Master Textile Prompt".
+    OBJECTIVE: Translate the user's input into a technical description for the "Master Textile Prompt" in ENGLISH.
     
     INPUT: "${safeInput}"
     
     RULES:
-    1. CATEGORIZE: Is it "Botânico", "Tropical", "Ornamental" or "Geométrico"?
-    2. DESCRIBE: Use terms like "vetorial", "chapado", "planificado", "estilizado".
-    3. FORBIDDEN: Do NOT use "floral", "organic", "watercolor", "realistic".
+    1. CATEGORIZE: Is it "Botanical", "Tropical", "Ornamental" or "Geometric"?
+    2. DESCRIBE: Use terms like "vector", "flat", "planar", "stylized".
+    3. LANGUAGE: Output MUST be in ENGLISH.
+    4. FORBIDDEN: Do NOT use "body", "skin", "nude", "realistic", "photo". Use "floral" only if modified by "botanical" or "stylized".
     
-    OUTPUT: A single paragraph in Portuguese describing the motifs technically.
-    Example output: "Motivos botânicos estilizados com folhas planificadas em composição rítmica."
+    OUTPUT: A single paragraph in ENGLISH describing the motifs technically.
+    Example output: "Stylized botanical motifs with planar leaves in a rhythmic composition."
     `;
 
     const payload = {
