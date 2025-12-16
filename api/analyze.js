@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
 
     if (action === 'GENERATE_PATTERN') {
         try {
-            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique);
+            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle);
             return res.status(200).json({ success: true, image });
         } catch (genError) {
             console.error("Generation Failed:", genError);

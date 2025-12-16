@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Texture } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage } from '../components/Shared';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
@@ -48,6 +48,16 @@ interface AtelierSystemProps {
     onNavigateToLayerStudio?: () => void;
 }
 
+// --- LAYOUT TYPES ---
+const LAYOUT_OPTIONS = [
+    { id: 'ORIGINAL', label: 'Conforme Original' },
+    { id: 'CORRIDA', label: 'Corrida (All-over)' },
+    { id: 'BARRADO', label: 'Barrado (Border)' },
+    { id: 'LENCO', label: 'Lenço (Scarf)' },
+    { id: 'PAREO', label: 'Pareô/Canga' },
+    { id: 'LOCALIZADA', label: 'Localizada (T-shirt)' },
+];
+
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
     // --- ESTADOS GERAIS ---
     const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT'>('IMAGE');
@@ -58,12 +68,13 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     // --- ESTADOS TÉCNICOS ---
     const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
-    const [selvedgePos, setSelvedgePos] = useState<SelvedgePosition>('Inferior');
-    const [useSelvedge, setUseSelvedge] = useState(false);
+    const [colorCount, setColorCount] = useState<number>(0); // 0 = Auto
+    const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
     
-    // --- ESTADOS DE TEXTURA (DIGITAL MODE) ---
+    // --- ESTADOS DE TEXTURA (AGORA PARA AMBOS) ---
     const [useTextureOverlay, setUseTextureOverlay] = useState(false);
     const [textureOpacity, setTextureOpacity] = useState(30); // %
+    const [textureType, setTextureType] = useState<'CANVAS' | 'LINEN' | 'SILK' | 'CUSTOM'>('CANVAS');
     const [textureBlend, setTextureBlend] = useState<'multiply' | 'overlay' | 'soft-light'>('multiply');
     
     // --- ESTADOS DE STATUS ---
@@ -90,6 +101,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setColors([]);
         setError(null);
         setCreationMode('IMAGE');
+        // Reset defaults
+        setTargetLayout('ORIGINAL');
+        setColorCount(0);
+        setUseTextureOverlay(false);
     };
 
     // --- ANALISADORES MODULARES ---
@@ -156,7 +171,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setError(null);
 
         // Feedback Visual
-        setTimeout(() => setStatusMessage(printTechnique === 'DIGITAL' ? "Aplicando Iluminação..." : "Separando Cores..."), 1500);
+        setTimeout(() => setStatusMessage(printTechnique === 'DIGITAL' ? "Aplicando Iluminação..." : `Separando em ${colorCount || 'Auto'} cores...`), 1500);
 
         try {
             const res = await fetch('/api/analyze', {
@@ -166,7 +181,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     action: 'GENERATE_PATTERN', 
                     prompt: userPrompt,
                     colors: colors, // Envia cores atuais
-                    selvedge: useSelvedge ? selvedgePos : 'NENHUMA', // Envia info técnica
+                    selvedge: 'NENHUMA', // Deprecated in favor of layoutStyle
+                    layoutStyle: targetLayout, // Novo: Corrida, Lenço, etc.
+                    colorCount: colorCount, // Novo: 1-12
                     technique: printTechnique // CYLINDER vs DIGITAL
                 })
             });
@@ -174,7 +191,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
-                // Ativa overlay automaticamente se for Digital
+                // Ativa overlay automaticamente se for Digital (opcional)
                 if (printTechnique === 'DIGITAL') setUseTextureOverlay(true);
             } else {
                 throw new Error(data.error || "A IA não conseguiu gerar.");
@@ -196,8 +213,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     };
 
     const handleTransfer = (target: string) => {
-        // Se estiver no modo Digital com Overlay, deveríamos idealmente "fundir" as imagens antes.
-        // Como simplificação, enviamos a base.
         if (!generatedPattern) return;
         triggerTransfer(target, generatedPattern);
         if (target === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
@@ -206,30 +221,37 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     const hasActiveSession = referenceImage || generatedPattern;
 
+    // --- TEXTURE ASSETS (SVG Patterns) ---
+    const getTextureStyle = () => {
+        let svg = "";
+        switch(textureType) {
+            case 'LINEN':
+                svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E`;
+                break;
+            case 'SILK': // Smooth gradient flow
+                svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0.2'/%3E%3Cstop offset='100%25' stop-color='%23000000' stop-opacity='0.1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23g)'/%3E%3C/svg%3E`;
+                break;
+            case 'CUSTOM': // Placeholder for AI Texture
+            case 'CANVAS':
+            default:
+                svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E`;
+                break;
+        }
+        return {
+            backgroundImage: `url("${svg}")`,
+            opacity: textureOpacity / 100,
+            mixBlendMode: textureBlend
+        };
+    };
+
     return (
         <div className="h-full bg-[#f8fafc] flex flex-col overflow-hidden">
             <ModuleHeader 
                 icon={Palette} 
-                title="Criação Rotativa" 
+                title="Estúdio de Criação" 
                 subtitle={hasActiveSession ? (printTechnique === 'CYLINDER' ? "Modo Cilindro (Vetorial)" : "Modo Digital (Alta Definição)") : undefined}
                 actionLabel={hasActiveSession ? "Reiniciar" : undefined}
                 onAction={resetSession}
-                rightContent={hasActiveSession ? (
-                    <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-                        <button 
-                            onClick={() => setPrintTechnique('CYLINDER')}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${printTechnique === 'CYLINDER' ? 'bg-white shadow-sm text-vingi-600' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            <Cylinder size={12}/> CILINDRO
-                        </button>
-                        <button 
-                            onClick={() => setPrintTechnique('DIGITAL')}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${printTechnique === 'DIGITAL' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            <Printer size={12}/> DIGITAL
-                        </button>
-                    </div>
-                ) : undefined}
             />
 
             {/* MODAL FLUTUANTE DE REFERÊNCIA (Só aparece se tiver imagem) */}
@@ -241,7 +263,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                     <ModuleLandingPage 
                         icon={Palette}
-                        title="Geração de Estampas"
+                        title="Estúdio de Criação"
                         description="Inteligência Artificial Generativa para criação têxtil. Transforme ideias ou referências visuais em arquivos de estampa prontos para produção."
                         features={["Prompt to Print", "Image to Pattern", "Separação de Cores", "Rapport Automático"]}
                         partners={["STORK", "EPSON TEXTILE", "REGGIANI", "MS PRINTING"]}
@@ -341,22 +363,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             <div className="relative shadow-2xl bg-white max-w-full max-h-full flex items-center justify-center border border-white/20 animate-fade-in group overflow-hidden">
                                 <img src={generatedPattern} className="max-w-full max-h-[80vh] object-contain" />
                                 
-                                {/* OVERLAY DE TEXTURA DIGITAL */}
-                                {printTechnique === 'DIGITAL' && useTextureOverlay && (
+                                {/* OVERLAY DE TEXTURA (UNIFICADO) */}
+                                {useTextureOverlay && (
                                     <div 
                                         className="absolute inset-0 pointer-events-none w-full h-full"
-                                        style={{
-                                            // Standard Noise/Weave Pattern simulation via CSS
-                                            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-                                            opacity: textureOpacity / 100,
-                                            mixBlendMode: textureBlend
-                                        }}
+                                        style={getTextureStyle()}
                                     />
                                 )}
 
                                 <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[9px] px-2 py-1 rounded backdrop-blur font-mono flex flex-col items-end">
                                     <span>{printTechnique} QUALITY</span>
-                                    {useSelvedge && <span>BARRADO {selvedgePos.toUpperCase()}</span>}
+                                    {targetLayout !== 'ORIGINAL' && <span>LAYOUT: {targetLayout}</span>}
                                 </div>
                             </div>
                         ) : (
@@ -389,7 +406,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 onClick={() => setCreationMode('TEXT')} 
                                 className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 ${creationMode === 'TEXT' ? 'text-vingi-600 border-b-2 border-vingi-600 bg-vingi-50' : 'text-gray-400 hover:text-gray-600'}`}
                             >
-                                <Type size={14}/> POR TEXTO (TEXT-TO-PRINT)
+                                <Type size={14}/> POR TEXTO
                             </button>
                         </div>
 
@@ -410,26 +427,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         </button>
                                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                                     </div>
-                                    {referenceImage && (
-                                        <div className="mt-3 flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-                                            <button onClick={() => setUseSelvedge(!useSelvedge)} className={`px-2 py-1 rounded text-[9px] font-bold border flex items-center gap-1 shrink-0 ${useSelvedge ? 'bg-vingi-100 border-vingi-300 text-vingi-700' : 'bg-white border-gray-200 text-gray-500'}`}>
-                                                <ArrowDownToLine size={10}/> {useSelvedge ? 'Ourela Ativa' : 'Definir Ourela'}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* FERRAMENTA DE OURELA (CONDICIONAL) */}
-                            {creationMode === 'IMAGE' && referenceImage && useSelvedge && (
-                                <div className="animate-fade-in">
-                                    <SelvedgeTool 
-                                        image={referenceImage} 
-                                        selectedPos={selvedgePos} 
-                                        onSelect={setSelvedgePos} 
-                                        active={true}
-                                    />
-                                    <p className="text-[9px] text-gray-400 text-center mt-1">Defina onde ficará o barrado da estampa.</p>
                                 </div>
                             )}
 
@@ -446,23 +443,56 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 />
                             </div>
 
-                            {/* 3. CORES & PANTONES */}
+                            {/* 3. CONTROLE DE LAYOUT (Estilo da Estampa) */}
+                            <div>
+                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <LayoutTemplate size={14}/> Formato de Saída
+                                </h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {LAYOUT_OPTIONS.map((opt) => (
+                                        <button
+                                            key={opt.id}
+                                            onClick={() => setTargetLayout(opt.id)}
+                                            className={`py-2 px-3 rounded-lg text-[10px] font-bold border transition-all truncate ${targetLayout === opt.id ? 'bg-vingi-600 text-white border-vingi-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 4. CORES & PANTONES (CILINDRO ONLY) */}
                             {(colors.length > 0 || creationMode === 'TEXT') && printTechnique === 'CYLINDER' && (
-                                <div>
+                                <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
                                     <div className="flex justify-between items-center mb-3">
-                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Palette size={14}/> Paleta Técnica (Cilindro)
+                                        <h3 className="text-xs font-bold text-orange-800 uppercase tracking-widest flex items-center gap-2">
+                                            <Palette size={14}/> Paleta & Separação
                                         </h3>
                                         {creationMode === 'IMAGE' && referenceImage && (
-                                            <div className="flex bg-gray-100 rounded-lg p-0.5">
-                                                <button onClick={() => handleColorVariation('NATURAL')} title="Natural" className="p-1 hover:bg-white rounded text-gray-500 hover:text-vingi-600"><Droplets size={12}/></button>
-                                                <button onClick={() => handleColorVariation('VIVID')} title="Mais Vivo" className="p-1 hover:bg-white rounded text-gray-500 hover:text-orange-500"><Sun size={12}/></button>
-                                                <button onClick={() => handleColorVariation('PASTEL')} title="Pastel" className="p-1 hover:bg-white rounded text-gray-500 hover:text-pink-400"><Contrast size={12}/></button>
-                                                <button onClick={() => handleColorVariation('DARK')} title="Escuro" className="p-1 hover:bg-white rounded text-gray-500 hover:text-slate-800"><Moon size={12}/></button>
+                                            <div className="flex bg-white rounded-lg p-0.5 border border-orange-200">
+                                                <button onClick={() => handleColorVariation('NATURAL')} title="Natural" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Droplets size={12}/></button>
+                                                <button onClick={() => handleColorVariation('VIVID')} title="Mais Vivo" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Sun size={12}/></button>
+                                                <button onClick={() => handleColorVariation('PASTEL')} title="Pastel" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Contrast size={12}/></button>
+                                                <button onClick={() => handleColorVariation('DARK')} title="Escuro" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Moon size={12}/></button>
                                             </div>
                                         )}
                                     </div>
                                     
+                                    {/* CONTROLE DE CONTAGEM DE CORES */}
+                                    <div className="mb-4">
+                                        <div className="flex justify-between text-[9px] font-bold text-orange-600 uppercase mb-1">
+                                            <span>Limite de Cores (Cilindros)</span>
+                                            <span>{colorCount === 0 ? 'AUTO' : `${colorCount} Cores`}</span>
+                                        </div>
+                                        <input 
+                                            type="range" min="0" max="12" step="1"
+                                            value={colorCount} 
+                                            onChange={(e) => setColorCount(parseInt(e.target.value))}
+                                            className="w-full h-1.5 bg-orange-200 rounded-lg appearance-none accent-orange-600"
+                                        />
+                                    </div>
+
+                                    {/* Chips de Cores Detectadas (Referência) */}
                                     {loadingColors ? (
                                         <div className="h-16 flex items-center justify-center text-xs text-gray-400 gap-2"><Loader2 size={14} className="animate-spin"/> Recalculando Cores...</div>
                                     ) : (
@@ -471,7 +501,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                 <PantoneChip key={i} color={c} onClick={() => {}} />
                                             ))}
                                             {colors.length === 0 && creationMode === 'TEXT' && (
-                                                <div className="col-span-4 text-center text-[10px] text-gray-400 py-2 border border-dashed rounded bg-gray-50">
+                                                <div className="col-span-4 text-center text-[10px] text-gray-400 py-2 border border-dashed rounded bg-white">
                                                     Cores automáticas.
                                                 </div>
                                             )}
@@ -480,58 +510,62 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 </div>
                             )}
 
-                            {/* 4. DIGITAL TEXTURE CONTROL (Somente no Modo Digital) */}
-                            {printTechnique === 'DIGITAL' && (
-                                <div className="animate-fade-in bg-purple-50 border border-purple-100 rounded-xl p-4">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h3 className="text-xs font-bold text-purple-700 uppercase tracking-widest flex items-center gap-2">
-                                            <Zap size={14}/> Acabamento Digital
-                                        </h3>
-                                        <button 
-                                            onClick={() => setUseTextureOverlay(!useTextureOverlay)}
-                                            className={`p-1 rounded transition-colors ${useTextureOverlay ? 'text-purple-600 bg-white shadow-sm' : 'text-gray-400'}`}
-                                            title={useTextureOverlay ? "Textura Ativa" : "Sem Textura"}
-                                        >
-                                            <Eye size={16}/>
-                                        </button>
-                                    </div>
-                                    
-                                    {useTextureOverlay ? (
-                                        <div className="space-y-3">
-                                            <div>
-                                                <div className="flex justify-between text-[9px] font-bold text-purple-400 uppercase mb-1">
-                                                    <span>Intensidade da Trama</span>
-                                                    <span>{textureOpacity}%</span>
-                                                </div>
-                                                <input 
-                                                    type="range" min="0" max="100" 
-                                                    value={textureOpacity} 
-                                                    onChange={(e) => setTextureOpacity(parseInt(e.target.value))}
-                                                    className="w-full h-1.5 bg-purple-200 rounded-lg appearance-none accent-purple-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <span className="text-[9px] font-bold text-purple-400 uppercase mb-1 block">Modo de Fusão</span>
-                                                <div className="flex gap-1">
-                                                    {['multiply', 'overlay', 'soft-light'].map((m) => (
-                                                        <button 
-                                                            key={m}
-                                                            onClick={() => setTextureBlend(m as any)}
-                                                            className={`flex-1 py-1.5 text-[9px] font-bold rounded border uppercase ${textureBlend === m ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-400 border-purple-200'}`}
-                                                        >
-                                                            {m.replace('-', ' ')}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-[10px] text-purple-400 text-center italic">Ative a textura para simular tecidos (Overlay).</p>
-                                    )}
+                            {/* 5. TEXTURA (UNIFICADO PARA AMBOS OS MODOS) */}
+                            <div className="animate-fade-in bg-gray-50 border border-gray-200 rounded-xl p-4">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="text-xs font-bold text-gray-700 uppercase tracking-widest flex items-center gap-2">
+                                        <Texture size={14}/> Textura & Acabamento
+                                    </h3>
+                                    <button 
+                                        onClick={() => setUseTextureOverlay(!useTextureOverlay)}
+                                        className={`p-1 rounded transition-colors ${useTextureOverlay ? 'text-vingi-600 bg-white shadow-sm' : 'text-gray-400'}`}
+                                        title={useTextureOverlay ? "Textura Ativa" : "Sem Textura"}
+                                    >
+                                        <Eye size={16}/>
+                                    </button>
                                 </div>
-                            )}
+                                
+                                {useTextureOverlay ? (
+                                    <div className="space-y-4 animate-fade-in">
+                                        <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+                                            {['CANVAS', 'LINEN', 'SILK', 'CUSTOM'].map(t => (
+                                                <button
+                                                    key={t}
+                                                    onClick={() => setTextureType(t as any)}
+                                                    className={`px-3 py-1.5 rounded text-[9px] font-bold border whitespace-nowrap ${textureType === t ? 'bg-gray-800 text-white border-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
+                                                >
+                                                    {t === 'CUSTOM' ? 'AI TEXTURE' : t}
+                                                </button>
+                                            ))}
+                                        </div>
 
-                            {/* 5. AÇÕES */}
+                                        {textureType === 'CUSTOM' && (
+                                            <input 
+                                                type="text" 
+                                                placeholder="Descreva a textura (Ex: Jeans gasto...)" 
+                                                className="w-full px-3 py-2 text-[10px] border border-gray-300 rounded bg-white"
+                                            />
+                                        )}
+
+                                        <div>
+                                            <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase mb-1">
+                                                <span>Intensidade</span>
+                                                <span>{textureOpacity}%</span>
+                                            </div>
+                                            <input 
+                                                type="range" min="0" max="100" 
+                                                value={textureOpacity} 
+                                                onChange={(e) => setTextureOpacity(parseInt(e.target.value))}
+                                                className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none accent-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-gray-400 text-center italic">Ative para simular substratos (Algodão, Seda, etc).</p>
+                                )}
+                            </div>
+
+                            {/* 6. AÇÕES */}
                             <div className="space-y-3 pt-4 border-t border-gray-100">
                                 {!isProcessing && (
                                     <button 

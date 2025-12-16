@@ -111,8 +111,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
 
                     <ModuleCard 
-                        title="Criação Rotativa"
-                        description="Gere estampas exclusivas para Cilindro (Rotativa) ou Digital 4K."
+                        title="Estúdio de Criação"
+                        description="Gere estampas exclusivas. Modos Vetorial (Cilindro) e Digital 4K com controle total."
                         icon={<Palette size={24} />}
                         colorClass="from-amber-500 to-orange-400"
                         onClick={() => onNavigate('ATELIER')}

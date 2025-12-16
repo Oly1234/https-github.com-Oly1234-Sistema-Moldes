@@ -55,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<Palette size={24} />} 
             active={currentView === 'ATELIER'} 
             onClick={() => onViewChange('ATELIER')}
-            tooltip="Criação Ilimitada"
+            tooltip="Estúdio de Criação"
           />
            <NavItem 
             icon={<Layers size={24} />} 
@@ -70,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<Shirt size={24} />} 
             active={currentView === 'MOCKUP'} 
             onClick={() => onViewChange('MOCKUP')}
-            tooltip="Estúdio 2D (Clássico)"
+            tooltip="Aplicação Técnica"
           />
           <NavItem 
             icon={<Camera size={24} />} 
