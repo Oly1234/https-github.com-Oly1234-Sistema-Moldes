@@ -56,7 +56,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // --- MÓDULO: REALISM STUDIO (BUSCA MÁGICA - WHITE HUNTER) ---
+    // --- MÓDULO: REALISM STUDIO (CONTRAST HUNTER ENGINE) ---
     if (action === 'FIND_WHITE_MODELS') {
         let finalPrompt = prompt;
         
@@ -73,26 +73,28 @@ export default async function handler(req, res) {
             if (descText) finalPrompt = descText;
         }
 
-        // 2. Geração de Queries "White Hunter" (Otimizadas para Extração)
-        // O segredo aqui é pedir "studio background", "grey background" ou "contrast" para facilitar o recorte automático.
+        // 2. Geração de Queries "Contrast Hunter 2.0"
+        // Lógica aprimorada: Buscar fundos escuros e pele com contraste para destacar o branco.
         const MOCKUP_PROMPT = `
-        CONTEXT: We need images of models wearing PLAIN WHITE versions of a specific garment to apply digital patterns on them.
+        CONTEXT: We need images of models wearing PLAIN WHITE versions of a specific garment to apply digital patterns.
         GARMENT: "${finalPrompt}"
         
         TASK: Generate 8 HIGHLY VISUAL search queries to find the perfect base image.
         
-        STRATEGY FOR AUTOMATIC EXTRACTION:
-        - The clothing must be WHITE.
-        - The background should be CONTRASTING (Grey, Studio, Street) to allow easy auto-cropping.
-        - Avoid "white on white".
-        - Prefer "Ghost Mannequin" or "Model Studio Shot".
+        CRITICAL "CONTRAST HUNTER" RULES:
+        1. CLOTHING MUST BE WHITE.
+        2. BACKGROUND MUST BE DARK, GREY, or COLORED (Never white background).
+        3. MODEL MUST HAVE TANNED, DEEP, OR DARK SKIN TONE (To create edge contrast with the white dress).
+        4. LIGHTING: Studio lighting, high contrast, sharp edges.
+        5. KEYWORDS: Use "dark background", "studio shot", "fashion editorial", "ghost mannequin".
         
         OUTPUT JSON: { "queries": ["string"] }
+        
         Example Queries to generate:
-        - "white maxi dress fashion editorial studio grey background"
-        - "plain white slip dress model street style high contrast"
-        - "white gown ghost mannequin isolated"
-        - "white summer dress zara product shot"
+        - "white maxi dress dark grey studio background tanned skin model"
+        - "plain white slip dress deep skin tone model high contrast photography"
+        - "white gown black background studio shot editorial"
+        - "white summer dress street style dark environment"
         `;
         
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -101,7 +103,6 @@ export default async function handler(req, res) {
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         const result = JSON.parse(cleanJson(text));
         
-        // Garante que temos queries suficientes
         const queries = result.queries || [];
         
         return res.status(200).json({ success: true, queries: queries, detectedStructure: finalPrompt });
