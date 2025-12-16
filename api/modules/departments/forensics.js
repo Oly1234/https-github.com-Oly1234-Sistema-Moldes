@@ -6,43 +6,41 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // ABA DE CRIADOR / ATELIER: Foco na Arte/Superfície & Criação
-        // SEGURANÇA: Instruímos a IA a usar termos de ARTE, não termos realistas que confundem o filtro.
-        const userContext = userHints ? `IMPORTANT USER HINT: "${userHints}".` : '';
+        // PROMPT DE ALTA SENIORIDADE - SURFACE DESIGN MANAGER
+        // Foco: Extrair a arte ignorando o suporte (corpo/roupa)
+        const userContext = userHints ? `DIRECTOR NOTES: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
-        ACT AS: Senior Surface Designer (Textile Industry).
-        TASK: Analyze the artwork to generate a TECHNICAL PROMPT for a Vector Generation AI.
+        ACT AS: Executive Textile Design Manager (20+ Years Experience).
+        TASK: Perform a technical breakdown of the SURFACE PATTERN found in this image.
         
-        SAFETY VOCABULARY PROTOCOL (CRITICAL):
-        1. COLORS: 
-           - NEVER use "Hot Pink" -> Use "Vibrant Magenta" or "Fuchsia".
-           - NEVER use "Skin", "Nude", "Flesh" -> Use "Beige", "Sand", "Peach", "Apricot".
-           - NEVER use "Blood" -> Use "Crimson" or "Garnet".
-        2. SHAPES:
-           - NEVER use "Body", "Face", "Human" -> Use "Figurative silhouette", "Portrait style", "Character".
-           - NEVER use "Child", "Kid" -> Use "Whimsical", "Junior style".
-        3. ADJECTIVES:
-           - AVOID "Sexy", "Hot", "Violent" -> Use "Alluring", "Vibrant", "Dynamic".
+        CRITICAL VISUAL ISOLATION PROTOCOL:
+        1. IGNORE THE MODEL: Do not describe the person, body, skin, face, hair, or pose.
+        2. IGNORE THE GARMENT: Do not describe the dress, shirt, or folds. Look ONLY at the 2D ARTWORK.
+        3. TRANSLATE TO VECTOR: Describe the motif as if it were a flat Adobe Illustrator file.
+        
+        SAFETY VOCABULARY ENFORCEMENT:
+        - FORBIDDEN: "Woman", "Girl", "Lady", "Body", "Skin", "Nude", "Legs", "Chest", "Wearing".
+        - REPLACEMENTS: "Figurative element", "Organic shape", "Background color", "Motif".
         
         ${userContext}
         
         OUTPUT JSON:
         {
-            "visualDescription": "A technical description using the SAFE vocabulary defined above. Subject + Style + Technique + Colors.",
+            "visualDescription": "A highly technical, flat description of the print artwork only. Focus on motif style (e.g., 'Gouache Floral', 'Geo-Vector'), composition (e.g., 'Tossed', 'Ogee'), and color palette. NO HUMAN TERMS.",
             "printLayout": "Corrida",
             "searchKeywords": [
                 "Main Motif (Art term)",
-                "Technique Name",
-                "Color Palette Style"
+                "Technique Name (e.g. Screen Print, Ikat)",
+                "Art Movement (e.g. Bauhaus, Tropical)"
             ],
             "technicalSpecs": { 
-                "technique": "Vector/Watercolor", 
-                "motifs": ["Floral", "Geometric"], 
-                "complexity": "High",
-                "vibe": "Modern",
-                "layout": "Corrida",
-                "restorationInstructions": "Vectorize, sharpen edges, flat color fill"
+                "technique": "Vector/Watercolor/Digital", 
+                "motifs": ["Primary Motif", "Secondary Motif"], 
+                "complexity": "Commercial/High",
+                "vibe": "Professional",
+                "layout": "Seamless Repeat",
+                "restorationInstructions": "Reconstruct as flat 2D vector file, clean lines, solid colors, remove fabric texture."
             }
         }
         `;

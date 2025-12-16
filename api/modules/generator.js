@@ -20,6 +20,15 @@ const SANITIZATION_MAP = {
     "breast": "chest",
     "chest": "torso",
     "nipple": "dot",
+    "legs": "stripes",
+    "woman": "pattern",
+    "girl": "motif",
+    "lady": "style",
+    "model": "composition",
+    "wearing": "featuring",
+    "dress": "textile design", // "Dress" confunde a IA para desenhar uma roupa 3D. Queremos o tecido plano.
+    "shirt": "fabric print",
+    "skirt": "surface pattern",
     
     // Violência & Armas
     "blood": "crimson",
@@ -29,8 +38,8 @@ const SANITIZATION_MAP = {
     "war": "conflict",
     
     // Termos de Realismo (Gatilhos de Deepfake)
-    "realistic": "detailed illustration",
-    "photorealistic": "high definition art",
+    "realistic": "detailed vector illustration",
+    "photorealistic": "high definition digital art",
     "photo": "image",
     "photography": "art"
 };
@@ -103,21 +112,28 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
         return sanitizeText(c.name) + ` (${c.hex})`; 
     }).join(', ');
 
-    const colorInstruction = safeColors ? `Colors: ${safeColors}.` : "Colors: Harmonious palette.";
+    const colorInstruction = safeColors ? `Palette: ${safeColors}.` : "Palette: Harmonious trend colors.";
 
     // 2. SANITIZAÇÃO DO PROMPT DO USUÁRIO
+    // Se o usuário digitou "Floral dress on a model", isso vira "Floral textile design on a composition".
     let safePrompt = sanitizeText(prompt);
     if (!safePrompt || safePrompt.length < 3) safePrompt = "Abstract artistic textile pattern";
 
-    // 3. PROMPT OTIMIZADO (Positivo e Direto - Estilo Atelier Clássico)
-    // Removemos "Restrictions: NO..." pois negações confundem o filtro de segurança.
+    // 3. PROMPT OTIMIZADO (Senior Textile Designer Persona)
+    // Força a IA a criar um ARQUIVO TÉCNICO (Flat 2D), não uma foto realista.
     const MASTER_PROMPT = `
-    Design a seamless textile pattern.
-    Motif: ${safePrompt}.
-    ${colorInstruction}
-    Style: ${styleGuide}, Flat Vector Art, Clean lines.
-    Context: Professional Fabric Printing. High Quality.
-    Layout: ${layout}, ${repeat}.
+    Create a professional textile design file (Surface Pattern Design).
+    
+    TECHNICAL BRIEF:
+    - Motif: ${safePrompt}.
+    - ${colorInstruction}
+    - Technique: ${styleGuide}, Screen Print aesthetic, Clean Vector Lines.
+    - View: FLAT 2D SWATCH (Top-down view). NO shadows, NO folds, NO 3D rendering.
+    - Layout: ${layout}, ${repeat}.
+    - Quality: Production-ready artwork.
+    
+    RESTRICTIONS:
+    - IGNORE any reference to human figures, bodies, or anatomy if present in the motif description. Convert them to abstract artistic shapes.
     `;
 
     try {
@@ -134,7 +150,7 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
             Theme: ${safePrompt.substring(0, 30)} inspired shapes.
             ${colorInstruction}
             Style: Bauhaus, Minimalist, Vector Art.
-            Context: Textile Design.
+            View: Flat 2D Texture.
             `;
             
             try {
