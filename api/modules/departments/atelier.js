@@ -19,8 +19,9 @@ export const refineDesignPrompt = async (apiKey, rawInput) => {
     
     GUIDELINES (Based on Vingi System v6.4 Standards):
     1. STYLE: "Contemporary decorative", "Stylized clean illustration", "Organic vector trace".
-    2. NEGATIVES: Explicitly mention "No watercolor blur", "No grain", "Solid colors".
+    2. NEGATIVES: Explicitly mention "No watercolor blur", "No grain", "Solid colors", "No people", "No bodies".
     3. STRUCTURE: Define the motifs clearly (e.g., "Medium scale floral elements", "Organic leaves").
+    4. TRANSLATION: Convert fashion terms to texture terms. "Floral Dress" -> "Floral Seamless Pattern".
     
     USER INPUT: "${rawInput}"
     
