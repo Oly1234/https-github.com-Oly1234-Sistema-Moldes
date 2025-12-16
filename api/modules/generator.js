@@ -1,13 +1,13 @@
 
 // api/modules/generator.js
 // DEPARTAMENTO: FABRICAÇÃO DE ESTAMPAS (The Loom)
-// TECNOLOGIA: Master Textile Prompt v2.0 (Industrial Standard - English)
+// TECNOLOGIA: Clean Vector Prompt v3.0 (No Negative Constraints)
 
 const callGeminiImage = async (apiKey, prompt) => {
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpointImg = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     
-    // SAFETY: Relaxada para permitir cores de pele em contexto vetorial/botânico.
+    // SAFETY: Configuramos para bloquear apenas o extremo.
     const payload = {
         contents: [{ parts: [{ text: prompt }] }],
         safetySettings: [
@@ -15,7 +15,13 @@ const callGeminiImage = async (apiKey, prompt) => {
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-        ]
+        ],
+        generationConfig: {
+            temperature: 0.4, // Baixa temperatura para seguir o prompt fielmente (menos alucinação)
+            topK: 32,
+            topP: 0.95,
+            candidateCount: 1
+        }
     };
 
     const response = await fetch(endpointImg, { 
@@ -52,31 +58,34 @@ const callGeminiImage = async (apiKey, prompt) => {
 export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     const { layout = "Corrida", repeat = "Straight" } = textileSpecs || {};
     
-    // 1. PALETTE DEFINITION
+    // 1. PALETTE DEFINITION (Solid Flat Colors)
+    // Forçamos "Flat Solid Colors" para evitar que a IA tente misturar cores de pele realistas
     const colorString = (colors || []).map(c => `${c.name} (${c.hex})`).join(', ');
     const paletteInstruction = colorString 
-        ? `COLOR PALETTE: Use exactly: ${colorString}. Flat Solid Colors.`
-        : `COLOR PALETTE: Harmonious, high-contrast flat colors.`;
+        ? `COLORS: Use strictly these solid flat colors: ${colorString}. High contrast, no shading.`
+        : `COLORS: High contrast flat vector colors.`;
 
-    // 2. INDUSTRIAL MASTER PROMPT (ENGLISH)
-    // FORCE "SURFACE DESIGN" CONTEXT, NOT "FASHION DESIGN"
-    const MASTER_PROMPT = `
-    TASK: Generate a 2D TEXTILE PATTERN SWATCH (Digital File).
-    TYPE: Surface Design / Vector Illustration.
+    // 2. INDUSTRIAL MASTER PROMPT (CLEAN VERSION)
+    // REMOVIDO: "NO PEOPLE", "NO BODIES" (Isso ativava o filtro de segurança)
+    // ADICIONADO: Termos fortes de design gráfico abstrato.
     
-    --- DESCRIPTION ---
+    const layoutTerm = layout === 'Barrada' ? 'Engineered border print design' : 'Seamless all-over repeat pattern';
+    
+    const MASTER_PROMPT = `
+    Professional Textile Surface Design.
+    
+    Product: Digital vector file for fabric printing.
+    Type: ${layoutTerm}.
+    Style: Flat Vector Illustration, Clean Lines, 2D Planar Geometry.
+    
+    VISUAL DESCRIPTION:
     ${prompt}
     
-    --- TECHNICAL SPECS ---
-    STRUCTURE: ${layout === 'Barrada' ? 'Engineered Border Print' : 'Seamless All-over Pattern'}.
-    STYLE: Flat Vector Art, Clean Lines, 2D Planar view.
-    VIEW: Top-down, 90 degrees. NO perspective, NO folds.
-    
-    --- NEGATIVE CONSTRAINTS (STRICT) ---
-    - NO PEOPLE, NO MODELS, NO BODY PARTS, NO MANNEQUINS.
-    - NO CLOTHING ITEMS (Do not draw a dress, draw the PRINT on a square canvas).
-    - NO PHOTOREALISM (Do not look like a photo of fabric, look like the digital file).
-    - NO BLUR, NO NOISE.
+    TECHNICAL FINISH:
+    - High resolution vector graphics.
+    - Sharp defined edges.
+    - Solid fills (Screen print style).
+    - Composition: Balanced, rhythmic, professional ${repeatType === 'Half-Drop' ? 'half-drop' : 'straight'} repeat.
     
     ${paletteInstruction}
     `;
@@ -86,14 +95,20 @@ export const generatePattern = async (apiKey, prompt, colors, textileSpecs) => {
     } catch (e) {
         const errString = e.message || e.toString();
         
-        // Fallback técnico em Inglês
+        // Fallback: Simplificação Extrema
+        // Se der erro, tentamos um prompt puramente geométrico/botânico sem adjetivos complexos.
         if (errString.includes("SAFETY_BLOCK")) {
-            console.warn("Engaging Technical Fallback (English)...");
+            console.warn("Engaging Technical Fallback (Pure Abstract)...");
+            
+            // Extraímos apenas os substantivos principais para limpar "lixo" semântico
+            const cleanSubject = prompt.split('.')[0].substring(0, 100); 
+            
             const FALLBACK_PROMPT = `
-            Abstract geometric textile pattern swatch.
-            Style: Flat Vector, Solid Colors, Minimalist.
-            Colors: ${colorString || 'Neutral'}.
-            View: 2D Top-down.
+            Textile Pattern Design.
+            Subject: ${cleanSubject}.
+            Style: Abstract flat vector geometry.
+            Colors: ${colorString || 'Vibrant'}.
+            View: 2D Texture Swatch.
             `;
             return await callGeminiImage(apiKey, FALLBACK_PROMPT);
         }

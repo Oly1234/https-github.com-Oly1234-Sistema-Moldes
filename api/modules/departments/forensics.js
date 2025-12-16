@@ -7,7 +7,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
 
     if (context === 'TEXTURE') {
         // PROMPT DE CAMADA SEMÂNTICA (ISOLAMENTO DE TEXTURA)
-        // Objetivo: Ignorar a pessoa/roupa e extrair APENAS a arte gráfica para recriação.
+        // Objetivo: Ignorar a pessoa/roupa e extrair APENAS a arte gráfica.
         
         const userContext = userHints ? `USER NOTES: "${userHints}".` : '';
 
@@ -18,23 +18,23 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         OBJECTIVE: Describe the graphic motif for a vector reconstruction software.
         
-        CRITICAL SAFETY RULES (TO AVOID GENERATION BLOCKS):
-        1. NEVER describe the person, skin, face, or body parts.
-        2. NEVER use words like "dress", "shirt", "worn by", "garment", "fabric fold".
-        3. DESCRIBE ONLY THE GRAPHICS: Shapes, Colors, Layout, Background.
+        CRITICAL RULES FOR PROMPT GENERATION:
+        1. SAFETY: NEVER mention "body", "person", "skin", "model", "dress", "shirt".
+        2. CLARITY: Do NOT use contradictory terms like "Painterly" AND "Vector" together. Choose ONE style: usually "Flat Vector" is safer and cleaner.
+        3. FOCUS: Describe shapes, colors, layout, background.
         
         SEMANTIC TRANSLATION (Map Reality to Vector Terms):
         - Real Flowers -> "Stylized botanical vector motifs"
         - Jungle/Leaves -> "Planar tropical foliage illustration"
         - Skin/Nude Colors -> "Neutral sand/beige tone background"
-        - Watercolor -> "Painterly effect with defined edges"
+        - Complex Art -> "Clean geometric composition"
         
         ${userContext}
         
         OUTPUT JSON (STRICTLY ENGLISH):
         {
             "semanticCategory": "Botanical / Geometric / Abstract / Ornamental",
-            "visualDescription": "A pure technical description of the graphics (e.g., 'A seamless pattern featuring large red hibiscus flowers and green palm leaves on a white background. Flat vector style.').",
+            "visualDescription": "A pure technical description of the graphics. Keep it structural and color-focused. (e.g., 'Seamless pattern with large red hibiscus flowers and green leaves on white background. Flat vector style.')",
             "printLayout": "All-over",
             "searchKeywords": [
                 "Seamless Pattern",
@@ -52,7 +52,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         }
         `;
     } else {
-        // MANTIDO: Análise de Vestuário (Scanner de Moldes) - Contexto de Roupa é permitido aqui
+        // MANTIDO: Análise de Vestuário (Scanner de Moldes)
         SYSTEM_PROMPT = `
         ACT AS: Master Pattern Cutter (Portuguese Speaker).
         TASK: Analyze the garment structure for sewing patterns.
