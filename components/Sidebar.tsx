@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers } from 'lucide-react';
+import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -17,7 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   showInstallButton 
 }) => {
   return (
-    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-4 md:px-0 transition-all shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+    <aside className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 bg-vingi-900 border-t md:border-t-0 md:border-r border-vingi-700 z-50 flex md:flex-col items-center justify-between py-2 md:py-6 px-2 md:px-0 transition-all shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
       
       {/* Desktop Brand */}
       <div className="hidden md:flex flex-col items-center gap-6">
@@ -30,7 +30,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         
         <nav className="flex flex-col gap-6 mt-8">
-           {/* Ícone Home/Dashboard para Desktop (Opcional se clicar no V já vai, mas bom ter explícito) */}
            <NavItem 
             icon={<LayoutGrid size={24} />} 
             active={currentView === 'HOME'} 
@@ -65,10 +64,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             tooltip="4. Editar & Separar"
           />
           <NavItem 
-            icon={<Shirt size={24} />} 
-            active={currentView === 'MOCKUP'} 
-            onClick={() => onViewChange('MOCKUP')}
-            tooltip="5. Provador Virtual"
+            icon={<Camera size={24} />} 
+            active={currentView === 'RUNWAY'} 
+            onClick={() => onViewChange('RUNWAY')}
+            tooltip="5. Realism Studio (Novo)"
           />
           
           <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
@@ -82,42 +81,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Mobile Nav - Agora inclui Atelier e scroll horizontal se necessário */}
-      <div className="flex md:hidden w-full justify-between items-center px-2 overflow-x-auto no-scrollbar gap-1">
+      {/* Mobile Nav - Otimizado para 5+ itens */}
+      <div className="flex md:hidden w-full justify-between items-center overflow-x-auto no-scrollbar gap-1 px-1">
           <NavItem 
-            icon={<LayoutGrid size={22} />} 
+            icon={<LayoutGrid size={20} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
             isMobile
           />
           <NavItem 
-            icon={<ScanLine size={22} />} 
+            icon={<ScanLine size={20} />} 
             active={currentView === 'SCANNER'} 
             onClick={() => onViewChange('SCANNER')}
             isMobile
           />
           <NavItem 
-            icon={<Globe size={22} />} 
+            icon={<Globe size={20} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
             isMobile
           />
           <NavItem 
-            icon={<Palette size={22} />} 
+            icon={<Palette size={20} />} 
             active={currentView === 'ATELIER'} 
             onClick={() => onViewChange('ATELIER')}
             isMobile
           />
-          <NavItem 
-            icon={<Layers size={22} />} 
+           <NavItem 
+            icon={<Layers size={20} />} 
             active={currentView === 'LAYER_STUDIO'} 
             onClick={() => onViewChange('LAYER_STUDIO')}
             isMobile
           />
-           <NavItem 
-            icon={<Shirt size={22} />} 
-            active={currentView === 'MOCKUP'} 
-            onClick={() => onViewChange('MOCKUP')}
+          <NavItem 
+            icon={<Camera size={20} />} 
+            active={currentView === 'RUNWAY'} 
+            onClick={() => onViewChange('RUNWAY')}
             isMobile
           />
       </div>
@@ -148,11 +147,11 @@ const NavItem: React.FC<{
   <button 
     onClick={onClick}
     title={tooltip}
-    className={`p-3 rounded-xl transition-all duration-300 group relative flex-shrink-0 ${
+    className={`p-3 rounded-xl transition-all duration-300 group relative flex-shrink-0 flex items-center justify-center ${
       active 
         ? 'text-vingi-400 bg-vingi-800/50 shadow-inner' 
         : 'text-slate-500 hover:text-slate-300 hover:bg-vingi-800/30'
-    } ${isMobile ? 'active:scale-95' : ''}`}
+    } ${isMobile ? 'active:scale-95 flex-1 min-w-[44px]' : ''}`}
   >
     {icon}
     {active && !isMobile && (

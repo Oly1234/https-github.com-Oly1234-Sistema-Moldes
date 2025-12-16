@@ -14,6 +14,7 @@ import { ScannerSystem } from './features/ScannerSystem';
 import { HistorySystem } from './features/HistorySystem';
 import { HomePage } from './components/HomePage';
 import { LayerStudio } from './components/LayerStudio';
+import { VirtualRunway } from './features/VirtualRunway'; // NEW IMPORT
 import { ViewState } from './types';
 import { Sparkles } from 'lucide-react';
 
@@ -121,20 +122,10 @@ export default function App() {
         showInstallButton={!!deferredPrompt && !isMobileBrowser}
       />
       
-      {/* 
-          LAYOUT MOBILE FIX:
-          - 'md:ml-20': Margem esquerda no desktop para sidebar
-          - 'pb-20 md:pb-0': Padding bottom no mobile para não cobrir conteúdo com a barra
-          - 'h-full': Ocupa altura total
-      */}
       <main className="flex-1 md:ml-20 h-full overflow-hidden relative touch-pan-y flex flex-col">
-        {/* 
-            PERSISTÊNCIA DE ESTADO:
-            Usamos display:none. O container interno tem padding para mobile.
-            Removido 'flex-col' para evitar problemas de altura no mobile.
-        */}
         
-        {/* NEW HOME PAGE DASHBOARD */}
+        {/* VIEW ROUTING */}
+        
         <div style={{ display: view === 'HOME' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <HomePage onNavigate={handleNavigate} />
         </div>
@@ -149,7 +140,7 @@ export default function App() {
 
         <div style={{ display: view === 'ATELIER' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <AtelierSystem 
-                onNavigateToMockup={() => handleNavigate('MOCKUP')} 
+                onNavigateToMockup={() => handleNavigate('RUNWAY')} // Changed default transfer to RUNWAY
                 onNavigateToLayerStudio={() => handleNavigate('LAYER_STUDIO')}
             />
         </div>
@@ -157,12 +148,20 @@ export default function App() {
         <div style={{ display: view === 'LAYER_STUDIO' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <LayerStudio 
                 onNavigateBack={() => handleNavigate('ATELIER')} 
-                onNavigateToMockup={() => handleNavigate('MOCKUP')}
+                onNavigateToMockup={() => handleNavigate('RUNWAY')}
             />
         </div>
 
+        {/* Legacy Mockup kept for history, but RUNWAY is the new default */}
         <div style={{ display: view === 'MOCKUP' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <MockupStudio />
+        </div>
+
+        {/* NEW RUNWAY MODULE */}
+        <div style={{ display: view === 'RUNWAY' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
+            <VirtualRunway 
+                onNavigateToCreator={() => handleNavigate('CREATOR')}
+            />
         </div>
 
         <div style={{ display: view === 'HISTORY' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0 overflow-y-auto">

@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, MessageCircle, Layers } from 'lucide-react';
+import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, MessageCircle, Layers, Camera } from 'lucide-react';
 import { ViewState } from '../types';
 import { AIVoiceAgent } from './AIVoiceAgent';
 
@@ -133,13 +133,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
 
                     <ModuleCard 
-                        title="Provador Virtual"
-                        description="Veja como sua estampa fica em roupas reais antes de produzir."
-                        icon={<Shirt size={24} />}
+                        title="Realism Studio"
+                        description="Aplique suas estampas em modelos reais. A IA detecta dobras, luz e sombra para um resultado fotográfico."
+                        icon={<Camera size={24} />}
                         colorClass="from-emerald-500 to-teal-400"
-                        onClick={() => onNavigate('MOCKUP')}
+                        onClick={() => onNavigate('RUNWAY')}
                         delay="400ms"
-                        stats="Simulação 3D"
+                        stats="Simulação 4K"
                     />
                 </div>
 

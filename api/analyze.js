@@ -55,6 +55,42 @@ export default async function handler(req, res) {
         const result = await reconstructElement(apiKey, cropBase64);
         return res.status(200).json({ success: true, ...result });
     }
+    
+    // --- MÓDULO: REALISM STUDIO (BUSCA MÁGICA) ---
+    if (action === 'FIND_WHITE_MODELS') {
+        // PASSO 1: Se o usuário enviou imagem, descrever a estrutura primeiro.
+        let finalPrompt = prompt;
+        
+        if (mainImageBase64) {
+            const DESCRIBE_PROMPT = `Describe ONLY the garment type, cut, and length. Ignore colors and patterns. Example: "Long sleeve maxi dress with ruffles".`;
+            const descEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const descPayload = {
+                contents: [{ parts: [{ text: DESCRIBE_PROMPT }, { inline_data: { mime_type: mainMimeType || 'image/jpeg', data: mainImageBase64 } }] }]
+            };
+            const descRes = await fetch(descEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(descPayload) });
+            const descData = await descRes.json();
+            const descText = descData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (descText) finalPrompt = descText;
+        }
+
+        // PASSO 2: Transformar a descrição (ou texto do usuário) em busca de Mockup Branco (Ghost Mannequin)
+        const MOCKUP_PROMPT = `
+        CONTEXT: The user wants to apply a digital pattern on a real model.
+        INPUT: "${finalPrompt}"
+        
+        TASK: Generate 4 distinct search queries to find HIGH QUALITY, WHITE, BLANK, UNPATTERNED versions of this garment.
+        Use terms like: "ghost mannequin", "white mockup", "studio shot", "front view", "blank clothing".
+        
+        OUTPUT JSON: { "queries": ["white maxi dress mockup front view", "blank white slip dress studio shot", "white gown ghost mannequin", "plain white dress model"] }
+        `;
+        
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const result = JSON.parse(cleanJson(text));
+        return res.status(200).json({ success: true, queries: result.queries, detectedStructure: finalPrompt });
+    }
 
     // --- ATELIER DE ESTAMPARIA ---
     
