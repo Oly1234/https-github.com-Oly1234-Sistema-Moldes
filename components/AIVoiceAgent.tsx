@@ -7,6 +7,8 @@ interface AIVoiceAgentProps {
     onNavigate: (view: ViewState, contextMessage: string) => void;
 }
 
+const VALID_VIEWS: ViewState[] = ['HOME', 'SCANNER', 'HISTORY', 'MOCKUP', 'CREATOR', 'ATELIER', 'LAYER_STUDIO', 'RUNWAY'];
+
 export const AIVoiceAgent: React.FC<AIVoiceAgentProps> = ({ onNavigate }) => {
     const [status, setStatus] = useState<'IDLE' | 'LISTENING' | 'PROCESSING' | 'SPEAKING'>('IDLE');
     const [transcript, setTranscript] = useState('');
@@ -56,12 +58,27 @@ export const AIVoiceAgent: React.FC<AIVoiceAgentProps> = ({ onNavigate }) => {
             const data = await response.json();
             
             if (data.success && data.targetView) {
-                if (navigator.vibrate) navigator.vibrate([30, 50, 30]); // Haptic Success
-                setStatus('SPEAKING'); // Success State
+                // SECURITY CHECK: Validate ViewState to prevent White Screen
+                const rawView = data.targetView.toUpperCase().trim();
+                let safeView: ViewState = 'HOME';
                 
-                // Delay navigation slightly to show success animation
+                // Direct match or Fallback
+                if (VALID_VIEWS.includes(rawView as ViewState)) {
+                    safeView = rawView as ViewState;
+                } else {
+                    console.warn("AI hallucinated view:", rawView, "Defaulting to HOME");
+                    // Intelligent Mapping fallback just in case
+                    if (rawView.includes('SCAN')) safeView = 'SCANNER';
+                    else if (rawView.includes('CREATE') || rawView.includes('GENERATE')) safeView = 'ATELIER';
+                    else if (rawView.includes('LAYER')) safeView = 'LAYER_STUDIO';
+                    else if (rawView.includes('FIT') || rawView.includes('RUNWAY')) safeView = 'RUNWAY';
+                }
+
+                if (navigator.vibrate) navigator.vibrate([30, 50, 30]); 
+                setStatus('SPEAKING'); 
+                
                 setTimeout(() => {
-                    onNavigate(data.targetView, data.message);
+                    onNavigate(safeView, data.message);
                     setStatus('IDLE');
                     setTranscript('');
                 }, 1200); 

@@ -36,7 +36,25 @@ export default async function handler(req, res) {
     // --- ROTEAMENTO ---
 
     if (action === 'VOICE_COMMAND') {
-        const ROUTER_PROMPT = `ACT AS: Vingi OS Navigation. USER: "${commandText}". OUTPUT JSON: { "targetView": "MODULE_NAME", "message": "Context message" }`;
+        const ROUTER_PROMPT = `
+        ACT AS: Vingi OS Navigation System.
+        
+        VALID VIEWS (STRICT LIST):
+        - "HOME" (Dashboard, Início)
+        - "SCANNER" (Caçador de Moldes, Scanner, Engenharia Reversa, Foto da roupa)
+        - "CREATOR" (Radar Global, Buscador de Estampas, Textura)
+        - "ATELIER" (Estúdio de Criação, Gerar Estampa, Criar, Pattern Generator)
+        - "LAYER_STUDIO" (Lab de Imagem, Layer, Editar, Remover Fundo, Photoshop)
+        - "MOCKUP" (Aplicação Técnica, Encaixe, Molde 2D)
+        - "RUNWAY" (Provador Mágico, Modelo 3D, Desfile, Simulação)
+        - "HISTORY" (Histórico, Meus Projetos)
+
+        USER COMMAND: "${commandText}"
+
+        TASK: Map the user command to the closest VALID VIEW.
+        OUTPUT JSON: { "targetView": "ONE_OF_THE_VALID_VIEWS", "message": "Short confirmation in PT-BR (e.g. 'Abrindo Scanner...')" }
+        `;
+        
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT }] }] }) });
         const data = await response.json();
