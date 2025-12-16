@@ -56,13 +56,13 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // --- MÓDULO: REALISM STUDIO (BUSCA MÁGICA) ---
+    // --- MÓDULO: REALISM STUDIO (BUSCA MÁGICA - WHITE HUNTER) ---
     if (action === 'FIND_WHITE_MODELS') {
-        // PASSO 1: Se o usuário enviou imagem, descrever a estrutura primeiro.
         let finalPrompt = prompt;
         
+        // 1. Visão Computacional para Estrutura (Se imagem for enviada)
         if (mainImageBase64) {
-            const DESCRIBE_PROMPT = `Describe ONLY the garment type, cut, and length. Ignore colors and patterns. Example: "Long sleeve maxi dress with ruffles".`;
+            const DESCRIBE_PROMPT = `Describe ONLY the garment type, cut, length and specific details (e.g. puff sleeves, maxi, slip dress). Ignore colors/patterns.`;
             const descEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const descPayload = {
                 contents: [{ parts: [{ text: DESCRIBE_PROMPT }, { inline_data: { mime_type: mainMimeType || 'image/jpeg', data: mainImageBase64 } }] }]
@@ -73,16 +73,26 @@ export default async function handler(req, res) {
             if (descText) finalPrompt = descText;
         }
 
-        // PASSO 2: Transformar a descrição em busca de Mockup Branco (Ghost Mannequin)
-        // ATUALIZAÇÃO: Gerar 8 queries para maior volume de resultados.
+        // 2. Geração de Queries "White Hunter" (Otimizadas para Extração)
+        // O segredo aqui é pedir "studio background", "grey background" ou "contrast" para facilitar o recorte automático.
         const MOCKUP_PROMPT = `
-        CONTEXT: The user wants to apply a digital pattern on a real model.
-        INPUT: "${finalPrompt}"
+        CONTEXT: We need images of models wearing PLAIN WHITE versions of a specific garment to apply digital patterns on them.
+        GARMENT: "${finalPrompt}"
         
-        TASK: Generate 8 DISTINCT search queries to find HIGH QUALITY, WHITE, BLANK, UNPATTERNED versions of this garment.
-        Vary the angles and context (Front, Back, Studio, Street, Folded).
+        TASK: Generate 8 HIGHLY VISUAL search queries to find the perfect base image.
         
-        OUTPUT JSON: { "queries": ["white maxi dress front view mockup", "blank white slip dress studio shot", "white gown ghost mannequin", "plain white dress model back view", ...] }
+        STRATEGY FOR AUTOMATIC EXTRACTION:
+        - The clothing must be WHITE.
+        - The background should be CONTRASTING (Grey, Studio, Street) to allow easy auto-cropping.
+        - Avoid "white on white".
+        - Prefer "Ghost Mannequin" or "Model Studio Shot".
+        
+        OUTPUT JSON: { "queries": ["string"] }
+        Example Queries to generate:
+        - "white maxi dress fashion editorial studio grey background"
+        - "plain white slip dress model street style high contrast"
+        - "white gown ghost mannequin isolated"
+        - "white summer dress zara product shot"
         `;
         
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -90,27 +100,27 @@ export default async function handler(req, res) {
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         const result = JSON.parse(cleanJson(text));
-        return res.status(200).json({ success: true, queries: result.queries, detectedStructure: finalPrompt });
+        
+        // Garante que temos queries suficientes
+        const queries = result.queries || [];
+        
+        return res.status(200).json({ success: true, queries: queries, detectedStructure: finalPrompt });
     }
 
     // --- ATELIER DE ESTAMPARIA ---
     
-    // 1. Extração de Prompt (Visão)
     if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {
         const extractedPrompt = await refineDesignPrompt(apiKey, mainImageBase64);
         return res.status(200).json({ success: true, prompt: extractedPrompt });
     }
 
-    // 2. Análise de Cor (Separada para permitir variações)
     if (action === 'ANALYZE_COLOR_TREND') {
         const colorData = await analyzeColorTrend(apiKey, mainImageBase64, 'image/jpeg', cleanJson, variation || 'NATURAL');
         return res.status(200).json({ success: true, colors: colorData.colors });
     }
 
-    // 3. Geração de Estampa
     if (action === 'GENERATE_PATTERN') {
         try {
-            // Agora passa 'selvedge' (Ourela), 'colors' e 'technique' (Cilindro/Digital)
             const image = await generatePattern(apiKey, prompt, colors, selvedge, technique);
             return res.status(200).json({ success: true, image });
         } catch (genError) {

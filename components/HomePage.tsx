@@ -131,8 +131,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
 
                     <ModuleCard 
-                        title="Estúdio 2D (Clássico)"
-                        description="A ferramenta clássica de aplicação plana. Rápido e direto ao ponto."
+                        title="Estúdio 2D"
+                        description="A ferramenta técnica clássica de aplicação plana. Rápido e direto ao ponto."
                         icon={<Shirt size={24} />}
                         colorClass="from-gray-600 to-gray-400"
                         onClick={() => onNavigate('MOCKUP')}
@@ -142,7 +142,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
                     <ModuleCard 
                         title="Provador Mágico"
-                        description="Simulação ultra-realista em modelos. Preserva cor, luz e dobras."
+                        description="Veja sua coleção ganhar vida. Aplique estampas em modelos reais instantaneamente."
                         icon={<Camera size={24} />}
                         colorClass="from-emerald-500 to-teal-400"
                         onClick={() => onNavigate('RUNWAY')}
