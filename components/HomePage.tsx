@@ -59,7 +59,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     };
 
     return (
-        <div className="min-h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar relative">
+        <div className="h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar relative touch-pan-y">
             <div className="max-w-6xl mx-auto space-y-10 pb-24">
                 
                 {/* HERO SECTION - REDESIGNED FOR EDITORIAL LOOK */}
@@ -93,53 +93,53 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                 {/* MODULES GRID */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <ModuleCard 
-                        title="Scanner de Moldes"
-                        description="Engenharia reversa de roupas. Identifique o DNA técnico e encontre moldes compatíveis."
+                        title="Encontrar Moldes"
+                        description="Tire uma foto de qualquer roupa e descubra onde comprar o molde de costura exato."
                         icon={<ScanLine size={24} />}
                         colorClass="from-blue-500 to-cyan-400"
                         onClick={() => onNavigate('SCANNER')}
                         delay="100ms"
-                        stats="Visão Computacional"
+                        stats="Engenharia Reversa"
                     />
                     
                     <ModuleCard 
-                        title="Pattern Search"
-                        description="Pesquisa visual de texturas e estampas em bancos de imagens globais e lojas de design."
+                        title="Buscar Estampas"
+                        description="Encontre fornecedores de tecidos ou arquivos digitais para estampas que você viu por aí."
                         icon={<Globe size={24} />}
                         colorClass="from-purple-500 to-pink-400"
                         onClick={() => onNavigate('CREATOR')}
                         delay="200ms"
-                        stats="Busca Semântica"
+                        stats="Busca Global"
                     />
 
                     <ModuleCard 
-                        title="Atelier Generativo"
-                        description="Crie estampas exclusivas do zero ou restaure desenhos antigos em alta resolução."
+                        title="Criar Estampas"
+                        description="Desenhe estampas exclusivas ou recrie arquivos em alta resolução usando Inteligência Artificial."
                         icon={<Palette size={24} />}
                         colorClass="from-amber-500 to-orange-400"
                         onClick={() => onNavigate('ATELIER')}
                         delay="300ms"
-                        stats="IA Generativa"
+                        stats="Criação Neural"
                     />
 
                     <ModuleCard 
-                        title="Layer Studio"
-                        description="Separe elementos da estampa, remova fundos e edite camadas com inpainting inteligente."
+                        title="Editar & Separar"
+                        description="Remova fundos, separe elementos e edite camadas das suas estampas automaticamente."
                         icon={<Layers size={24} />}
                         colorClass="from-indigo-500 to-violet-400"
                         onClick={() => onNavigate('LAYER_STUDIO')}
                         delay="350ms"
-                        stats="Decomposição IA"
+                        stats="Photoshop AI"
                     />
 
                     <ModuleCard 
                         title="Provador Virtual"
-                        description="Aplique estampas em moldes reais instantaneamente com ferramentas de distorção."
+                        description="Veja como sua estampa fica em roupas reais antes de produzir."
                         icon={<Shirt size={24} />}
                         colorClass="from-emerald-500 to-teal-400"
                         onClick={() => onNavigate('MOCKUP')}
                         delay="400ms"
-                        stats="Simulação Física"
+                        stats="Simulação 3D"
                     />
                 </div>
 

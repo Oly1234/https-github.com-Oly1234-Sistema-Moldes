@@ -131,42 +131,41 @@ export default function App() {
         {/* 
             PERSISTÊNCIA DE ESTADO:
             Usamos display:none. O container interno tem padding para mobile.
+            Removido 'flex-col' para evitar problemas de altura no mobile.
         */}
         
         {/* NEW HOME PAGE DASHBOARD */}
-        <div style={{ display: view === 'HOME' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+        <div style={{ display: view === 'HOME' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <HomePage onNavigate={handleNavigate} />
         </div>
 
-        <div style={{ display: view === 'SCANNER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+        <div style={{ display: view === 'SCANNER' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <ScannerSystem />
         </div>
         
-        <div style={{ display: view === 'CREATOR' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
-            {/* onNavigateToAtelier leva da Busca para o Atelier */}
+        <div style={{ display: view === 'CREATOR' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <PatternCreator onNavigateToAtelier={() => handleNavigate('ATELIER')} />
         </div>
 
-        <div style={{ display: view === 'ATELIER' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
-            {/* onNavigateToMockup leva do Atelier para o Provador */}
+        <div style={{ display: view === 'ATELIER' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <AtelierSystem 
                 onNavigateToMockup={() => handleNavigate('MOCKUP')} 
                 onNavigateToLayerStudio={() => handleNavigate('LAYER_STUDIO')}
             />
         </div>
 
-        <div style={{ display: view === 'LAYER_STUDIO' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+        <div style={{ display: view === 'LAYER_STUDIO' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <LayerStudio 
                 onNavigateBack={() => handleNavigate('ATELIER')} 
                 onNavigateToMockup={() => handleNavigate('MOCKUP')}
             />
         </div>
 
-        <div style={{ display: view === 'MOCKUP' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0">
+        <div style={{ display: view === 'MOCKUP' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0">
             <MockupStudio />
         </div>
 
-        <div style={{ display: view === 'HISTORY' ? 'flex' : 'none' }} className="w-full h-full flex-col pb-20 md:pb-0 overflow-y-auto">
+        <div style={{ display: view === 'HISTORY' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0 overflow-y-auto">
             <HistorySystem />
         </div>
       </main>

@@ -582,7 +582,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
 
     if (incomingPayload) {
         return (
-            <div className="flex flex-col h-full items-center justify-center p-8 bg-gray-50">
+            <div className="flex flex-col h-full items-center justify-center p-8 bg-gray-50 overflow-y-auto">
                  <div className="bg-white p-8 rounded-2xl shadow-xl max-w-4xl w-full flex gap-8 items-center">
                     <img src={incomingPayload.mainImage} className="w-1/2 h-80 object-contain bg-gray-100 rounded-lg border" />
                     <div className="space-y-6">
@@ -606,7 +606,8 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             
             {!layers.length && !incomingPayload ? (
                 // LANDING STATE
-                <div className="flex-1 bg-white">
+                // ADDED overflow-y-auto to fix mobile scrolling
+                <div className="flex-1 bg-white overflow-y-auto">
                     <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
                     <ModuleLandingPage 
                         icon={Layers}

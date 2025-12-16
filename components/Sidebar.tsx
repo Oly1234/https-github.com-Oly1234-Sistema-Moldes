@@ -35,7 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<LayoutGrid size={24} />} 
             active={currentView === 'HOME'} 
             onClick={() => onViewChange('HOME')}
-            tooltip="Dashboard Central"
+            tooltip="Início"
           />
 
           <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
@@ -44,25 +44,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<ScanLine size={24} />} 
             active={currentView === 'SCANNER'} 
             onClick={() => onViewChange('SCANNER')}
-            tooltip="1. Scanner Visual DNA"
+            tooltip="1. Encontrar Moldes"
           />
           <NavItem 
             icon={<Globe size={24} />} 
             active={currentView === 'CREATOR'} 
             onClick={() => onViewChange('CREATOR')}
-            tooltip="2. Pesquisa Global"
+            tooltip="2. Buscar Estampas"
           />
           <NavItem 
             icon={<Palette size={24} />} 
             active={currentView === 'ATELIER'} 
             onClick={() => onViewChange('ATELIER')}
-            tooltip="3. Atelier Generativo"
+            tooltip="3. Criar Estampas"
           />
            <NavItem 
             icon={<Layers size={24} />} 
             active={currentView === 'LAYER_STUDIO'} 
             onClick={() => onViewChange('LAYER_STUDIO')}
-            tooltip="4. Layer Studio (Pro)"
+            tooltip="4. Editar & Separar"
           />
           <NavItem 
             icon={<Shirt size={24} />} 
@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<History size={24} />} 
             active={currentView === 'HISTORY'} 
             onClick={() => onViewChange('HISTORY')}
-            tooltip="Acervo Pessoal"
+            tooltip="Meu Acervo"
           />
         </nav>
       </div>

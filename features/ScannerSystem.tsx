@@ -102,8 +102,8 @@ const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
 };
 
 const ExternalSearchButton = ({ name, url, colorClass, icon: Icon }: any) => (
-    <a href={url} target="_blank" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white transition-transform hover:scale-105 ${colorClass}`}>
-        <Icon size={12} /> {name}
+    <a href={url} target="_blank" className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-xs font-bold text-white transition-transform hover:scale-105 shadow-sm ${colorClass}`}>
+        <Icon size={14} /> {name}
     </a>
 );
 
@@ -289,7 +289,7 @@ export const ScannerSystem: React.FC = () => {
         {state !== AppState.ANALYZING && state !== AppState.ERROR && (
             <ModuleHeader 
                 icon={ScanLine} 
-                title="Scanner de Moldes" 
+                title="Encontrar Moldes" 
                 subtitle="Engenharia Reversa"
                 onAction={state === AppState.SUCCESS ? resetApp : undefined}
                 actionLabel="Nova Busca"
@@ -304,7 +304,7 @@ export const ScannerSystem: React.FC = () => {
             {state === AppState.IDLE && !uploadedImage && (
                 <ModuleLandingPage 
                     icon={ScanLine}
-                    title="Scanner de Moldes"
+                    title="Encontrar Moldes"
                     description="Faça a engenharia reversa de qualquer roupa. Carregue uma foto para a IA identificar o DNA técnico e encontrar moldes de costura reais para compra ou download."
                     primaryActionLabel="Carregar Foto"
                     onPrimaryAction={() => fileInputRef.current?.click()}
@@ -435,7 +435,7 @@ export const ScannerSystem: React.FC = () => {
 
                     <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200">
                         <h4 className="font-bold mb-4 flex items-center gap-2 text-sm text-gray-500 uppercase tracking-widest"><Globe size={14}/> Pesquisa Global Manual</h4>
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2 flex-wrap justify-center md:justify-start">
                             <ExternalSearchButton name="Google Imagens" url={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(strictQuery)}`} colorClass="bg-blue-600" icon={Globe} />
                             <ExternalSearchButton name="Pinterest" url={`https://www.pinterest.com/search/pins/?q=${encodeURIComponent(strictQuery)}`} colorClass="bg-red-600" icon={Share2} />
                             <ExternalSearchButton name="Etsy Global" url={`https://www.etsy.com/search?q=${encodeURIComponent(strictQuery + ' sewing pattern')}`} colorClass="bg-orange-500" icon={ShoppingBag} />

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Check, Printer, Brush, Info, Settings2, Ruler, Scroll, Maximize, FileWarning, Zap, Grip, AlignVerticalSpaceAround, Spline, RefreshCw, Droplets, Sun, Moon, Contrast, Sparkles, X, Hammer, Image as ImageIcon, Type } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Layers, Grid3X3, ArrowDownToLine, Check, Printer, Brush, Info, Settings2, Ruler, Scroll, Maximize, FileWarning, Zap, Grip, AlignVerticalSpaceAround, Spline, RefreshCw, Droplets, Sun, Moon, Contrast, Sparkles, X, Hammer, Image as ImageIcon, Type, BrainCircuit } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference } from '../components/Shared';
 
@@ -62,11 +62,11 @@ interface AtelierSystemProps {
 }
 
 const GENERATION_STEPS = [
-    "Inicializando Atelier Digital...",
-    "Calculando Encaixe de RIP...",
-    "Aplicando Estética Vetorial Rica...",
-    "Renderizando Detalhes Artísticos...",
-    "Calibrando Cores...",
+    "Inicializando Atelier Neural...",
+    "Verificando Compliance de Segurança...",
+    "Aplicando Vingi Neuro-Bridge...",
+    "Renderizando Vetores de Alta Densidade...",
+    "Calibrando Paleta Pantone...",
     "Finalizando Arquivo..."
 ];
 
@@ -122,7 +122,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         let interval: any;
         if (isGenerating) {
             setGenStep(0);
-            interval = setInterval(() => { setGenStep(p => (p + 1) % GENERATION_STEPS.length); }, 1500);
+            interval = setInterval(() => { setGenStep(p => (p + 1) % GENERATION_STEPS.length); }, 2000);
         }
         return () => clearInterval(interval);
     }, [isGenerating]);
@@ -360,7 +360,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         <div className="h-full bg-[#f8fafc] flex flex-col overflow-hidden">
             <ModuleHeader 
                 icon={Palette} 
-                title="Atelier Generativo" 
+                title="Criar Estampas" 
                 subtitle="Impressão Digital & Estamparia"
                 referenceImage={referenceImage}
                 actionLabel={creationMode ? "Reiniciar" : undefined}
@@ -373,7 +373,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
             {!creationMode ? (
                 // LANDING STATE: DUAL CHOICE
-                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 animate-fade-in bg-gradient-to-b from-[#f8fafc] to-gray-50">
+                // ADDED overflow-y-auto to fix mobile scrolling
+                <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 animate-fade-in bg-gradient-to-b from-[#f8fafc] to-gray-50 overflow-y-auto">
                     <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
                     
                     <div className="text-center mb-10 max-w-2xl">
@@ -386,7 +387,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl pb-10">
                         {/* CARD 1: REFERENCE */}
                         <button 
                             onClick={() => fileInputRef.current?.click()}
@@ -397,9 +398,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6">
                                     <UploadCloud size={24} />
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Restaurar / Variação</h3>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Recriar Sua Estampa</h3>
                                 <p className="text-sm text-gray-500 mb-6">
-                                    Carregue uma foto, desenho ou amostra de tecido. A IA extrai o DNA técnico e cria variações de alta resolução.
+                                    Envie uma foto de roupa ou tecido e a IA cria o arquivo digital idêntico em alta definição. Perfeito para restaurar estampas antigas.
                                 </p>
                                 <span className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest group-hover:gap-3 transition-all">
                                     Carregar Imagem <ArrowDownToLine size={14} className="-rotate-90"/>
@@ -438,12 +439,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
                          {isGenerating || isEnhancing ? (
                              <div className="text-center relative z-10 p-8 max-w-sm">
-                                 <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-6"/>
+                                 <div className="relative inline-block mb-6">
+                                     <Loader2 size={48} className="text-vingi-400 animate-spin"/>
+                                     <div className="absolute inset-0 flex items-center justify-center">
+                                         <BrainCircuit size={20} className="text-white animate-pulse" />
+                                     </div>
+                                 </div>
                                  <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
                                      {isEnhancing ? "Refinando Detalhes..." : GENERATION_STEPS[genStep]}
                                  </h2>
                                  <p className="text-slate-400 text-sm">
-                                     {isEnhancing ? "Aplicando vetorização e limpeza de ruído..." : "Gerando arquivo RAW VECTOR..."}
+                                     {isEnhancing ? "Aplicando vetorização e limpeza de ruído..." : "A IA está negociando a semântica visual para máxima fidelidade."}
                                  </p>
                                  <div className="mt-8 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
                                      <div className="h-full bg-vingi-500 animate-progress-indeterminate"></div>
@@ -502,8 +508,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                          )}
 
                          {error && (
-                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full shadow-lg text-xs font-bold flex items-center gap-2 animate-bounce-subtle z-50">
-                                 <FileWarning size={14}/> {error}
+                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400">
+                                 <FileWarning size={18}/> 
+                                 <div className="flex flex-col text-left">
+                                     <span>{error}</span>
+                                     <span className="text-[10px] opacity-80 font-normal">A Neuro-Negociação falhou. Simplifique o prompt.</span>
+                                 </div>
                              </div>
                          )}
                     </div>
