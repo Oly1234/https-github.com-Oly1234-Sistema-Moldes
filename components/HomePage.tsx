@@ -101,7 +101,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
                     
                     <ModuleCard 
-                        title="Radar de Estampas"
+                        title="Radar Global"
                         description="Localize fornecedores de tecidos e arquivos digitais globais."
                         icon={<Globe size={24} />}
                         colorClass="from-purple-500 to-pink-400"
@@ -111,7 +111,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
 
                     <ModuleCard 
-                        title="Criação Ilimitada"
+                        title="Criação Rotativa"
                         description="Gere estampas exclusivas para Cilindro (Rotativa) ou Digital 4K."
                         icon={<Palette size={24} />}
                         colorClass="from-amber-500 to-orange-400"
@@ -131,13 +131,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     />
 
                     <ModuleCard 
-                        title="Estúdio 2D"
-                        description="A ferramenta técnica clássica de aplicação plana. Rápido e direto ao ponto."
+                        title="Aplicação Técnica"
+                        description="Aplicação de arte em moldes de corte. Ferramenta de engenharia 2D."
                         icon={<Shirt size={24} />}
                         colorClass="from-gray-600 to-gray-400"
                         onClick={() => onNavigate('MOCKUP')}
                         delay="400ms"
-                        stats="Aplicação Plana"
+                        stats="Aplicação em Corte"
                     />
 
                     <ModuleCard 

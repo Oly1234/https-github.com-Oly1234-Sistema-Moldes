@@ -616,6 +616,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                         primaryActionLabel="Iniciar Projeto"
                         onPrimaryAction={() => fileInputRef.current?.click()}
                         features={["Smart Mask", "Inpainting", "Compositing", "Alpha Channel"]}
+                        partners={["ADOBE PHOTOSHOP AI", "CANVA", "REMOVE.BG", "VECTORIZER"]}
                         secondaryAction={
                             <div className="h-full flex flex-col justify-center">
                                 <div className="flex items-center gap-2 mb-4">

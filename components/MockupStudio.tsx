@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 // --- TYPES ---
@@ -311,8 +311,8 @@ export const MockupStudio: React.FC = () => {
     <div className="flex flex-col h-full w-full bg-[#f0f2f5] overflow-hidden">
       <ModuleHeader 
           icon={Shirt} 
-          title="Provador Virtual" 
-          subtitle="Simulação Física de Caimento"
+          title="Aplicação em Corte" 
+          subtitle="Engenharia Técnica 2D"
           referenceImage={patternImage}
           actionLabel={patternImage ? "Trocar Estampa" : undefined}
           onAction={() => setPatternImage(null)}
@@ -323,12 +323,13 @@ export const MockupStudio: React.FC = () => {
           <div className="flex-1 overflow-y-auto">
               <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=ev=>setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
               <ModuleLandingPage 
-                  icon={Shirt}
-                  title="Provador Virtual"
-                  description="Aplique estampas em moldes reais instantaneamente. A simulação física respeita sombras e dobras para um resultado ultra-realista."
-                  primaryActionLabel="Carregar Molde (Base)"
+                  icon={PenTool}
+                  title="Aplicação Técnica em Moldes"
+                  description="Ferramenta de precisão para engenharia de produto. Aplique estampas vetoriais diretamente em moldes de corte, com controle total de escala e rotação."
+                  primaryActionLabel="Carregar Molde Técnico"
                   onPrimaryAction={() => moldInputRef.current?.click()}
-                  features={["Warping", "Shadow Match", "3D Drape", "Export"]}
+                  features={["Preenchimento Inteligente", "Escala Milimétrica", "Rotação de Fio", "Exportação HD"]}
+                  partners={["AUDACES", "GERBER TECHNOLOGY", "LECTRA", "OPTITEX"]}
                   secondaryAction={
                       <div className="h-full flex flex-col justify-center">
                           <div className="flex items-center gap-2 mb-4">
@@ -337,12 +338,12 @@ export const MockupStudio: React.FC = () => {
                           </div>
                           <div className="space-y-4">
                               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
-                                  <h4 className="text-sm font-bold text-gray-800 mb-1">Base de Contraste</h4>
-                                  <p className="text-xs text-gray-500">Prefira fotos de bases brancas ou cinzas para preservar as sombras originais.</p>
+                                  <h4 className="text-sm font-bold text-gray-800 mb-1">Moldes Limpos</h4>
+                                  <p className="text-xs text-gray-500">Use imagens de moldes com linhas pretas bem definidas e fundo branco para melhor detecção.</p>
                               </div>
                               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
-                                  <h4 className="text-sm font-bold text-gray-800 mb-1">Mistura Realista</h4>
-                                  <p className="text-xs text-gray-500">O modo 'Multiply' é aplicado automaticamente para integrar a estampa ao tecido.</p>
+                                  <h4 className="text-sm font-bold text-gray-800 mb-1">Fio do Tecido</h4>
+                                  <p className="text-xs text-gray-500">A rotação da estampa respeita o ângulo do molde. Use o controle de 'Rot' para ajustar o viés.</p>
                               </div>
                           </div>
                       </div>
@@ -379,7 +380,7 @@ export const MockupStudio: React.FC = () => {
             <div className="order-2 md:order-1 w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 flex flex-col shadow-2xl z-20 h-[35vh] md:h-full overflow-y-auto custom-scrollbar">
                 <div className="p-4 bg-blue-50 border-b border-blue-100">
                 <p className="text-[10px] text-vingi-700">
-                    <strong>Como usar:</strong> 1. Carregue molde e estampa. 2. Use a Varinha para clicar nas partes do molde. 3. Ajuste escala e rotação.
+                    <strong>Técnica:</strong> 1. Clique na área do molde. 2. A estampa preencherá o corte. 3. Ajuste o rapport.
                 </p>
                 </div>
 
@@ -398,8 +399,8 @@ export const MockupStudio: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2 bg-gray-50 p-1 rounded-lg">
-                        <button onClick={() => setTool('WAND')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'WAND' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Zap size={14}/> SELECIONAR</button>
-                        <button onClick={() => setTool('MOVE')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'MOVE' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Move size={14}/> MOVER</button>
+                        <button onClick={() => setTool('WAND')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'WAND' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Zap size={14}/> PREENCHER</button>
+                        <button onClick={() => setTool('MOVE')} className={`flex-1 py-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${tool === 'MOVE' ? 'bg-white shadow text-vingi-700' : 'text-gray-400'}`}><Move size={14}/> AJUSTAR</button>
                     </div>
 
                     <div className={`space-y-3 ${activeLayerId ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
@@ -421,7 +422,7 @@ export const MockupStudio: React.FC = () => {
                     </div>
 
                     <button onClick={handleDownload} className="w-full py-3 bg-vingi-900 text-white font-bold rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 mt-4">
-                        <Download size={14}/> EXPORTAR MOCKUP
+                        <Download size={14}/> EXPORTAR FICHA TÉCNICA
                     </button>
                 </div>
             </div>

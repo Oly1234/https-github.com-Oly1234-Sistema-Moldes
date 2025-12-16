@@ -304,9 +304,9 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
                         <div className="bg-vingi-900 p-1.5 rounded text-white shadow-sm">
                             <Globe size={14}/>
                         </div>
-                        <h2 className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">Pattern Search</h2>
+                        <h2 className="text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">Radar Global</h2>
                     </div>
-                    <h2 className="md:hidden text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">Pattern Search</h2>
+                    <h2 className="md:hidden text-sm font-bold text-gray-900 leading-tight uppercase tracking-wide">Radar Global</h2>
                     <p className="text-[10px] text-gray-500 font-medium hidden md:block">Buscador Global de Estampas</p>
                 </div>
 
@@ -327,11 +327,12 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
                 {!referenceImage && (
                     <ModuleLandingPage 
                         icon={Globe}
-                        title="Scanner de Estampas"
+                        title="Radar de Estampas"
                         description="Encontre fornecedores globais para qualquer textura ou estampa. A IA identifica o padrão e busca arquivos digitais para compra em bancos de imagem e estúdios."
-                        primaryActionLabel="Carregar Amostra"
+                        primaryActionLabel="Escanear Textura"
                         onPrimaryAction={() => fileInputRef.current?.click()}
                         features={["Shutterstock", "Patternbank", "Adobe Stock", "Spoonflower"]}
+                        partners={["SHUTTERSTOCK", "ADOBE STOCK", "PATTERNBANK", "PINTEREST LENS"]}
                         secondaryAction={
                             <div className="h-full flex flex-col justify-center">
                                 <div className="flex items-center gap-2 mb-4">

@@ -289,7 +289,7 @@ export const ScannerSystem: React.FC = () => {
         {state !== AppState.ANALYZING && state !== AppState.ERROR && (
             <ModuleHeader 
                 icon={ScanLine} 
-                title="Encontrar Moldes" 
+                title="Caçador de Moldes" 
                 subtitle="Engenharia Reversa"
                 onAction={state === AppState.SUCCESS ? resetApp : undefined}
                 actionLabel="Nova Busca"
@@ -304,11 +304,12 @@ export const ScannerSystem: React.FC = () => {
             {state === AppState.IDLE && !uploadedImage && (
                 <ModuleLandingPage 
                     icon={ScanLine}
-                    title="Encontrar Moldes"
+                    title="Caçador de Moldes"
                     description="Faça a engenharia reversa de qualquer roupa. Carregue uma foto para a IA identificar o DNA técnico e encontrar moldes de costura reais para compra ou download."
                     primaryActionLabel="Carregar Foto"
                     onPrimaryAction={() => fileInputRef.current?.click()}
                     features={["DNA Técnico", "Burda Style", "Etsy", "Mood Fabrics"]}
+                    partners={["BURDA STYLE", "ETSY PATTERNS", "MOOD FABRICS", "THE FOLD LINE"]}
                     secondaryAction={
                         <div className="h-full flex flex-col justify-center">
                             <div className="flex items-center gap-2 mb-4">

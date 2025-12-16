@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus } from 'lucide-react';
+import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus, Globe, Cpu, Database, Network, Check } from 'lucide-react';
 
 // --- TIPO DE PROPRIEDADES DO CABEÇALHO ---
 interface ModuleHeaderProps {
@@ -74,68 +74,129 @@ export const ModuleHeader: React.FC<ModuleHeaderProps> = ({
     );
 };
 
-// --- NOVO COMPONENTE DE LANDING PAGE PADRONIZADA ---
+// --- NOVO COMPONENTE DE LANDING PAGE "CAPA DE REVISTA TÉCNICA" ---
 interface ModuleLandingPageProps {
     icon: React.ElementType;
     title: string;
     description: string;
-    primaryActionLabel: string;
-    onPrimaryAction: () => void;
-    secondaryAction?: React.ReactNode; // Conteúdo da direita
+    primaryActionLabel?: string; // Opcional agora
+    onPrimaryAction?: () => void;
+    secondaryAction?: React.ReactNode; 
     versionLabel?: string;
     features?: string[];
+    partners?: string[]; // Lista de logos/nomes para o rodapé
+    customContent?: React.ReactNode; // Conteúdo customizado para substituir botões padrão
 }
 
 export const ModuleLandingPage: React.FC<ModuleLandingPageProps> = ({
-    icon: Icon, title, description, primaryActionLabel, onPrimaryAction, secondaryAction, versionLabel = "VINGI SYSTEM v6.4", features
+    icon: Icon, title, description, primaryActionLabel, onPrimaryAction, secondaryAction, versionLabel = "VINGI ENGINE 6.5", features, partners, customContent
 }) => {
     return (
-        <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center animate-fade-in pb-32 md:pb-0">
-            <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
-                {/* Lado Esquerdo: Ação Principal */}
-                <div className="flex-1 p-8 md:p-12 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100 relative">
-                    <div className="absolute top-4 left-4 flex gap-1">
-                        <div className="w-2 h-2 rounded-full bg-red-400"></div>
-                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                    </div>
-
-                    <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
-                        <Icon size={40} className="text-vingi-600" />
-                    </div>
-                    
-                    <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 tracking-tight">{title}</h2>
-                    <p className="text-gray-500 text-sm md:text-base mb-8 max-w-md leading-relaxed mx-auto">
-                        {description}
-                    </p>
-                    
-                    <button 
-                        onClick={onPrimaryAction} 
-                        className="w-full max-w-xs py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 hover:scale-105 transition-all flex items-center justify-center gap-3"
-                    >
-                        <ImageIcon size={20} /> {primaryActionLabel}
-                    </button>
-
-                    <div className="mt-8 flex gap-4 text-gray-400">
-                        {features?.map((feat, i) => (
-                            <span key={i} className="text-[10px] uppercase font-bold tracking-widest bg-gray-50 px-2 py-1 rounded border border-gray-100">{feat}</span>
-                        ))}
-                    </div>
-
-                    <span className="text-[10px] text-gray-300 mt-8 font-mono absolute bottom-4">{versionLabel}</span>
+        <div className="flex-1 flex flex-col relative overflow-y-auto overflow-x-hidden bg-[#f8fafc] w-full h-full">
+            {/* FUNDO TÉCNICO COM GRID E SCANLINE */}
+            <div className="absolute inset-0 pointer-events-none h-full w-full fixed">
+                {/* Grid */}
+                <div className="absolute inset-0 opacity-[0.03]" 
+                     style={{ backgroundImage: 'linear-gradient(#0f172a 1px, transparent 1px), linear-gradient(90deg, #0f172a 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
                 </div>
+                {/* Scan Line Animation */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-blue-400/50 shadow-[0_0_30px_rgba(59,130,246,0.6)] animate-scan z-0"></div>
+            </div>
 
-                {/* Lado Direito: Secundário ou Decorativo */}
-                <div className="w-full md:w-80 bg-gray-50 p-8 flex flex-col justify-center border-l border-gray-100">
-                    {secondaryAction ? (
-                        secondaryAction
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-300 opacity-50 space-y-4">
-                            <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl"></div>
-                            <div className="w-full h-20 border-2 border-dashed border-gray-300 rounded-xl"></div>
-                            <span className="text-xs font-bold uppercase">Área de Trabalho</span>
+            <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 relative z-10 w-full max-w-[1600px] mx-auto min-h-min pb-32">
+                <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    
+                    {/* ESQUERDA: HERO CONTENT */}
+                    <div className="text-left space-y-8 animate-fade-in w-full max-w-2xl mx-auto lg:mx-0">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                            <span className="text-[10px] font-bold text-blue-700 tracking-widest uppercase">Sistema Pronto • {versionLabel}</span>
                         </div>
-                    )}
+
+                        <div className="space-y-6">
+                            <div className="w-16 h-16 bg-gradient-to-br from-vingi-900 to-slate-800 rounded-2xl flex items-center justify-center shadow-2xl shadow-slate-400/20 text-white mb-2">
+                                <Icon size={32} />
+                            </div>
+                            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">
+                                {title}
+                            </h1>
+                            <p className="text-lg text-slate-500 leading-relaxed font-light">
+                                {description}
+                            </p>
+                        </div>
+
+                        {customContent ? (
+                            customContent
+                        ) : (
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                {onPrimaryAction && primaryActionLabel && (
+                                    <button 
+                                        onClick={onPrimaryAction} 
+                                        className="px-8 py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-xl hover:bg-vingi-800 hover:scale-105 transition-all flex items-center justify-center gap-3 group w-full sm:w-auto"
+                                    >
+                                        <ImageIcon size={20} className="group-hover:rotate-12 transition-transform"/> {primaryActionLabel}
+                                    </button>
+                                )}
+                                <div className="flex flex-wrap gap-2">
+                                    {features?.map((feat, i) => (
+                                        <div key={i} className="px-4 py-4 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center gap-2 shadow-sm grow justify-center sm:grow-0">
+                                            <Check size={14} className="text-green-500"/> {feat}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* DIREITA: VISUAL CONTEXTUAL (Dica Pro / Exemplo) */}
+                    <div className="relative hidden lg:block animate-fade-in w-full max-w-lg mx-auto" style={{ animationDelay: '0.2s' }}>
+                        {/* Decorative Backdrop */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-3xl -rotate-2 scale-105 blur-xl"></div>
+                        
+                        <div className="bg-white/80 backdrop-blur-xl border border-white/50 p-8 rounded-3xl shadow-2xl relative">
+                            {secondaryAction ? secondaryAction : (
+                                <div className="text-center space-y-4 py-10 opacity-50">
+                                    <div className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-2xl mx-auto flex items-center justify-center">
+                                        <Plus size={32} className="text-slate-300"/>
+                                    </div>
+                                    <p className="text-sm font-bold text-slate-400">Aguardando Input...</p>
+                                </div>
+                            )}
+                            
+                            {/* Technical Decoration Lines */}
+                            <div className="absolute top-4 right-4 flex gap-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+                            </div>
+                            <div className="absolute bottom-4 left-4 text-[9px] font-mono text-slate-300">
+                                AI_MODULE_READY // ID_294
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* RODAPÉ "PROPAGANDA TÉCNICA" (Ecosystem Strip) */}
+            <div className="bg-white/90 backdrop-blur border-t border-slate-100 py-4 px-6 md:px-12 w-full z-20 shrink-0">
+                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 text-slate-400 shrink-0">
+                        <Network size={14} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Conectado aos Motores:</span>
+                    </div>
+                    <div className="flex flex-wrap justify-center md:justify-end gap-6 md:gap-12 opacity-60 grayscale hover:grayscale-0 transition-all duration-500 w-full">
+                        {partners ? partners.map((p, i) => (
+                            <span key={i} className="text-xs font-bold text-slate-600 flex items-center gap-2 whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span> {p}
+                            </span>
+                        )) : (
+                            <>
+                                <span className="text-xs font-bold text-slate-600">GOOGLE GEMINI 2.5</span>
+                                <span className="text-xs font-bold text-slate-600">PANTONE TCX</span>
+                                <span className="text-xs font-bold text-slate-600">WGSN ANALYTICS</span>
+                                <span className="text-xs font-bold text-slate-600">ADOBE STOCK API</span>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

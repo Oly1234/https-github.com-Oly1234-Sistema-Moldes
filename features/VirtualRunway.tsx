@@ -469,42 +469,89 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     };
 
+    // SEARCH BAR REF FOR AUTO-FOCUS
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
     return (
         <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden">
-            <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Simulação Realista em Modelos" />
+            {step !== 'SEARCH_BASE' && <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Simulação Realista em Modelos" />}
             
             {step === 'SEARCH_BASE' && (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in overflow-y-auto">
-                    <div className="max-w-4xl w-full text-center space-y-8 pb-20">
-                        <h2 className="text-3xl font-bold text-gray-800">Escolha o Modelo</h2>
-                        <div className="relative max-w-xl mx-auto space-y-4">
-                            <div className="relative">
-                                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && searchModels()} placeholder="Ex: Vestido de Festa, Camisa Social..." disabled={!!referenceImage} className="w-full px-6 py-4 rounded-full border border-gray-300 shadow-sm focus:ring-2 focus:ring-vingi-500 outline-none text-lg pl-14 disabled:bg-gray-100 disabled:text-gray-400" />
-                                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={24}/>
-                                <button onClick={searchModels} className="absolute right-2 top-2 bottom-2 bg-vingi-900 text-white px-6 rounded-full font-bold text-sm hover:bg-vingi-800 transition-colors flex items-center gap-2">
-                                    {isSearching ? <Loader2 className="animate-spin" size={16}/> : <><Sparkles size={16}/> BUSCAR</>}
+                <div className="flex-1 overflow-y-auto">
+                    <ModuleLandingPage 
+                        icon={Camera}
+                        title="Provador Mágico 3D"
+                        description="Visualize suas estampas em modelos reais instantaneamente. Use a tecnologia 'Contrast Hunter' para simular caimento, luz e sombra em roupas brancas."
+                        features={["Simulação de Caimento", "Máscara Automática", "Luz & Sombra Realista", "Modelos Diversos"]}
+                        partners={["CLO3D", "MARVELOUS DESIGNER", "BROWZWEAR", "OPTITEX"]}
+                        customContent={
+                            <div className="mt-8 space-y-4 w-full max-w-xl">
+                                <div className="relative">
+                                    <input 
+                                        ref={searchInputRef}
+                                        type="text" 
+                                        value={searchQuery} 
+                                        onChange={(e) => setSearchQuery(e.target.value)} 
+                                        onKeyDown={(e) => e.key === 'Enter' && searchModels()} 
+                                        placeholder="Ex: Vestido de Festa, Camisa Social..." 
+                                        disabled={!!referenceImage} 
+                                        className="w-full px-6 py-4 rounded-full border border-gray-300 shadow-lg focus:ring-4 focus:ring-vingi-500/20 outline-none text-lg pl-14 disabled:bg-gray-100 disabled:text-gray-400 transition-all" 
+                                    />
+                                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={24}/>
+                                    <button 
+                                        onClick={searchModels} 
+                                        className="absolute right-2 top-2 bottom-2 bg-vingi-900 text-white px-6 rounded-full font-bold text-sm hover:bg-vingi-800 transition-colors flex items-center gap-2"
+                                    >
+                                        {isSearching ? <Loader2 className="animate-spin" size={16}/> : <><Sparkles size={16}/> BUSCAR</>}
+                                    </button>
+                                </div>
+                                
+                                <div className="flex items-center gap-4 justify-center">
+                                    <div className="h-px bg-gray-300 w-full"></div>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase whitespace-nowrap">OU CARREGUE O SEU</span>
+                                    <div className="h-px bg-gray-300 w-full"></div>
+                                </div>
+
+                                <button onClick={() => refInputRef.current?.click()} className={`w-full py-4 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white'}`}>
+                                    <input type="file" ref={refInputRef} onChange={handleRefImageUpload} className="hidden" accept="image/*"/>
+                                    {referenceImage ? <><Check size={16}/> Imagem Carregada</> : <><ImageIcon size={16}/> Usar Foto de Referência</>}
                                 </button>
-                            </div>
-                            <div className="flex items-center gap-4 justify-center"><span className="text-xs text-gray-400 font-bold uppercase">OU</span></div>
-                            <button onClick={() => refInputRef.current?.click()} className={`w-full py-3 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white'}`}>
-                                <input type="file" ref={refInputRef} onChange={handleRefImageUpload} className="hidden" accept="image/*"/>
-                                {referenceImage ? <><Check size={16}/> Imagem Carregada</> : <><ImageIcon size={16}/> Usar Foto de Referência</>}
-                            </button>
-                        </div>
-                        {isSearching && <div className="animate-fade-in text-vingi-600 font-bold text-sm flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={16}/> {loadingMessage}</div>}
-                        {whiteBases.length > 0 && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in mt-8 pb-10">
-                                {whiteBases.map((url, i) => (
-                                    <div key={i} onClick={() => handleBaseSelect(url)} className="aspect-[3/4] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:ring-4 hover:ring-vingi-500 transition-all group relative">
-                                        <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                            <span className="bg-white text-vingi-900 px-3 py-1 rounded-full text-xs font-bold shadow">ESCOLHER</span>
-                                        </div>
+
+                                {isSearching && <div className="text-vingi-600 font-bold text-sm flex items-center justify-center gap-2 py-4"><Loader2 className="animate-spin" size={16}/> {loadingMessage}</div>}
+                                
+                                {whiteBases.length > 0 && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-in mt-4 pb-10">
+                                        {whiteBases.map((url, i) => (
+                                            <div key={i} onClick={() => handleBaseSelect(url)} className="aspect-[3/4] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:ring-4 hover:ring-vingi-500 transition-all group relative">
+                                                <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                    <span className="bg-white text-vingi-900 px-3 py-1 rounded-full text-xs font-bold shadow">ESCOLHER</span>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        )}
-                    </div>
+                        }
+                        secondaryAction={
+                            <div className="h-full flex flex-col justify-center">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="w-2 h-2 rounded-full bg-vingi-500"></span>
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dica Profissional</h3>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Contrast Hunter</h4>
+                                        <p className="text-xs text-gray-500">A IA busca automaticamente modelos com fundo escuro e pele contrastante para facilitar o recorte da roupa branca.</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Fit Studio</h4>
+                                        <p className="text-xs text-gray-500">Use os controles de escala e rotação para ajustar o rapport da estampa ao corpo da modelo.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    />
                 </div>
             )}
 
