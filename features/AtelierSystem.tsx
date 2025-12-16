@@ -243,7 +243,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         width: widthCm, 
                         height: heightCm, 
                         dpi: dpi,
-                        styleGuide: "RICH DIGITAL ART, FLAT SURFACE, NO WEAVE", 
+                        styleGuide: "Vector Art, Clean lines, Flat colors", 
                     }
                 }),
                 signal: controller.signal
@@ -253,7 +253,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             if (genData.success && genData.image) {
                 setGeneratedPattern(genData.image);
             } else {
-                throw new Error(genData.error || "Erro na geração.");
+                let msg = genData.error || "Erro desconhecido.";
+                if (msg.includes("SAFETY")) msg = "Segurança: Tente remover palavras que possam ter duplo sentido (ex: pele, corpo).";
+                throw new Error(msg);
             }
 
         } catch (err: any) {
@@ -466,11 +468,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                          )}
 
                          {error && (
-                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400 max-w-sm">
+                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400 max-w-md">
                                  <FileWarning size={18} className="shrink-0"/> 
                                  <div className="flex flex-col text-left">
-                                     <span className="line-clamp-2">{error.length > 80 ? error.substring(0, 80) + '...' : error}</span>
-                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente simplificar o prompt.</span>
+                                     <span className="line-clamp-3">{error}</span>
+                                     <span className="text-[10px] opacity-80 font-normal mt-0.5">Tente termos como "Organic", "Floral", "Abstract".</span>
                                  </div>
                              </div>
                          )}
