@@ -119,7 +119,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'DESCRIBE_PATTERN') {
-        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson);
+        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson, (userHints && userHints.includes('VARIATION') ? userHints.split(':')[1].trim() : 'NATURAL'));
+        // CRITICAL: Force 'TEXTURE' context to trigger the "Mental Crop" in Forensics
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE', userHints);
         const matches = generateMarketLinks(visualData, 'TEXTURE');
 

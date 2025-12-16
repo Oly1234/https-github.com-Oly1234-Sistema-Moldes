@@ -6,37 +6,40 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     let SYSTEM_PROMPT = '';
 
     if (context === 'TEXTURE') {
-        // PROMPT DE CAMADA SEMÂNTICA (SEMANTIC INTERPRETATION LAYER)
-        // Objetivo: Detectar a natureza do padrão e traduzir para linguagem técnica segura EM INGLÊS.
+        // PROMPT DE CAMADA SEMÂNTICA (ISOLAMENTO DE TEXTURA)
+        // Objetivo: Ignorar a pessoa/roupa e extrair APENAS a arte gráfica para recriação.
         
         const userContext = userHints ? `USER NOTES: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
-        ACT AS: Senior Textile Design Analyst.
+        ACT AS: Senior Textile CAD Designer.
         
-        OBJECTIVE: Analyze the visual pattern and classify it into SAFE TECHNICAL CATEGORIES in ENGLISH.
+        TASK: Perform a "Mental Crop" on the image. Ignore the model, the body, the sewing, and the lighting. Focus ONLY on the 2D ARTWORK (The Print).
         
-        SEMANTIC MAPPING RULES (CRITICAL):
-        - IF you see FLOWERS -> Output: "Stylized botanical motifs" (avoid generic 'floral', use 'botanical').
-        - IF you see JUNGLE/LEAVES -> Output: "Planar tropical foliage" (avoid 'nature').
-        - IF you see DECORATIVE ART -> Output: "Structured ornamental elements".
-        - IF you see SKETCHES -> Output: "Natural inspired vector lines".
+        OBJECTIVE: Describe the graphic motif for a vector reconstruction software.
         
-        SECURITY PROTOCOL:
-        - IGNORE: Human figures, bodies, skin, dresses, models. Look ONLY at the GRAPHIC ARTWORK.
-        - FORBIDDEN WORDS: Body, Skin, Nude, Sexy, Realistic, Photo, Girl, Woman, Man.
+        CRITICAL SAFETY RULES (TO AVOID GENERATION BLOCKS):
+        1. NEVER describe the person, skin, face, or body parts.
+        2. NEVER use words like "dress", "shirt", "worn by", "garment", "fabric fold".
+        3. DESCRIBE ONLY THE GRAPHICS: Shapes, Colors, Layout, Background.
+        
+        SEMANTIC TRANSLATION (Map Reality to Vector Terms):
+        - Real Flowers -> "Stylized botanical vector motifs"
+        - Jungle/Leaves -> "Planar tropical foliage illustration"
+        - Skin/Nude Colors -> "Neutral sand/beige tone background"
+        - Watercolor -> "Painterly effect with defined edges"
         
         ${userContext}
         
-        OUTPUT JSON:
+        OUTPUT JSON (STRICTLY ENGLISH):
         {
-            "semanticCategory": "One of the mapped technical categories above (IN ENGLISH)",
-            "visualDescription": "A highly technical description of the motifs in ENGLISH using vector/geometry terms (e.g., 'Stylized radial elements with planar filling').",
-            "printLayout": "Corrida",
+            "semanticCategory": "Botanical / Geometric / Abstract / Ornamental",
+            "visualDescription": "A pure technical description of the graphics (e.g., 'A seamless pattern featuring large red hibiscus flowers and green palm leaves on a white background. Flat vector style.').",
+            "printLayout": "All-over",
             "searchKeywords": [
-                "Technical Term 1 (e.g. Botanical Illustration)",
-                "Technical Term 2 (e.g. Vector Foliage)",
-                "Technical Term 3 (e.g. Engineered Print)"
+                "Seamless Pattern",
+                "Vector Illustration",
+                "Digital Print"
             ],
             "technicalSpecs": { 
                 "technique": "Vector/Flat", 
@@ -44,12 +47,12 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
                 "complexity": "High Definition",
                 "vibe": "Industrial Sophisticated",
                 "layout": "Continuous Repeat",
-                "restorationInstructions": "Refine contours for clean vector lines, remove noise, harmonize proportions, apply flat colors."
+                "restorationInstructions": "Reconstruct as flat 2D vector art. Remove shadows and folds."
             }
         }
         `;
     } else {
-        // MANTIDO: Análise de Vestuário (Scanner de Moldes) - Este pode manter PT-BR pois é exibido na UI
+        // MANTIDO: Análise de Vestuário (Scanner de Moldes) - Contexto de Roupa é permitido aqui
         SYSTEM_PROMPT = `
         ACT AS: Master Pattern Cutter (Portuguese Speaker).
         TASK: Analyze the garment structure for sewing patterns.
@@ -90,7 +93,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         // Fallback de Segurança
         if (!result.visualDescription) {
-            result.visualDescription = "High definition vector textile pattern with stylized geometric elements.";
+            result.visualDescription = "Geometric vector pattern with stylized motifs in high contrast.";
         }
         
         return result;
