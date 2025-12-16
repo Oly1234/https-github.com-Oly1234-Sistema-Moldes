@@ -14,16 +14,22 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         ACT AS: Senior Surface Designer (Textile Industry).
         TASK: Analyze the artwork to generate a TECHNICAL PROMPT for a Vector Generation AI.
         
-        SAFETY PROTOCOL:
-        - Describe shapes geometrically (e.g. "organic curves" instead of "body shapes").
-        - Use art terms (watercolor, gouache, vector, screen print).
-        - AVOID: Words related to biology, skin, violence, or photorealism.
+        SAFETY VOCABULARY PROTOCOL (CRITICAL):
+        1. COLORS: 
+           - NEVER use "Hot Pink" -> Use "Vibrant Magenta" or "Fuchsia".
+           - NEVER use "Skin", "Nude", "Flesh" -> Use "Beige", "Sand", "Peach", "Apricot".
+           - NEVER use "Blood" -> Use "Crimson" or "Garnet".
+        2. SHAPES:
+           - NEVER use "Body", "Face", "Human" -> Use "Figurative silhouette", "Portrait style", "Character".
+           - NEVER use "Child", "Kid" -> Use "Whimsical", "Junior style".
+        3. ADJECTIVES:
+           - AVOID "Sexy", "Hot", "Violent" -> Use "Alluring", "Vibrant", "Dynamic".
         
         ${userContext}
         
         OUTPUT JSON:
         {
-            "visualDescription": "A technical, comma-separated list of visual elements. Subject + Style + Technique + Colors.",
+            "visualDescription": "A technical description using the SAFE vocabulary defined above. Subject + Style + Technique + Colors.",
             "printLayout": "Corrida",
             "searchKeywords": [
                 "Main Motif (Art term)",
