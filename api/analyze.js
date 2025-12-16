@@ -99,9 +99,14 @@ export default async function handler(req, res) {
 
     // GERAÇÃO PRIMÁRIA (DRAFT)
     if (action === 'GENERATE_PATTERN') {
-        const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
-        const image = await generatePattern(apiKey, prompt, colors, specs);
-        return res.status(200).json({ success: true, image });
+        try {
+            const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
+            const image = await generatePattern(apiKey, prompt, colors, specs);
+            return res.status(200).json({ success: true, image });
+        } catch (genError) {
+            console.error("Pattern Generation Failed:", genError);
+            return res.status(200).json({ success: false, error: genError.message || "Erro na geração." });
+        }
     }
 
     // NOVO: REFINAMENTO DE QUALIDADE (FINAL POLISH)
