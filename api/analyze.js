@@ -1,12 +1,12 @@
 
 import { analyzeColorTrend } from './modules/departments/color.js';
-import { createTextileDesign } from './modules/departments/atelier.js';
+import { createTextileDesign, refineDesignPrompt } from './modules/departments/atelier.js';
 import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern } from './modules/generator.js'; 
 import { reconstructElement, transformElement, decomposePattern } from './modules/departments/layerLab.js'; 
-import { enhancePatternQuality } from './modules/departments/qualityControl.js'; // NOVO MÓDULO
+import { enhancePatternQuality } from './modules/departments/qualityControl.js'; 
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -57,6 +57,12 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
 
+    // OTIMIZAÇÃO DE PROMPT TEXTUAL
+    if (action === 'ENHANCE_TEXT_PROMPT') {
+        const enhancedText = await refineDesignPrompt(apiKey, prompt);
+        return res.status(200).json({ success: true, enhancedText });
+    }
+
     // GERAÇÃO PRIMÁRIA (DRAFT)
     if (action === 'GENERATE_PATTERN') {
         const specs = textileSpecs || { layout: 'Seamless', restoration: 'Clean lines' };
@@ -66,8 +72,6 @@ export default async function handler(req, res) {
 
     // NOVO: REFINAMENTO DE QUALIDADE (FINAL POLISH)
     if (action === 'ENHANCE_PATTERN') {
-        // Recebe a imagem gerada (draft) e o prompt original para contexto
-        // Remove cabeçalho data:image se existir para envio limpo, mas a função qualityControl espera base64
         let cleanBase64 = mainImageBase64;
         if (cleanBase64.includes(',')) cleanBase64 = cleanBase64.split(',')[1];
         

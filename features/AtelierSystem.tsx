@@ -86,6 +86,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     // State
     const [isGenerating, setIsGenerating] = useState(false);
     const [isEnhancing, setIsEnhancing] = useState(false);
+    const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false); // New State
     const [isAnalyzingColors, setIsAnalyzingColors] = useState(false);
     const [genStep, setGenStep] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -187,6 +188,30 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 handleImageSession(img);
             };
             reader.readAsDataURL(file);
+        }
+    };
+
+    // --- PROMPT ENHANCER ---
+    const handlePromptEnhance = async () => {
+        if (!userInstruction || userInstruction.length < 3) return;
+        setIsEnhancingPrompt(true);
+        try {
+            const res = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'ENHANCE_TEXT_PROMPT', 
+                    prompt: userInstruction 
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.enhancedText) {
+                setUserInstruction(data.enhancedText);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsEnhancingPrompt(false);
         }
     };
 
@@ -478,7 +503,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
                                     <Ruler size={14} className="text-vingi-500"/> Dimensões Digitais
                                 </h3>
-                                {/* (DPI, Size Presets, Layout buttons hidden for brevity, assume similar to previous but working) */}
                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div className="bg-white p-2 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group">
                                         <span className="text-[9px] text-gray-400 font-bold block flex items-center gap-1">LARGURA ÚTIL</span>
@@ -517,15 +541,30 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <button key={type} onClick={() => setLayoutType(type as any)} className={`flex-1 py-2 rounded-lg border text-[10px] font-bold transition-all ${layoutType === type ? 'bg-vingi-900 text-white border-vingi-900 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>{type}</button>
                                     ))}
                                 </div>
-
-                                <textarea 
-                                    value={userInstruction}
-                                    onChange={(e) => setUserInstruction(e.target.value)}
-                                    placeholder={creationMode === 'TEXT' ? "Descreva a estampa: Ex: Floral tropical aquarela com fundo preto e folhas verdes vibrantes..." : "Instruções adicionais para a IA..."}
-                                    className={`w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all mb-4 ${creationMode === 'TEXT' ? 'h-32 border-vingi-200 shadow-inner' : 'h-20'}`}
-                                />
                                 
-                                {/* Technical Prompt (Only visible if Image Mode, or if needed for debugging) */}
+                                {/* PROMPT AREA */}
+                                <div className="relative">
+                                     {creationMode === 'TEXT' && (
+                                         <div className="flex justify-between items-center mb-1 px-1">
+                                             <span className="text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
+                                             <button 
+                                                onClick={handlePromptEnhance}
+                                                disabled={isEnhancingPrompt}
+                                                className="flex items-center gap-1 text-[9px] font-bold text-vingi-600 bg-vingi-50 px-2 py-1 rounded-md hover:bg-vingi-100 transition-colors disabled:opacity-50"
+                                             >
+                                                {isEnhancingPrompt ? <Loader2 size={10} className="animate-spin"/> : <Sparkles size={10}/>}
+                                                OTIMIZAR COM IA
+                                             </button>
+                                         </div>
+                                     )}
+                                    <textarea 
+                                        value={userInstruction}
+                                        onChange={(e) => setUserInstruction(e.target.value)}
+                                        placeholder={creationMode === 'TEXT' ? "Ex: Floral tropical aquarela com fundo preto..." : "Instruções adicionais..."}
+                                        className={`w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all mb-4 ${creationMode === 'TEXT' ? 'h-32 border-vingi-200 shadow-inner' : 'h-20'}`}
+                                    />
+                                </div>
+                                
                                 {creationMode === 'IMAGE' && (
                                     <div className="mb-4">
                                          <label className="text-[9px] font-bold text-gray-400 uppercase flex justify-between items-center mb-1">DNA Técnico (IA)</label>
@@ -533,7 +572,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     </div>
                                 )}
 
-                                {/* Color Tools (Only if Image Mode for now, or until we add a picker for Text Mode) */}
                                 {creationMode === 'IMAGE' && (
                                     <div className="space-y-2 animate-fade-in bg-gray-50 p-3 rounded-xl border border-gray-100">
                                         <div className="flex justify-between items-center mb-2">
@@ -554,7 +592,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 )}
                             </div>
 
-                            {/* GENERATE BUTTON */}
                             {!isGenerating && !isEnhancing && (
                                 <button 
                                     onClick={handleGenerate}
@@ -565,7 +602,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 </button>
                             )}
 
-                            {/* ACTIONS */}
                             {generatedPattern && !isGenerating && !isEnhancing && (
                                 <div className="space-y-2 animate-slide-up">
                                     {!isEnhanced && (

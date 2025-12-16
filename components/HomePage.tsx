@@ -61,17 +61,28 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         <div className="min-h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar">
             <div className="max-w-6xl mx-auto space-y-10 pb-24">
                 
-                {/* HERO SECTION */}
-                <div className="text-center space-y-4 py-8 animate-fade-in">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-vingi-900/5 rounded-full border border-vingi-900/10 mb-4">
+                {/* HERO SECTION - REDESIGNED FOR EDITORIAL LOOK */}
+                <div className="text-center space-y-6 py-10 animate-fade-in flex flex-col items-center">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-vingi-900/5 rounded-full border border-vingi-900/10">
                         <Sparkles size={12} className="text-vingi-500" />
-                        <span className="text-xs font-bold text-vingi-900 tracking-wide uppercase">Vingi AI Workflow 6.4</span>
+                        <span className="text-[10px] font-bold text-vingi-900 tracking-widest uppercase">Vingi AI Workflow 6.4</span>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight">
-                        Engenharia de Moda <br className="hidden md:block"/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-vingi-600 to-purple-600">Assistida por Inteligência</span>
+                    
+                    {/* TITULO ESTILIZADO */}
+                    <h1 className="flex flex-col items-center justify-center leading-none">
+                        <span className="text-3xl md:text-5xl font-extrabold text-gray-900 uppercase tracking-[0.2em] md:tracking-[0.3em] scale-y-90">
+                            Engenharia
+                        </span>
+                        <span className="text-xl md:text-3xl text-gray-400 font-serif italic my-2 font-light">
+                            de
+                        </span>
+                        <span className="text-6xl md:text-8xl font-serif font-medium text-transparent bg-clip-text bg-gradient-to-r from-vingi-800 via-vingi-600 to-purple-800 tracking-tighter drop-shadow-sm">
+                            Moda
+                        </span>
                     </h1>
-                    <p className="text-gray-500 max-w-2xl mx-auto text-lg">
-                        Um ecossistema completo para escanear roupas reais, encontrar moldes técnicos, pesquisar texturas globais e simular resultados em tempo real.
+
+                    <p className="text-gray-500 max-w-xl mx-auto text-sm md:text-lg font-light tracking-wide mt-4">
+                        <span className="font-medium text-vingi-600">Assistida por Inteligência.</span> Um ecossistema completo para escanear roupas reais, encontrar moldes técnicos e criar estampas digitais.
                     </p>
                 </div>
 
