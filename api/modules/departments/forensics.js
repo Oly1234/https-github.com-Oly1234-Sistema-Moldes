@@ -8,7 +8,7 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
     if (context === 'TEXTURE') {
         // PROMPT DE ALTA SENIORIDADE - SURFACE DESIGN MANAGER
         // Foco: Extrair a arte ignorando o suporte (corpo/roupa)
-        const userContext = userHints ? `DIRECTOR NOTES: "${userHints}".` : '';
+        const userContext = userHints ? `USER NOTES: "${userHints}".` : '';
 
         SYSTEM_PROMPT = `
         ACT AS: Executive Textile Design Manager (20+ Years Experience).
@@ -16,12 +16,12 @@ export const analyzeVisualDNA = async (apiKey, imageBase64, mimeType, cleanJson,
         
         CRITICAL VISUAL ISOLATION PROTOCOL:
         1. IGNORE THE MODEL: Do not describe the person, body, skin, face, hair, or pose.
-        2. IGNORE THE GARMENT: Do not describe the dress, shirt, or folds. Look ONLY at the 2D ARTWORK.
+        2. IGNORE THE GARMENT: Do not describe the dress, shirt, folds, or drape. Look ONLY at the 2D ARTWORK printed on the fabric.
         3. TRANSLATE TO VECTOR: Describe the motif as if it were a flat Adobe Illustrator file.
         
         SAFETY VOCABULARY ENFORCEMENT:
-        - FORBIDDEN: "Woman", "Girl", "Lady", "Body", "Skin", "Nude", "Legs", "Chest", "Wearing".
-        - REPLACEMENTS: "Figurative element", "Organic shape", "Background color", "Motif".
+        - FORBIDDEN WORDS: "Woman", "Girl", "Lady", "Body", "Skin", "Nude", "Legs", "Chest", "Wearing", "Model", "Posed".
+        - REPLACEMENTS: Use "Figurative element", "Organic shape", "Background color", "Motif", "Composition".
         
         ${userContext}
         
