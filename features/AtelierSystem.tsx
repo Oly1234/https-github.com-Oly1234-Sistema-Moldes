@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
@@ -104,14 +104,24 @@ const ART_STYLES = [
     { id: 'CUSTOM', label: 'Outro', icon: Edit3 }, // Opção Personalizada
 ];
 
+// TEXTURE PRESETS (CSS BACKGROUNDS)
+const TEXTURE_PRESETS = [
+    { id: 'NONE', label: 'Lisa', css: 'none' },
+    { id: 'LINEN', label: 'Linho', css: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 3px), repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 3px)` },
+    { id: 'CANVAS', label: 'Canvas', css: `repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(0,0,0,0.15) 3px), repeating-linear-gradient(-45deg, transparent 0, transparent 2px, rgba(0,0,0,0.15) 3px)` },
+    { id: 'PAPER', label: 'Papel', css: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E")` },
+    { id: 'TWILL', label: 'Sarja', css: `repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(0,0,0,0.1) 1px, rgba(0,0,0,0.1) 4px)` },
+    { id: 'CUSTOM_AI', label: 'Criar (AI)', css: 'none', isAI: true }
+];
+
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
     const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT'>('IMAGE');
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
     
     // Prompt System
-    const [userPrompt, setUserPrompt] = useState<string>(''); // Prompt da IA
-    const [customInstruction, setCustomInstruction] = useState<string>(''); // Prompt do Usuário (Novo)
+    const [userPrompt, setUserPrompt] = useState<string>(''); 
+    const [customInstruction, setCustomInstruction] = useState<string>(''); 
 
     const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
@@ -128,6 +138,14 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [isCustomSize, setIsCustomSize] = useState(false);
     const [customW, setCustomW] = useState('');
     const [customH, setCustomH] = useState('');
+
+    // TEXTURE STATE (NEW)
+    const [activeTexture, setActiveTexture] = useState('NONE');
+    const [textureScale, setTextureScale] = useState(1);
+    const [textureOpacity, setTextureOpacity] = useState(0.3);
+    const [customTexturePrompt, setCustomTexturePrompt] = useState('');
+    const [generatedTextureUrl, setGeneratedTextureUrl] = useState<string | null>(null);
+    const [isGeneratingTexture, setIsGeneratingTexture] = useState(false);
 
     const [customColorInput, setCustomColorInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -168,6 +186,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setCustomInstruction(''); setColors([]); setError(null); setCreationMode('IMAGE');
         setTargetLayout('ORIGINAL'); setSubLayout(''); setTargetSize(''); setArtStyle('ORIGINAL'); setColorCount(0); setIsCustomSize(false);
         setCustomStyleText(''); setShowDownloadMenu(false); setIsUpscaling(false);
+        setActiveTexture('NONE'); setGeneratedTextureUrl(null);
     };
 
     const analyzePrompt = async (cleanBase64: string) => {
@@ -201,6 +220,23 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             
         } catch (e) { console.error(e); setError("Erro ao analisar imagem."); } 
         finally { setIsProcessing(false); }
+    };
+
+    // GENERATE TEXTURE (AI)
+    const handleGenerateTexture = async () => {
+        if (!customTexturePrompt.trim()) return;
+        setIsGeneratingTexture(true);
+        try {
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'GENERATE_TEXTURE', textureType: 'CUSTOM', texturePrompt: customTexturePrompt }) });
+            const data = await res.json();
+            if (data.success && data.image) {
+                setGeneratedTextureUrl(data.image);
+                setActiveTexture('CUSTOM_AI');
+            } else {
+                alert("Falha ao gerar textura.");
+            }
+        } catch (e) { console.error(e); }
+        finally { setIsGeneratingTexture(false); }
     };
 
     const handleGenerate = async () => {
@@ -284,6 +320,18 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const hasActiveSession = referenceImage || generatedPattern;
     const isAnalysisComplete = colors.length > 0 && !isProcessing;
 
+    // Helper to get current texture style
+    const getCurrentTextureStyle = () => {
+        if (activeTexture === 'CUSTOM_AI' && generatedTextureUrl) {
+            return { backgroundImage: `url(${generatedTextureUrl})`, backgroundSize: `${50 * textureScale}%`, opacity: textureOpacity, mixBlendMode: 'multiply' as any };
+        }
+        const preset = TEXTURE_PRESETS.find(t => t.id === activeTexture);
+        if (preset && preset.id !== 'NONE') {
+            return { background: preset.css, backgroundSize: `${20 * textureScale}px ${20 * textureScale}px`, opacity: textureOpacity, mixBlendMode: 'multiply' as any };
+        }
+        return { display: 'none' };
+    };
+
     return (
         <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
             {/* HEADER COMPACTO DARK */}
@@ -364,7 +412,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             </div>
                         ) : generatedPattern ? (
                             <div className="relative w-full h-full flex items-center justify-center animate-fade-in group overflow-hidden">
-                                <SmartImageViewer src={generatedPattern} />
+                                <div className="relative w-full h-full">
+                                    <SmartImageViewer src={generatedPattern} />
+                                    {/* TEXTURE OVERLAY LAYER */}
+                                    <div className="absolute inset-0 pointer-events-none" style={getCurrentTextureStyle()}></div>
+                                </div>
                             </div>
                         ) : (
                             <div className="relative w-full h-full flex flex-col items-center justify-center p-8 text-center gap-6">
@@ -530,6 +582,51 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                     placeholder="Descreva o estilo (Ex: Pontilhismo, Art Deco...)"
                                                     className="w-full bg-black border border-gray-700 rounded-lg p-3 text-xs text-white outline-none focus:border-vingi-500 transition-colors"
                                                 />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* NOVO: ACABAMENTO & TEXTURA */}
+                                    <div className="space-y-3 pb-4 border-t border-white/5 pt-4 animate-slide-up" style={{animationDelay: '0.35s'}}>
+                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Grid size={12}/> Acabamento & Textura (Overlay)</h3>
+                                        
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {TEXTURE_PRESETS.map(tex => (
+                                                <button 
+                                                    key={tex.id}
+                                                    onClick={() => { setActiveTexture(tex.id); if(tex.id === 'NONE') setGeneratedTextureUrl(null); }}
+                                                    className={`px-3 py-2 rounded-lg text-[10px] font-bold border transition-all ${activeTexture === tex.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                >
+                                                    {tex.label}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {activeTexture === 'CUSTOM_AI' && (
+                                            <div className="flex gap-2 animate-fade-in">
+                                                <input 
+                                                    type="text" 
+                                                    value={customTexturePrompt}
+                                                    onChange={(e) => setCustomTexturePrompt(e.target.value)}
+                                                    placeholder="Ex: Seda amassada, Tecido Bouclé..."
+                                                    className="flex-1 bg-[#1a1a1a] border border-gray-700 rounded-lg px-3 py-2 text-xs outline-none focus:border-vingi-500"
+                                                />
+                                                <button onClick={handleGenerateTexture} disabled={isGeneratingTexture} className="bg-vingi-900 border border-vingi-700 text-white rounded-lg px-3 flex items-center justify-center hover:bg-vingi-800">
+                                                    {isGeneratingTexture ? <Loader2 size={14} className="animate-spin"/> : <Wand2 size={14}/>}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {activeTexture !== 'NONE' && (
+                                            <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 space-y-3 animate-slide-down">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[9px] font-bold text-gray-500 uppercase w-12">Intensidade</span>
+                                                    <input type="range" min="0.1" max="1" step="0.1" value={textureOpacity} onChange={(e) => setTextureOpacity(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[9px] font-bold text-gray-500 uppercase w-12">Densidade</span>
+                                                    <input type="range" min="0.5" max="3" step="0.1" value={textureScale} onChange={(e) => setTextureScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                                </div>
                                             </div>
                                         )}
                                     </div>

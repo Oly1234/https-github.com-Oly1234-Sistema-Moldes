@@ -4,7 +4,7 @@ import { refineDesignPrompt } from './modules/departments/atelier.js';
 import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
-import { generatePattern } from './modules/generator.js'; 
+import { generatePattern, generateTextureLayer } from './modules/generator.js'; 
 import { reconstructElement } from './modules/departments/layerLab.js'; 
 import { generateHighResProductionFile } from './modules/departments/qualityControl.js';
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle, textureType, texturePrompt } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -133,6 +133,17 @@ export default async function handler(req, res) {
         } catch (genError) {
             console.error("Generation Failed:", genError);
             return res.status(200).json({ success: false, error: genError.message || "Erro na geração." });
+        }
+    }
+
+    // NOVO: GERAR TEXTURA
+    if (action === 'GENERATE_TEXTURE') {
+        try {
+            const textureImage = await generateTextureLayer(apiKey, textureType, texturePrompt);
+            if (!textureImage) throw new Error("IA não retornou textura.");
+            return res.status(200).json({ success: true, image: textureImage });
+        } catch (e) {
+            return res.status(200).json({ success: false, error: "Erro ao gerar textura." });
         }
     }
 
