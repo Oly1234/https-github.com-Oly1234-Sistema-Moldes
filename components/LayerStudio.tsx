@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minimize2, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap, ZoomIn, ZoomOut, RotateCcw, X, Brush, Focus, ShieldCheck, Grid, PaintBucket, Loader2, RefreshCcw, BringToFront, SendToBack, CopyPlus, MinusCircle, PlusCircle, SlidersHorizontal, Settings2, Magnet, Crop, Download, Square, Check, Cpu, Rotate3d, Move3d, XCircle, MoreVertical, LayoutGrid, Sliders, BoxSelect, Sparkle, Wand, Send } from 'lucide-react';
+import { Layers, Move, Trash2, Eye, EyeOff, Lock, UploadCloud, RotateCw, Hand, Maximize, Minimize2, Minus, Plus, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, Eraser, Sparkles, Undo2, X, Brush, Focus, ShieldCheck, Grid, Loader2, RefreshCcw, PlusCircle, SlidersHorizontal, Settings2, XCircle, LayoutGrid, BoxSelect, Sparkle, Wand, Send, Crosshair, Target } from 'lucide-react';
 import { DesignLayer } from '../types';
-import { ModuleHeader, ModuleLandingPage } from './Shared';
+import { ModuleLandingPage } from './Shared';
 import { VingiSegmenter, SegmentationResult } from '../services/segmentationEngine';
 
 export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMockup?: () => void }> = ({ onNavigateBack, onNavigateToMockup }) => {
@@ -13,8 +13,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     const [canvasSize, setCanvasSize] = useState({ w: 1024, h: 1024 });
     
     // Tools UI
-    const [tool, setTool] = useState<'MOVE' | 'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('HAND');
-    const [wandTolerance, setWandTolerance] = useState(32);
+    const [tool, setTool] = useState<'MOVE' | 'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('WAND');
+    const [wandTolerance, setWandTolerance] = useState(35);
     const [wandMode, setWandMode] = useState<'ADD' | 'SUB'>('ADD');
     const [brushSize, setBrushSize] = useState(40);
     
@@ -52,7 +52,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const img = new Image(); img.src = src;
         img.onload = () => {
             const layer: DesignLayer = {
-                id: 'L0', type: 'BACKGROUND', name: 'Base Têxtil', src,
+                id: 'L0', type: 'BACKGROUND', name: 'Base Original', src,
                 x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false,
                 visible: true, locked: false, zIndex: 0, opacity: 1
             };
@@ -61,7 +61,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             setLayers([layer]);
             setSelectedLayerId(layer.id);
             setHistory([]);
-            setTool('MOVE');
+            setTool('WAND');
             if (containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
                 setView({ x: 0, y: 0, k: Math.min(rect.width / img.width, rect.height / img.height) * 0.75 });
@@ -84,21 +84,24 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const pix = imgData.data;
 
-            if (action === 'EXTRACT' && maskBounds) {
-                for (let i = 0; i < activeMask.length; i++) { if (activeMask[i] === 0) pix[i*4 + 3] = 0; }
+            if (action === 'EXTRACT') {
+                // Criar máscara Alpha com suavização de borda (Anti-Aliasing básico)
+                for (let i = 0; i < activeMask.length; i++) { 
+                    if (activeMask[i] === 0) pix[i*4 + 3] = 0; 
+                }
                 ctx.putImageData(imgData, 0, 0);
                 
-                const cropCanvas = document.createElement('canvas');
-                cropCanvas.width = maskBounds.w; cropCanvas.height = maskBounds.h;
-                const cCtx = cropCanvas.getContext('2d')!;
-                cCtx.drawImage(canvas, maskBounds.x, maskBounds.y, maskBounds.w, maskBounds.h, 0, 0, maskBounds.w, maskBounds.h);
-                
+                // EXTRAÇÃO PIXEL-PERFECT: Manter coordenadas absolutas
                 const newId = 'LX-' + Date.now();
                 const newLayer: DesignLayer = { 
-                    ...target, id: newId, name: `Recorte ${layers.length}`, 
-                    src: cropCanvas.toDataURL(), zIndex: layers.length + 1,
-                    x: target.x + maskBounds.x, y: target.y + maskBounds.y,
-                    scale: 1 
+                    ...target, 
+                    id: newId, 
+                    name: `Motivo ${layers.length}`, 
+                    src: canvas.toDataURL(), 
+                    zIndex: layers.length + 1,
+                    // Mantém na mesma posição exata
+                    x: target.x, y: target.y,
+                    scale: target.scale 
                 };
                 saveHistory([...layers, newLayer]);
                 setSelectedLayerId(newId);
@@ -163,6 +166,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             ctx.drawImage(img, 0, 0);
             ctx.globalCompositeOperation = tool === 'ERASER' ? 'destination-out' : 'source-over';
             ctx.fillStyle = 'white';
+            ctx.shadowBlur = 2; ctx.shadowColor = tool === 'ERASER' ? 'transparent' : 'white';
             ctx.beginPath();
             ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
             ctx.fill();
@@ -203,6 +207,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         setActiveMask(res.mask);
                         setMaskBounds(res.bounds);
                     }
+                    setShowActionPanel(true);
                 }
             };
         } else if (tool === 'BRUSH' || tool === 'ERASER') {
@@ -255,7 +260,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     <div className="bg-vingi-900/50 p-1.5 rounded-lg border border-vingi-500/30"><Layers size={18} className="text-vingi-400"/></div>
                     <div>
                         <h2 className="text-xs font-bold uppercase tracking-widest leading-none">Layer Studio Pro</h2>
-                        <p className="text-[9px] text-gray-500 uppercase font-medium mt-1">SAM-Modular Engine v2</p>
+                        <p className="text-[9px] text-gray-500 uppercase font-medium mt-1">Motor SAM v2.5 Ativo</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -269,64 +274,79 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             {!layers.length ? (
                 <div className="flex-1 bg-white">
                     <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>initFromImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
-                    <ModuleLandingPage icon={Layers} title="Lab de Segmentação" description="Tecnologia neuro-visual para isolamento de elementos com inteligência de borda." primaryActionLabel="Iniciar Decomposição" onPrimaryAction={() => fileInputRef.current?.click()} />
+                    <ModuleLandingPage icon={Layers} title="Decomposição Inteligente" description="Isole elementos de estampas com precisão SAM. Clique para selecionar objetos e transforme-os em camadas independentes." primaryActionLabel="Iniciar Estúdio" onPrimaryAction={() => fileInputRef.current?.click()} />
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col overflow-hidden relative">
                     
                     {/* 2. VIEWPORT CENTRAL */}
-                    <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center touch-none bg-[#050505] ${tool==='HAND'?'cursor-grab':tool==='MOVE'?'cursor-move':'cursor-none'}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => { if(isDrawing.current) saveHistory([...layers]); isDrawing.current = false; isPanning.current = false; }} onWheel={handleWheel}>
+                    <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center touch-none bg-[#050505] cursor-none`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => { if(isDrawing.current) saveHistory([...layers]); isDrawing.current = false; isPanning.current = false; }} onWheel={handleWheel}>
                         
-                        {/* CURSOR VISUAL DE PRECISÃO */}
-                        {(tool === 'BRUSH' || tool === 'ERASER') && (
-                            <div className="fixed pointer-events-none z-[1000] rounded-full border border-white/60 bg-white/5 mix-blend-difference shadow-[0_0_10px_rgba(255,255,255,0.5)]" 
-                                 style={{ width: brushSize * view.k, height: brushSize * view.k, left: cursorPos.x - (brushSize * view.k)/2, top: cursorPos.y - (brushSize * view.k)/2 }}>
-                                <div className="absolute inset-0 flex items-center justify-center"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>
-                            </div>
-                        )}
+                        {/* CURSOR VISUAL DINÂMICO (CUSTOM MOUSE) */}
+                        <div className="fixed pointer-events-none z-[1000] mix-blend-difference flex items-center justify-center transition-transform duration-75" 
+                             style={{ left: cursorPos.x, top: cursorPos.y, transform: 'translate(-50%, -50%)' }}>
+                            {tool === 'HAND' ? <Hand size={24} className="text-white"/> : 
+                             tool === 'MOVE' ? <Move size={24} className="text-white"/> :
+                             tool === 'WAND' ? (
+                                <div className="relative">
+                                    <Target size={32} className="text-white/80 animate-spin-slow" strokeWidth={1}/>
+                                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-1 h-1 bg-vingi-400 rounded-full shadow-[0_0_10px_#3b82f6]"></div></div>
+                                </div>
+                             ) : (
+                                <div className="rounded-full border-2 border-white shadow-[0_0_15px_rgba(255,255,255,0.5)] bg-white/5" 
+                                     style={{ width: brushSize * view.k, height: brushSize * view.k }}>
+                                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>
+                                </div>
+                             )}
+                        </div>
 
                         <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
                         
                         <div className="relative shadow-2xl transition-transform duration-75 ease-out origin-center" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
                             {layers.map(l => l.visible && (
                                 <div key={l.id} className="absolute inset-0 pointer-events-none" style={{ transform: `translate(${l.x}px, ${l.y}px) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, zIndex: l.zIndex, opacity: l.opacity ?? 1 }}>
-                                    <img src={l.src} className={`w-full h-full object-contain ${selectedLayerId===l.id ? 'filter drop-shadow-[0_0_20px_rgba(59,130,246,0.6)]' : ''}`} draggable={false} />
+                                    <img src={l.src} className={`w-full h-full object-contain ${selectedLayerId===l.id ? 'filter drop-shadow-[0_0_25px_rgba(59,130,246,0.6)]' : ''}`} draggable={false} />
                                 </div>
                             ))}
                             
-                            {/* BOUNDING BOX ATIVO (SÓ NO OBJETO) */}
+                            {/* BOUNDING BOX REAL (LOCALIZADO NO OBJETO) */}
                             {activeMask && maskBounds && (
-                                <div className="absolute border-[3px] border-vingi-400 border-dashed animate-pulse pointer-events-none z-[60] shadow-[0_0_30px_rgba(59,130,246,0.4)]" 
+                                <div className="absolute border-[3px] border-vingi-400 border-dashed animate-pulse pointer-events-none z-[60] shadow-[0_0_40px_rgba(59,130,246,0.4)]" 
                                      style={{ left: maskBounds.x, top: maskBounds.y, width: maskBounds.w, height: maskBounds.h }}>
                                     <div className="absolute -top-7 left-0 bg-vingi-500 text-black text-[9px] font-black px-2 py-1 rounded-md flex items-center gap-1.5 uppercase tracking-widest shadow-xl"><Focus size={12}/> Objeto Detectado</div>
+                                    {/* Corner handles visual feedback */}
+                                    <div className="absolute -top-1 -left-1 w-2 h-2 bg-white rounded-full"></div>
+                                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full"></div>
+                                    <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white rounded-full"></div>
+                                    <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white rounded-full"></div>
                                 </div>
                             )}
                         </div>
 
-                        {/* PAINEL DE AÇÃO INTELIGENTE */}
+                        {/* MODAL DE AÇÃO INTELIGENTE (POSIÇÃO DINÂMICA) */}
                         {showActionPanel && activeMask && (
                             <div className="absolute bottom-44 left-1/2 -translate-x-1/2 z-[200] animate-slide-up">
-                                <div className="bg-[#111]/98 backdrop-blur-2xl border border-vingi-500/30 p-4 rounded-[2rem] shadow-[0_0_80px_rgba(0,0,0,0.95)] flex flex-col gap-4 min-w-[440px]">
-                                    <div className="flex items-center justify-between px-2">
+                                <div className="bg-[#111]/98 backdrop-blur-2xl border border-vingi-500/30 p-4 rounded-[2.5rem] shadow-[0_0_100px_rgba(0,0,0,0.95)] flex flex-col gap-4 min-w-[460px]">
+                                    <div className="flex items-center justify-between px-3">
                                         <div className="flex items-center gap-2.5">
-                                            <div className="p-1.5 bg-vingi-500 rounded-xl shadow-lg shadow-vingi-900/50"><Sparkles size={16} className="text-black"/></div>
-                                            <h4 className="text-xs font-black text-white uppercase tracking-widest">Processar Seleção</h4>
+                                            <div className="p-2 bg-vingi-500 rounded-2xl shadow-lg shadow-vingi-900/50"><Sparkles size={18} className="text-black"/></div>
+                                            <h4 className="text-xs font-black text-white uppercase tracking-widest">Motor de Motivos</h4>
                                         </div>
-                                        <button onClick={() => setShowActionPanel(false)} className="p-1.5 hover:bg-white/10 rounded-full text-gray-500 transition-colors"><X size={20}/></button>
+                                        <button onClick={() => { setActiveMask(null); setShowActionPanel(false); }} className="p-2 hover:bg-white/10 rounded-full text-gray-500 transition-colors"><X size={24}/></button>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => applySelectionAction('EXTRACT')} className="px-5 py-3.5 bg-white/5 hover:bg-white/10 rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-2.5 border border-white/5 transition-all"><Plus size={18}/> Isolar Elemento</button>
-                                        <button onClick={() => applySelectionAction('DELETE')} className="px-5 py-3.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-2.5 transition-all border border-red-900/30"><Trash2 size={18}/> Excluir Área</button>
+                                        <button onClick={() => applySelectionAction('EXTRACT')} className="px-6 py-4 bg-white/5 hover:bg-white/10 rounded-3xl text-[11px] font-black uppercase flex items-center justify-center gap-3 border border-white/5 transition-all active:scale-95 group"><Plus size={20} className="group-hover:rotate-90 transition-transform"/> Isolar em Camada</button>
+                                        <button onClick={() => applySelectionAction('DELETE')} className="px-6 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-400 rounded-3xl text-[11px] font-black uppercase flex items-center justify-center gap-3 transition-all border border-red-900/30 active:scale-95"><Trash2 size={20}/> Remover da Base</button>
                                     </div>
 
-                                    <div className="h-px bg-white/5 mx-2"></div>
+                                    <div className="h-px bg-white/5 mx-3"></div>
                                     
-                                    <div className="px-2 space-y-2.5">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">Neuro-Substituição (IA)</p>
+                                    <div className="px-3 space-y-2.5">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">Troca Inteligente (IA)</p>
                                         <div className="flex gap-2">
-                                            <input value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="Ex: Substituir por botão de madrepérola..." className="flex-1 bg-black/60 border border-white/10 rounded-2xl px-5 py-3 text-xs outline-none focus:border-vingi-500 transition-all" />
-                                            <button onClick={handleAISwap} disabled={!aiPrompt} className="bg-vingi-600 hover:bg-vingi-500 disabled:opacity-30 px-4 rounded-2xl transition-all shadow-xl shadow-vingi-900/50"><Send size={20}/></button>
+                                            <input value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="Ex: Substituir por botão de cristal..." className="flex-1 bg-black/60 border border-white/10 rounded-3xl px-6 py-3.5 text-xs outline-none focus:border-vingi-500 transition-all font-medium" />
+                                            <button onClick={handleAISwap} disabled={!aiPrompt} className="bg-vingi-600 hover:bg-vingi-500 disabled:opacity-30 px-5 rounded-3xl transition-all shadow-xl shadow-vingi-900/50 flex items-center justify-center"><Send size={22}/></button>
                                         </div>
                                     </div>
                                 </div>
@@ -334,14 +354,14 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         )}
 
                         {/* LISTA DE CAMADAS */}
-                        <div className={`absolute top-6 right-6 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/5 flex flex-col transition-all duration-300 z-50 shadow-2xl rounded-3xl overflow-hidden ${showLayersPanel ? 'w-64 h-[calc(100%-140px)]' : 'w-14 h-14'}`}>
+                        <div className={`absolute top-6 right-6 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/5 flex flex-col transition-all duration-300 z-50 shadow-2xl rounded-[2rem] overflow-hidden ${showLayersPanel ? 'w-72 h-[calc(100%-160px)]' : 'w-14 h-14'}`}>
                             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#111]/50">
                                 {showLayersPanel ? (
                                     <>
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Camadas</span>
                                         <div className="flex gap-2">
-                                            <button onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-white transition-colors"><PlusCircle size={16}/></button>
-                                            <button onClick={() => setShowLayersPanel(false)} className="text-gray-500 hover:text-white transition-colors"><Minimize2 size={16}/></button>
+                                            <button onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-white transition-colors"><PlusCircle size={18}/></button>
+                                            <button onClick={() => setShowLayersPanel(false)} className="text-gray-500 hover:text-white transition-colors"><Minimize2 size={18}/></button>
                                         </div>
                                     </>
                                 ) : (
@@ -351,14 +371,14 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             {showLayersPanel && (
                                 <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
                                     {layers.slice().reverse().map(l => (
-                                        <div key={l.id} onClick={() => setSelectedLayerId(l.id)} className={`group p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 ${selectedLayerId===l.id ? 'bg-vingi-900/30 border-vingi-500/50 shadow-xl' : 'bg-transparent border-transparent hover:bg-white/5'}`}>
-                                            <div className="w-12 h-12 bg-black rounded-xl overflow-hidden border border-white/10 shrink-0 shadow-inner"><img src={l.src} className="w-full h-full object-cover" /></div>
+                                        <div key={l.id} onClick={() => setSelectedLayerId(l.id)} className={`group p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-4 ${selectedLayerId===l.id ? 'bg-vingi-900/40 border-vingi-500/50 shadow-xl' : 'bg-transparent border-transparent hover:bg-white/5'}`}>
+                                            <div className="w-14 h-14 bg-black rounded-xl overflow-hidden border border-white/10 shrink-0 shadow-inner"><img src={l.src} className="w-full h-full object-cover" /></div>
                                             <div className="flex-1 min-w-0">
-                                                <p className={`text-[11px] font-bold truncate ${selectedLayerId===l.id ? 'text-white' : 'text-gray-500'}`}>{l.name}</p>
-                                                <div className="flex items-center gap-3 mt-1.5">
-                                                    <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.map(ly => ly.id === l.id ? { ...ly, visible: !ly.visible } : ly)); }}>{l.visible ? <Eye size={12} className="text-gray-400"/> : <EyeOff size={12} className="text-red-500"/>}</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.map(ly => ly.id === l.id ? { ...ly, locked: !ly.locked } : ly)); }}>{l.locked ? <Lock size={12} className="text-vingi-500"/> : <Lock size={12} className="text-gray-600"/>}</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.filter(ly => ly.id !== l.id)); if(selectedLayerId===l.id) setSelectedLayerId(null); }} className="hover:text-red-500 ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
+                                                <p className={`text-[11px] font-black truncate ${selectedLayerId===l.id ? 'text-white' : 'text-gray-500'}`}>{l.name}</p>
+                                                <div className="flex items-center gap-3 mt-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.map(ly => ly.id === l.id ? { ...ly, visible: !ly.visible } : ly)); }}>{l.visible ? <Eye size={14} className="text-gray-400"/> : <EyeOff size={14} className="text-red-500"/>}</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.map(ly => ly.id === l.id ? { ...ly, locked: !ly.locked } : ly)); }}>{l.locked ? <Lock size={14} className="text-vingi-500"/> : <Lock size={14} className="text-gray-600"/>}</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.filter(ly => ly.id !== l.id)); if(selectedLayerId===l.id) setSelectedLayerId(null); }} className="hover:text-red-500 ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
                                                 </div>
                                             </div>
                                         </div>
@@ -368,94 +388,87 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         </div>
                     </div>
 
-                    {/* 3. DOCK INFERIOR */}
-                    <div className="bg-[#0a0a0a] border-t border-white/5 shrink-0 z-[100] pb-[env(safe-area-inset-bottom)] flex flex-col shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+                    {/* 3. DOCK INFERIOR (CONTROLES) */}
+                    <div className="bg-[#0a0a0a] border-t border-white/5 shrink-0 z-[100] pb-[env(safe-area-inset-bottom)] flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.7)]">
                         
-                        {/* CONTEXTUAL SLIDERS */}
-                        <div className="bg-[#111] px-8 py-4 flex flex-col md:flex-row items-center justify-between border-b border-white/5 gap-6">
-                            <div className="flex items-center gap-6 flex-1 w-full max-w-5xl">
+                        {/* SLIDERS DINÂMICOS */}
+                        <div className="bg-[#111] px-10 py-5 flex flex-col md:flex-row items-center justify-between border-b border-white/5 gap-8">
+                            <div className="flex items-center gap-8 flex-1 w-full max-w-6xl">
                                 {tool === 'WAND' ? (
                                     <>
-                                        <div className="flex bg-black/50 rounded-xl p-1.5 border border-white/5 shrink-0 shadow-inner">
-                                            <button onClick={() => setWandMode('ADD')} className={`px-4 py-2 rounded-lg flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='ADD'?'bg-vingi-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Plus size={14}/> Somar</button>
-                                            <button onClick={() => setWandMode('SUB')} className={`px-4 py-2 rounded-lg flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='SUB'?'bg-red-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Minus size={14}/> Subtrair</button>
+                                        <div className="flex bg-black/60 rounded-2xl p-1.5 border border-white/5 shrink-0 shadow-inner">
+                                            <button onClick={() => setWandMode('ADD')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='ADD'?'bg-vingi-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Plus size={16}/> Combinar</button>
+                                            <button onClick={() => setWandMode('SUB')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='SUB'?'bg-red-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Minus size={16}/> Subtrair</button>
                                         </div>
-                                        <div className="flex-1 space-y-1.5">
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase tracking-[0.1em]"><span>Inteligência de Borda</span><span>{wandTolerance}</span></div>
-                                            <input type="range" min="1" max="150" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white cursor-pointer"/>
+                                        <div className="flex-1 space-y-2">
+                                            <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Precisão SAM (Tolerância)</span><span>{wandTolerance}%</span></div>
+                                            <input type="range" min="5" max="150" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-vingi-500 cursor-pointer"/>
                                         </div>
-                                        <div className="flex gap-2">
-                                            {activeMask && (
-                                                <button onClick={() => setShowActionPanel(true)} className="px-6 py-2.5 bg-vingi-500 text-black rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-[0_0_25px_rgba(59,130,246,0.5)] transition-all hover:scale-105 active:scale-95"><Sparkle size={16}/> Ações</button>
-                                            )}
-                                            <button onClick={() => { setActiveMask(null); setMaskBounds(null); }} disabled={!activeMask} className="p-2.5 bg-white/5 rounded-xl text-gray-500 hover:text-red-500 disabled:opacity-20 transition-colors"><XCircle size={20}/></button>
+                                        <div className="flex gap-3">
+                                            {activeMask && <button onClick={() => setShowActionPanel(true)} className="px-6 py-3 bg-vingi-500 text-black rounded-2xl text-xs font-black uppercase flex items-center gap-2.5 shadow-[0_0_30px_rgba(59,130,246,0.6)] transition-all hover:scale-105 active:scale-95 animate-pulse"><Sparkle size={18}/> AÇÕES</button>}
+                                            <button onClick={() => { setActiveMask(null); setMaskBounds(null); }} disabled={!activeMask} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-red-500 disabled:opacity-20 transition-colors border border-white/5"><XCircle size={24}/></button>
                                         </div>
                                     </>
                                 ) : (tool === 'BRUSH' || tool === 'ERASER') ? (
                                     <>
-                                        <div className="flex-1 space-y-1.5">
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase tracking-[0.1em]"><span>Tamanho da Ferramenta</span><span>{brushSize}px</span></div>
-                                            <input type="range" min="2" max="250" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white cursor-pointer"/>
+                                        <div className="flex-1 space-y-2">
+                                            <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Diâmetro da Ponta ({tool==='BRUSH'?'Pincel':'Borracha'})</span><span>{brushSize}px</span></div>
+                                            <input type="range" min="4" max="300" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white cursor-pointer"/>
                                         </div>
-                                        {selectedLayer?.locked && (
-                                            <div className="flex items-center gap-2.5 bg-red-900/20 border border-red-500/30 px-4 py-2 rounded-xl">
-                                                <ShieldCheck size={16} className="text-red-400"/>
-                                                <span className="text-[10px] font-black text-red-400 uppercase">Camada Travada</span>
-                                            </div>
-                                        )}
+                                        {selectedLayer?.locked && <div className="flex items-center gap-2.5 bg-red-900/30 border border-red-500/30 px-5 py-2.5 rounded-2xl animate-pulse"><ShieldCheck size={18} className="text-red-400"/><span className="text-[10px] font-black text-red-400 uppercase">Camada Protegida</span></div>}
                                     </>
                                 ) : selectedLayer && (
-                                    <div className="flex-1 grid grid-cols-2 gap-10">
-                                        <div className="space-y-1.5">
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><span>Opacidade</span><span>{Math.round((selectedLayer.opacity||1)*100)}%</span></div>
-                                            <input type="range" min="0" max="1" step="0.1" value={selectedLayer.opacity||1} onChange={e => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, opacity: parseFloat(e.target.value) } : ly))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white"/>
+                                    <div className="flex-1 grid grid-cols-2 gap-12">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Opacidade Camada</span><span>{Math.round((selectedLayer.opacity||1)*100)}%</span></div>
+                                            <input type="range" min="0" max="1" step="0.05" value={selectedLayer.opacity||1} onChange={e => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, opacity: parseFloat(e.target.value) } : ly))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white"/>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><span>Escala da Camada</span><span>{Math.round(selectedLayer.scale*100)}%</span></div>
-                                            <input type="range" min="0.1" max="4" step="0.1" value={selectedLayer.scale} onChange={e => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, scale: parseFloat(e.target.value) } : ly))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white"/>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Escala Absoluta</span><span>{Math.round(selectedLayer.scale*100)}%</span></div>
+                                            <input type="range" min="0.05" max="5" step="0.05" value={selectedLayer.scale} onChange={e => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, scale: parseFloat(e.target.value) } : ly))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white"/>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* BARRA DE FERRAMENTAS PRINCIPAL */}
-                        <div className="flex items-center justify-between px-6 py-2.5 overflow-x-auto no-scrollbar gap-2 max-w-[1200px] mx-auto w-full">
+                        {/* TOOL DOCK PRINCIPAL */}
+                        <div className="flex items-center justify-between px-8 py-3 overflow-x-auto no-scrollbar gap-2 max-w-[1400px] mx-auto w-full">
                             <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>initFromImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
                             
-                            <ToolBtn icon={Hand} label="Navegar" active={tool==='HAND'} onClick={() => setTool('HAND')} />
+                            <ToolBtn icon={Hand} label="Pan" active={tool==='HAND'} onClick={() => setTool('HAND')} />
                             <ToolBtn icon={Move} label="Mover" active={tool==='MOVE'} onClick={() => setTool('MOVE')} />
                             
-                            <div className="w-px h-8 bg-white/5 mx-1"></div>
+                            <div className="w-px h-10 bg-white/5 mx-2"></div>
                             
-                            <ToolBtn icon={Wand} label="Vingi SAM" active={tool==='WAND'} onClick={() => setTool('WAND')} />
+                            <ToolBtn icon={Wand} label="SAM Wand" active={tool==='WAND'} onClick={() => setTool('WAND')} />
                             <ToolBtn icon={Brush} label="Pincel" active={tool==='BRUSH'} onClick={() => setTool('BRUSH')} />
                             <ToolBtn icon={Eraser} label="Borracha" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
                             
-                            <div className="w-px h-8 bg-white/5 mx-1"></div>
+                            <div className="w-px h-10 bg-white/5 mx-2"></div>
 
-                            <div className="hidden md:flex gap-1.5">
-                                <button onClick={() => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, flipX: !ly.flipX } : ly))} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all shadow-sm" title="Espelhar"><FlipHorizontal size={20}/></button>
-                                <button onClick={() => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, rotation: (ly.rotation + 90) % 360 } : ly))} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all shadow-sm" title="Girar 90°"><RotateCw size={20}/></button>
+                            <div className="hidden md:flex gap-2">
+                                <button onClick={() => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, flipX: !ly.flipX } : ly))} className="p-3.5 bg-white/5 rounded-2xl text-gray-400 hover:text-white transition-all shadow-sm active:scale-90" title="Espelhar Horizontal"><FlipHorizontal size={22}/></button>
+                                <button onClick={() => setLayers(ls => ls.map(ly => ly.id === selectedLayerId ? { ...ly, rotation: (ly.rotation + 90) % 360 } : ly))} className="p-3.5 bg-white/5 rounded-2xl text-gray-400 hover:text-white transition-all shadow-sm active:scale-90" title="Girar 90°"><RotateCw size={22}/></button>
                             </div>
 
-                            <div className="w-px h-8 bg-white/5 mx-1"></div>
+                            <div className="w-px h-10 bg-white/5 mx-2"></div>
                             
-                            <ToolBtn icon={Undo2} label="Desfazer" onClick={undo} disabled={history.length === 0} />
-                            <ToolBtn icon={RefreshCcw} label="Nova Arte" onClick={() => fileInputRef.current?.click()} />
+                            <ToolBtn icon={Undo2} label="Undo" onClick={undo} disabled={history.length === 0} />
+                            <ToolBtn icon={RefreshCcw} label="Nova Base" onClick={() => fileInputRef.current?.click()} />
                         </div>
                     </div>
                 </div>
             )}
 
             {isProcessing && (
-                <div className="fixed inset-0 z-[400] bg-black/70 backdrop-blur-xl flex flex-col items-center justify-center animate-fade-in">
-                    <div className="relative mb-8">
-                        <div className="absolute inset-0 bg-vingi-500 blur-2xl opacity-20 animate-pulse"></div>
-                        <Loader2 size={56} className="text-vingi-400 animate-spin relative z-10" />
+                <div className="fixed inset-0 z-[400] bg-black/80 backdrop-blur-2xl flex flex-col items-center justify-center animate-fade-in">
+                    <div className="relative mb-10">
+                        <div className="absolute inset-0 bg-vingi-500 blur-[50px] opacity-20 animate-pulse rounded-full"></div>
+                        <Loader2 size={64} className="text-vingi-400 animate-spin relative z-10" />
                     </div>
-                    <p className="text-sm font-black uppercase tracking-[0.3em] text-white">Segmentando Neuro-Camadas...</p>
-                    <p className="text-[10px] text-gray-500 mt-2 font-mono">VINGI_SAM_ENGINE_ACTIVE // V2.0</p>
+                    <p className="text-lg font-black uppercase tracking-[0.4em] text-white">Segmentando Geometria...</p>
+                    <p className="text-[11px] text-gray-500 mt-3 font-mono">VINGI_NEURAL_RECOGNITION_PROCESSOR // V2.5</p>
                 </div>
             )}
         </div>
@@ -463,8 +476,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 };
 
 const ToolBtn = ({ icon: Icon, label, active, onClick, disabled }: any) => (
-    <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center min-w-[76px] h-16 rounded-[1.25rem] gap-1.5 transition-all active:scale-90 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:bg-white/5'} ${active ? 'bg-vingi-900/50 text-white border border-vingi-500/30 shadow-2xl shadow-vingi-900/50' : 'text-gray-500 hover:text-gray-300'}`}>
-        <Icon size={22} strokeWidth={active ? 2.5 : 1.5} className={active ? 'drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]' : ''} /> 
-        <span className="text-[9px] font-black uppercase tracking-wider">{label}</span>
+    <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center min-w-[80px] h-16 rounded-2xl gap-1.5 transition-all active:scale-90 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:bg-white/5'} ${active ? 'bg-vingi-900/60 text-white border border-vingi-500/40 shadow-2xl shadow-vingi-900/50' : 'text-gray-500 hover:text-gray-300'}`}>
+        <Icon size={24} strokeWidth={active ? 2.5 : 1.5} className={active ? 'drop-shadow-[0_0_15px_rgba(59,130,246,0.6)]' : ''} /> 
+        <span className="text-[10px] font-black uppercase tracking-wider">{label}</span>
     </button>
 );
