@@ -171,6 +171,7 @@ export const MockupStudio: React.FC = () => {
             tempCtx.fillStyle = layer.pattern; 
             // Draw a large enough rect to cover the mask even when scaled down/rotated
             const diag = Math.sqrt(layer.maskW**2 + layer.maskH**2); 
+            // Safe Size calculation ensures pattern covers mask
             const safeSize = (diag * 1.5) / layer.scale; 
             tempCtx.fillRect(-safeSize, -safeSize, safeSize*2, safeSize*2); 
         }
