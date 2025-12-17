@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
@@ -121,7 +121,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
     const [subLayout, setSubLayout] = useState<string>(''); 
     const [artStyle, setArtStyle] = useState<string>('ORIGINAL');
-    const [customStyleText, setCustomStyleText] = useState<string>(''); // Novo estado para estilo custom
+    const [customStyleText, setCustomStyleText] = useState<string>(''); 
     
     // SIZE STATE
     const [targetSize, setTargetSize] = useState<string>('');
@@ -187,11 +187,20 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     };
 
     const handleReferenceUpload = async (imgBase64: string) => {
-        setReferenceImage(imgBase64); setCreationMode('IMAGE'); setIsProcessing(true); setStatusMessage("Extraindo DNA & Cores...");
+        setReferenceImage(imgBase64); setCreationMode('IMAGE'); setIsProcessing(true); 
+        
         try {
+            setStatusMessage("Lendo Referência Visual...");
             const compressed = await compressImage(imgBase64); const cleanBase64 = compressed.split(',')[1];
+            
+            setStatusMessage("Identificando DNA & Cores...");
             await Promise.allSettled([ analyzePrompt(cleanBase64), analyzeColors(cleanBase64, 'NATURAL') ]);
-        } catch (e) { console.error(e); } finally { setIsProcessing(false); }
+            
+            setStatusMessage("Preparando Estúdio...");
+            await new Promise(resolve => setTimeout(resolve, 800)); // Pequeno delay para leitura humana
+            
+        } catch (e) { console.error(e); setError("Erro ao analisar imagem."); } 
+        finally { setIsProcessing(false); }
     };
 
     const handleGenerate = async () => {
@@ -357,11 +366,21 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <SmartImageViewer src={generatedPattern} />
                             </div>
                         ) : (
-                            <div className="relative shadow-xl w-full h-full max-h-[60vh] max-w-[60vh] flex items-center justify-center border-2 border-dashed border-gray-800 rounded-xl opacity-50">
-                                <div className="text-center">
-                                    <Grid3X3 size={48} className="mx-auto mb-4 text-gray-700"/>
-                                    <p className="text-gray-500 text-sm">Preview da Estampa</p>
+                            <div className="relative shadow-xl w-full h-full max-h-[60vh] max-w-[60vh] flex flex-col items-center justify-center border-2 border-dashed border-gray-800 rounded-xl opacity-70 p-8 text-center gap-6">
+                                <Grid3X3 size={48} className="text-gray-700"/>
+                                <div>
+                                    <h3 className="text-gray-300 font-bold text-lg mb-1">Área de Visualização</h3>
+                                    <p className="text-gray-500 text-sm max-w-xs mx-auto">Sua estampa aparecerá aqui após a geração. Configure os parâmetros ao lado.</p>
                                 </div>
+                                {/* STATUS GUIDE INSIDE CANVAS */}
+                                {colors.length > 0 && (
+                                    <div className="bg-vingi-900/50 border border-vingi-500/30 p-4 rounded-xl max-w-sm animate-slide-up">
+                                        <div className="flex items-center gap-2 mb-2 text-vingi-400 font-bold text-xs uppercase tracking-widest">
+                                            <Check size={12} className="bg-vingi-500 text-black rounded-full p-0.5"/> Análise Concluída
+                                        </div>
+                                        <p className="text-xs text-gray-300">Pantones e DNA identificados. Ajuste o layout no painel e clique em <strong>Gerar Estampa</strong>.</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {error && ( <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-900/90 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-700 max-w-md backdrop-blur"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div> )}
@@ -373,7 +392,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     {/* CONTROL DECK (FLEX LAYOUT) */}
                     <div className="w-full md:w-[380px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-[55vh] md:h-full shrink-0 relative">
                         
-                        {/* 1. SCROLLABLE CONTENT - INCREASED BOTTOM PADDING FOR MOBILE */}
+                        {/* ALERT BANNER - NEXT STEP */}
+                        {!generatedPattern && colors.length > 0 && !isProcessing && (
+                            <div className="bg-gradient-to-r from-vingi-900 to-black px-4 py-2 border-b border-vingi-500/30 flex items-center gap-3 animate-fade-in shrink-0">
+                                <div className="bg-vingi-500 text-black p-1 rounded-full animate-pulse"><Info size={12}/></div>
+                                <p className="text-[10px] font-medium text-vingi-200 leading-tight">
+                                    <span className="font-bold text-white">Próximo Passo:</span> Configure abaixo e clique no botão Gerar.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* 1. SCROLLABLE CONTENT */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-40">
                             
                             {/* MAGIC INPUT (DIREÇÃO CRIATIVA) */}
@@ -505,16 +534,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             </div>
                         </div>
 
-                        {/* 2. STATIC FOOTER (GENERATE BUTTON) */}
-                        <div className="shrink-0 p-4 bg-gradient-to-t from-black via-[#111] to-transparent z-30 pb-[env(safe-area-inset-bottom)]">
+                        {/* 2. STATIC FOOTER (GENERATE BUTTON) - HERO BUTTON DESIGN */}
+                        <div className="shrink-0 p-4 bg-[#111] z-30 pb-[env(safe-area-inset-bottom)] border-t border-white/5">
                             {!isProcessing && !isUpscaling && (
-                                <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-2 text-white transition-all active:scale-95 text-sm border border-white/10 relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110'}`}>
-                                    {/* Pulse Animation if ready */}
-                                    {colors.length > 0 && <span className="absolute inset-0 bg-white/20 animate-pulse rounded-xl"></span>}
-                                    <span className="relative flex items-center gap-2">
-                                        <Wand2 size={18} className={generatedPattern ? '' : 'animate-bounce'}/> 
-                                        {generatedPattern ? "Regerar Variação" : "Gerar Estampa"}
-                                    </span>
+                                <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-3 text-white transition-all active:scale-95 text-base relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110 shadow-purple-900/20' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110 shadow-vingi-900/20'}`}>
+                                    {/* Pulse Animation Only if Ready (No pattern yet) */}
+                                    {colors.length > 0 && !generatedPattern && <span className="absolute inset-0 bg-white/20 animate-pulse rounded-xl"></span>}
+                                    
+                                    <div className="relative flex items-center gap-2">
+                                        {generatedPattern ? <RefreshCw size={20}/> : <Play size={20} fill="currentColor" className="animate-pulse"/>}
+                                        {generatedPattern ? "Regerar Variação" : "GERAR ESTAMPA"}
+                                    </div>
                                 </button>
                             )}
                         </div>
