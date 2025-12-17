@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw, Layers, CopyCheck } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 interface AppliedLayer {
@@ -23,7 +23,8 @@ export const MockupStudio: React.FC = () => {
   const [tool, setTool] = useState<'WAND' | 'MOVE' | 'HAND'>('WAND');
   const [tolerance, setTolerance] = useState(40); 
   
-  // UI Controls for Active Layer
+  // UI Controls for Active Layer / Group
+  const [editAll, setEditAll] = useState(false);
   const [activeScale, setActiveScale] = useState(0.5);
   const [activeRotation, setActiveRotation] = useState(0);
   const [activeFlipX, setActiveFlipX] = useState(false);
@@ -87,57 +88,127 @@ export const MockupStudio: React.FC = () => {
   useEffect(() => { if (patternImage) { const img = new Image(); img.src = patternImage; img.crossOrigin = "anonymous"; img.onload = () => setPatternImgObj(img); } }, [patternImage]);
 
   useEffect(() => {
+      // Update UI controls when active layer changes
       if (activeLayerId) {
           const layer = layers.find(l => l.id === activeLayerId);
-          if (layer) { setActiveScale(layer.scale); setActiveRotation(layer.rotation); setActiveFlipX(layer.flipX); setActiveFlipY(layer.flipY); }
+          if (layer) { 
+              setActiveScale(layer.scale); 
+              setActiveRotation(layer.rotation); 
+              setActiveFlipX(layer.flipX); 
+              setActiveFlipY(layer.flipY); 
+          }
       }
   }, [activeLayerId, layers]);
 
-  const updateActiveLayer = (updater: (l: AppliedLayer) => Partial<AppliedLayer>) => {
-      if (!activeLayerId) return;
-      setLayers(prev => prev.map(l => { if (l.id === activeLayerId) return { ...l, ...updater(l) }; return l; }));
+  // Unified Updater: Handles Single or Batch Updates
+  const updateTargetLayers = (updater: (l: AppliedLayer) => Partial<AppliedLayer>) => {
+      if (layers.length === 0) return;
+      
+      setLayers(prev => prev.map(l => { 
+          // If Edit All is ON, or if this is the active layer
+          if (editAll || l.id === activeLayerId) { 
+              return { ...l, ...updater(l) }; 
+          }
+          return l; 
+      }));
   };
 
-  const handleFlipX = () => updateActiveLayer(l => ({ flipX: !l.flipX, offsetX: -l.offsetX })); 
-  const handleFlipY = () => updateActiveLayer(l => ({ flipY: !l.flipY, offsetY: -l.offsetY }));
-  const handleRotate = (val: number) => updateActiveLayer(l => ({ rotation: val }));
-  const handleScale = (val: number) => updateActiveLayer(l => ({ scale: val }));
-  const resetActiveLayer = () => updateActiveLayer(l => ({ scale: 0.5, rotation: 0, offsetX: 0, offsetY: 0, flipX: false, flipY: false }));
+  const handleFlipX = () => {
+      const newVal = !activeFlipX;
+      setActiveFlipX(newVal);
+      updateTargetLayers(l => ({ flipX: newVal, offsetX: -l.offsetX })); 
+  };
+
+  const handleFlipY = () => {
+      const newVal = !activeFlipY;
+      setActiveFlipY(newVal);
+      updateTargetLayers(l => ({ flipY: newVal, offsetY: -l.offsetY }));
+  };
+
+  const handleRotate = (val: number) => {
+      setActiveRotation(val);
+      updateTargetLayers(l => ({ rotation: val }));
+  };
+
+  const handleScale = (val: number) => {
+      setActiveScale(val);
+      updateTargetLayers(l => ({ scale: val }));
+  };
+
+  const resetActiveLayer = () => {
+      setActiveScale(0.5); setActiveRotation(0); setActiveFlipX(false); setActiveFlipY(false);
+      updateTargetLayers(l => ({ scale: 0.5, rotation: 0, offsetX: 0, offsetY: 0, flipX: false, flipY: false }));
+  };
 
   const render = useCallback(() => {
     const canvas = mainCanvasRef.current; const tempCanvas = tempCanvasRef.current;
     if (!canvas || !moldImgObj || !tempCanvas) return;
     const ctx = canvas.getContext('2d', { alpha: false })!; const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
 
+    // 1. Draw Base Mold
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height);
 
+    // 2. Draw Layers
     layers.forEach(layer => {
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Draw Mask
         tempCtx.drawImage(layer.maskCanvas, layer.maskX, layer.maskY);
+        
+        // Clip to Mask
         tempCtx.globalCompositeOperation = 'source-in';
+        
+        // Transform Pattern
         tempCtx.save();
         tempCtx.translate(layer.maskCenter.x, layer.maskCenter.y);
         tempCtx.rotate((layer.rotation * Math.PI) / 180);
         tempCtx.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
         tempCtx.scale(layer.scale, layer.scale);
         tempCtx.translate(layer.offsetX, layer.offsetY);
+        
         if (layer.pattern) { 
             tempCtx.fillStyle = layer.pattern; 
-            const diag = Math.sqrt(layer.maskW**2 + layer.maskH**2); const safeSize = (diag * 1.5) / layer.scale; 
+            // Draw a large enough rect to cover the mask even when scaled down/rotated
+            const diag = Math.sqrt(layer.maskW**2 + layer.maskH**2); 
+            const safeSize = (diag * 1.5) / layer.scale; 
             tempCtx.fillRect(-safeSize, -safeSize, safeSize*2, safeSize*2); 
         }
         tempCtx.restore();
-        ctx.save(); ctx.globalAlpha = 0.92; ctx.drawImage(tempCanvas, 0, 0); ctx.restore();
+        
+        // Composite Layer onto Main Canvas (Multiply/Overlay effect logic could be improved here, but standard is fine)
+        ctx.save(); 
+        ctx.globalAlpha = 0.92; 
+        ctx.drawImage(tempCanvas, 0, 0); 
+        ctx.restore();
 
-        if (layer.id === activeLayerId) {
-            ctx.save(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-            ctx.beginPath(); ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 10 / view.k, 0, Math.PI * 2); // Scale adjust dot
-            ctx.fillStyle = '#3b82f6'; ctx.strokeStyle = 'white'; ctx.lineWidth = 3 / view.k; ctx.shadowBlur = 5; ctx.fill(); ctx.stroke();
+        // Highlight Active Layer(s)
+        if (layer.id === activeLayerId || editAll) {
+            ctx.save(); 
+            ctx.globalAlpha = 1; 
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // Draw Indicator Dot
+            ctx.beginPath(); 
+            ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 10 / view.k, 0, Math.PI * 2); 
+            ctx.fillStyle = editAll ? '#8b5cf6' : '#3b82f6'; // Purple for Group, Blue for Single
+            ctx.strokeStyle = 'white'; 
+            ctx.lineWidth = 3 / view.k; 
+            ctx.shadowBlur = 5; 
+            ctx.fill(); 
+            ctx.stroke();
+            
+            // Optional: Draw bounding box for context? Too noisy. Dot is fine.
             ctx.restore();
         }
     });
-    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height); ctx.restore();
-  }, [moldImgObj, layers, activeLayerId, view.k]);
+
+    // 3. Multiply Shadow/Texture from Mold on top (Multiply blend mode)
+    ctx.save(); 
+    ctx.globalCompositeOperation = 'multiply'; 
+    ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height); 
+    ctx.restore();
+
+  }, [moldImgObj, layers, activeLayerId, editAll, view.k]);
 
   useEffect(() => { requestAnimationFrame(render); }, [render]);
 
@@ -145,17 +216,21 @@ export const MockupStudio: React.FC = () => {
       if (!mainCanvasRef.current || !moldImgObj) return null;
       const canvas = mainCanvasRef.current;
       const width = canvas.width; const height = canvas.height;
+      
+      // Use a temp canvas to read original pixels (ignoring current layers)
       const tempCanvas = document.createElement('canvas'); tempCanvas.width = width; tempCanvas.height = height;
       const tCtx = tempCanvas.getContext('2d')!; tCtx.drawImage(moldImgObj, 0, 0, width, height);
       const data = tCtx.getImageData(0, 0, width, height).data;
-      const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
       
+      const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
+      const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
+      
+      // Basic Flood Fill
       const visited = new Uint8Array(width * height);
       const stack = [[Math.floor(startX), Math.floor(startY)]];
       const tol = tolerance;
       let minX = width, maxX = 0, minY = height, maxY = 0;
       let pixelCount = 0;
-      const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
       const validPixels: number[] = [];
 
       while (stack.length) {
@@ -164,18 +239,26 @@ export const MockupStudio: React.FC = () => {
           if (visited[idx]) continue;
           visited[idx] = 1;
           const pPos = idx * 4;
+          
           const diff = Math.abs(data[pPos] - r0) + Math.abs(data[pPos+1] - g0) + Math.abs(data[pPos+2] - b0);
+          
           if (diff <= tol * 3) {
               validPixels.push(idx); pixelCount++;
               if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
-              if (x > 0) stack.push([x-1, y]); if (x < width - 1) stack.push([x+1, y]); if (y > 0) stack.push([x, y-1]); if (y < height - 1) stack.push([x, y+1]);
+              
+              if (x > 0) stack.push([x-1, y]); 
+              if (x < width - 1) stack.push([x+1, y]); 
+              if (y > 0) stack.push([x, y-1]); 
+              if (y < height - 1) stack.push([x, y+1]);
           }
       }
-      if (pixelCount < 50) return null;
+      
+      if (pixelCount < 50) return null; // Ignore noise
 
       const maskW = maxX - minX + 1; const maskH = maxY - minY + 1;
       const maskCanvas = document.createElement('canvas'); maskCanvas.width = maskW; maskCanvas.height = maskH;
       const mCtx = maskCanvas.getContext('2d')!; const mImgData = mCtx.createImageData(maskW, maskH); const mData = mImgData.data;
+      
       for (const globalIdx of validPixels) {
           const gx = globalIdx % width; const gy = Math.floor(globalIdx / width);
           const lx = gx - minX; const ly = gy - minY;
@@ -213,26 +296,41 @@ export const MockupStudio: React.FC = () => {
       }
 
       if (tool === 'WAND') {
+          // Check if we clicked on an existing layer to select it, instead of creating new mask?
+          // BUT user wants to fill multiple spots.
+          // Let's create mask first. If it overlaps heavily with existing, maybe ignore?
+          // For now, always create.
           const res = createMaskFromClick(x, y);
           if (res) {
               const tempP = document.createElement('canvas');
               const ctxP = tempP.getContext('2d')!;
               const pat = ctxP.createPattern(patternImgObj, 'repeat');
               const newLayer: AppliedLayer = {
-                  id: Date.now().toString(), maskCanvas: res.maskCanvas, maskX: res.minX, maskY: res.minY, maskW: res.maskW, maskH: res.maskH, maskCenter: { x: res.centerX, y: res.centerY },
-                  pattern: pat, offsetX: 0, offsetY: 0, scale: 0.5, rotation: 0, flipX: false, flipY: false, timestamp: Date.now()
+                  id: Date.now().toString(), 
+                  maskCanvas: res.maskCanvas, 
+                  maskX: res.minX, 
+                  maskY: res.minY, 
+                  maskW: res.maskW, 
+                  maskH: res.maskH, 
+                  maskCenter: { x: res.centerX, y: res.centerY },
+                  pattern: pat, 
+                  offsetX: 0, offsetY: 0, 
+                  scale: editAll && layers.length > 0 ? layers[0].scale : 0.5, // Match existing scale if in group mode
+                  rotation: editAll && layers.length > 0 ? layers[0].rotation : 0,
+                  flipX: false, flipY: false, 
+                  timestamp: Date.now()
               };
               setLayers(prev => [...prev, newLayer]); 
               setActiveLayerId(newLayer.id); 
-              // CORREÇÃO: Não mudamos para 'MOVE' automaticamente. O usuário continua no modo preenchimento.
-              // setTool('MOVE'); 
+              // STAY IN WAND MODE for continuous filling
           }
       } else if (tool === 'MOVE') {
           let clickedId = null;
+          // Hit testing (reverse order to find top-most)
           for (let i = layers.length - 1; i >= 0; i--) {
               const l = layers[i];
               const dist = Math.sqrt((x - l.maskCenter.x)**2 + (y - l.maskCenter.y)**2);
-              if (dist < 50 / view.k) { clickedId = l.id; break; } // Hit area scales with zoom
+              if (dist < 50 / view.k) { clickedId = l.id; break; }
           }
           if (clickedId) { setActiveLayerId(clickedId); isDragging.current = true; } 
           else { setActiveLayerId(null); }
@@ -260,24 +358,29 @@ export const MockupStudio: React.FC = () => {
       const dxCanvas = (clientX - lastPos.current.x) * scale;
       const dyCanvas = (clientY - lastPos.current.y) * scale;
       
-      updateActiveLayer(layer => {
+      updateTargetLayers(layer => {
           const angleRad = (layer.rotation * Math.PI) / 180;
           let dxLocal = dxCanvas * Math.cos(angleRad) + dyCanvas * Math.sin(angleRad);
           let dyLocal = -dxCanvas * Math.sin(angleRad) + dyCanvas * Math.cos(angleRad);
-          if (layer.flipX) dxLocal = -dxLocal; if (layer.flipY) dyLocal = -dyLocal; 
-          dxLocal /= layer.scale; dyLocal /= layer.scale;
+          
+          if (layer.flipX) dxLocal = -dxLocal; 
+          if (layer.flipY) dyLocal = -dyLocal; 
+          
+          dxLocal /= layer.scale; 
+          dyLocal /= layer.scale;
+          
           return { offsetX: layer.offsetX + dxLocal, offsetY: layer.offsetY + dyLocal };
       });
       lastPos.current = { x: clientX, y: clientY };
   };
 
+  // Standard Touch Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
       if (e.touches.length === 2) {
           e.preventDefault();
           const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
           lastDistRef.current = dist;
       } else {
-          // Pass single touch to pointer down
           handlePointerDown(e);
       }
   };
@@ -317,7 +420,6 @@ export const MockupStudio: React.FC = () => {
               <ModuleLandingPage icon={Shirt} title="Mockup Técnico" description="Ferramenta de engenharia para aplicação de estampas em moldes de corte." primaryActionLabel="Carregar Molde/Peça" onPrimaryAction={() => moldInputRef.current?.click()} features={["Preenchimento Inteligente", "Controle de Fio", "Escala Real", "Espelhamento"]} />
           </div>
       ) : (
-          // MAIN LAYOUT FIX: FLEX COLUMN to keep Toolbar Visible
           <div className="flex-1 flex flex-col relative h-full">
               {/* CANVAS AREA (Takes remaining space) */}
               <div 
@@ -397,19 +499,29 @@ export const MockupStudio: React.FC = () => {
                           <button onClick={() => setTool('WAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='WAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Wand2 size={16}/> PREENCHER</button>
                           <button onClick={() => setTool('MOVE')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='MOVE' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Move size={16}/> AJUSTAR</button>
                       </div>
+                      
+                      {/* NEW: GROUP EDIT TOGGLE */}
+                      <button 
+                        onClick={() => setEditAll(!editAll)} 
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all shrink-0 border ${editAll ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-gray-500 border-gray-200'}`}
+                      >
+                        {editAll ? <Layers size={16}/> : <CopyCheck size={16}/>}
+                        {editAll ? 'EDITAR TODOS' : 'EDITAR ÚNICO'}
+                      </button>
+
                       <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-vingi-900 text-white rounded-lg text-xs font-bold shadow-md hover:bg-vingi-800 shrink-0"><Download size={16}/> Exportar</button>
                   </div>
 
-                  {/* ACTIVE LAYER CONTROLS (Only visible when layer active) */}
-                  {activeLayerId && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center bg-gray-50 animate-fade-in border-b border-gray-200">
+                  {/* ACTIVE LAYER CONTROLS (Visible when layer active OR editing all) */}
+                  {(activeLayerId || editAll) && (
+                      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center animate-fade-in border-b border-gray-200 ${editAll ? 'bg-purple-50' : 'bg-gray-50'}`}>
                           <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase">Rotação ({activeRotation}°)</label>
-                              <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
+                              <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} className={`w-full h-2 rounded-lg appearance-none ${editAll ? 'bg-purple-200 accent-purple-600' : 'bg-gray-200 accent-vingi-600'}`}/>
                           </div>
                           <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase">Escala ({Math.round(activeScale * 100)}%)</label>
-                              <input type="range" min="0.1" max="3" step="0.1" value={activeScale} onChange={(e) => handleScale(parseFloat(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
+                              <input type="range" min="0.1" max="3" step="0.1" value={activeScale} onChange={(e) => handleScale(parseFloat(e.target.value))} className={`w-full h-2 rounded-lg appearance-none ${editAll ? 'bg-purple-200 accent-purple-600' : 'bg-gray-200 accent-vingi-600'}`}/>
                           </div>
                           <div className="flex gap-2">
                               <button onClick={handleFlipX} className={`flex-1 py-2 border rounded-lg flex items-center justify-center ${activeFlipX ? 'bg-vingi-200 border-vingi-300' : 'bg-white border-gray-300'}`} title="Espelhar H"><FlipHorizontal size={18}/></button>
