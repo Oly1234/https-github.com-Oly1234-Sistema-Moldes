@@ -3,7 +3,7 @@
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
 import { GoogleGenAI } from "@google/genai";
 
-export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '') => {
+export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL') => {
     const ai = new GoogleGenAI({ apiKey });
 
     // 1. Contexto de Cor (Se disponível)
@@ -11,114 +11,122 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
         ? `STRICT PALETTE: ${colors.map(c => c.name).join(', ')}. Dominant tones: ${colors.slice(0,2).map(c => c.hex).join(', ')}.` 
         : "Use colors that match the requested theme.";
 
-    // 2. Contexto de Layout (Aprimorado para Nível Profissional com Sub-Layouts)
+    // 2. Contexto de Estilo Artístico (NOVO)
+    let artStyleInstruction = "";
+    switch (artStyle) {
+        case 'WATERCOLOR': 
+            artStyleInstruction = "ART STYLE: WET WATERCOLOR PAINTING. Translucent washes, bleeding edges, soft gradients, paper texture visible. No hard outlines."; 
+            break;
+        case 'GIZ': 
+            artStyleInstruction = "ART STYLE: DRY PASTEL / CHALK. Textured strokes, dusty appearance, soft blending, rough paper grain."; 
+            break;
+        case 'ACRILICA': 
+            artStyleInstruction = "ART STYLE: ACRYLIC IMPASTO. Thick visible brushstrokes, vibrant opaque colors, slight texture relief, expressive painterly look."; 
+            break;
+        case 'VETOR': 
+            artStyleInstruction = "ART STYLE: FLAT VECTOR ILLUSTRATION. Clean sharp lines, solid fills, no gradients, no texture. Minimalist and modern."; 
+            break;
+        case 'BORDADO': 
+            artStyleInstruction = "ART STYLE: EMBROIDERY / NEEDLEWORK. Render the design as stitched threads on fabric. Satin stitch, cross-stitch details. Tactile texture."; 
+            break;
+        case 'LINHA': 
+            artStyleInstruction = "ART STYLE: LINE ART / INK SKETCH. Black outline only (or monochrome), etching style, detailed hatching. No fills."; 
+            break;
+        case 'ORNAMENTAL': 
+            artStyleInstruction = "ART STYLE: BAROQUE ORNAMENTAL. Highly intricate filigree, flourishes, luxury detailing, damask complexity."; 
+            break;
+        default: 
+            artStyleInstruction = "ART STYLE: Maintain the aesthetic style of the original reference.";
+            break;
+    }
+
+    // 3. Contexto de Layout (Aprimorado)
     let layoutInstruction = "Seamless repeat pattern (All-over/Corrida).";
     
-    // Mapeamento de Estilos de Layout com Estrutura Rígida
     if (layoutStyle && layoutStyle !== 'ORIGINAL') {
         switch (layoutStyle) {
             case 'BARRADO':
                 layoutInstruction = `
                 LAYOUT: HORIZONTAL BORDER PRINT (Barrado). 
                 STRUCTURE:
-                - BOTTOM 35%: Heavy, intricate, highly detailed border artwork.
-                - TOP 65%: Lighter field, sparse motifs, or fading gradient.
-                - VISUAL GRAVITY: The visual weight must be at the bottom edge.
-                ${subLayoutStyle ? `SUB-STYLE: ${subLayoutStyle}.` : ''}
-                ${subLayoutStyle === 'DUPLO' ? 'MIRRORED BORDER: Identical heavy borders on BOTH Top and Bottom edges.' : ''}
-                ${subLayoutStyle === 'DEGRADE' ? 'GRADIENT FLOW: Motifs must visually dissolve/fade from heavy bottom to empty top.' : ''}
+                - VISUAL GRAVITY: Heavy, intricate motifs at the BOTTOM edge.
+                - Flowing upwards into negative space or lighter motifs.
+                ${subLayoutStyle === 'DUPLO' ? 'SUB-STYLE: MIRRORED BORDER. Identical heavy borders on BOTH Top and Bottom edges.' : ''}
+                ${subLayoutStyle === 'DEGRADE' ? 'SUB-STYLE: GRADIENT FADE. Motifs visually dissolve from bottom to top.' : ''}
+                ${subLayoutStyle === 'SIMPLES' ? 'SUB-STYLE: SINGLE HEM BORDER. Clear definition at the hem.' : ''}
                 `;
                 break;
             case 'LENCO':
                 layoutInstruction = `
-                LAYOUT: LUXURY SILK SCARF (Foulard/Carré Style).
+                LAYOUT: ENGINEERED SQUARE SCARF (Foulard/Carré).
                 GEOMETRY: Perfectly SYMMETRICAL Square Composition.
-                STRUCTURE:
-                1. FRAME: A distinct, ornate outer border (frame) running equally along ALL 4 EDGES.
-                2. CORNERS: Elaborate decorative motifs mirrored in all 4 corners.
-                3. CENTER: A strong central medallion or focal illustration.
-                4. FILLER: Connecting motifs between the center and the border.
-                VIBE: High-end fashion (Hermès/Versace style).
-                ${subLayoutStyle ? `SUB-STYLE: ${subLayoutStyle}.` : ''}
-                ${subLayoutStyle === 'MEDALHAO' ? 'FOCUS: Massive, intricate central medallion. Symmetrical radiation.' : ''}
-                ${subLayoutStyle === 'BANDANA' ? 'FOCUS: Paisley/Ornamental concentric frames. Classic Bandana layout.' : ''}
-                ${subLayoutStyle === 'GEOMETRICO' ? 'FOCUS: Art Deco/Bauhaus rigid symmetry. No organic flow.' : ''}
+                MANDATORY: A distinct outer border frame enclosing the design.
+                ${subLayoutStyle === 'MEDALHAO' ? 'SUB-STYLE: MEDALLION. Massive, intricate central circular motif radiating outwards.' : ''}
+                ${subLayoutStyle === 'BANDANA' ? 'SUB-STYLE: BANDANA/PAISLEY. Concentric frames with paisley teardrops in corners.' : ''}
+                ${subLayoutStyle === 'LISTRADO' ? 'SUB-STYLE: STRIPED/GEOMETRIC BORDERS. Bold concentric square stripes forming the frame.' : ''}
+                ${subLayoutStyle === 'FLORAL' ? 'SUB-STYLE: FLORAL FRAME. Vines and flowers forming the border, lighter center.' : ''}
                 `;
                 break;
             case 'LOCALIZADA':
                 layoutInstruction = `
-                LAYOUT: PLACED PRINT (Localizada/T-shirt Graphic).
-                STRUCTURE: Single isolated artwork centered on a solid background. 
-                - NOT a repeating pattern.
-                - NOT a full coverage print.
-                - Clear negative space around the central subject.
+                LAYOUT: PLACED PRINT (T-Shirt Graphic).
+                STRUCTURE: Single isolated artwork centered on a solid background. Clear negative space. NOT A PATTERN.
                 `;
                 break;
             case 'PAREO':
                 layoutInstruction = `
-                LAYOUT: BEACH PAREO/SARONG PANEL.
-                STRUCTURE: Large scale rectangular panel design.
-                - Highly decorative borders.
-                - Tropical/Summer flow.
-                - Designed to be worn wrapped around the body.
+                LAYOUT: BEACH PAREO (Sarong) PANEL (Vertical Rectangle).
+                STRUCTURE: Large scale tropical/ornamental design framed for a vertical fabric panel.
                 `;
                 break;
             case 'CORRIDA':
                 layoutInstruction = `
                 LAYOUT: ALL-OVER SEAMLESS REPEAT.
-                ${subLayoutStyle === 'TOSS' ? 'STYLE: Tossed layout. Motifs scattered randomly with varying rotations. No obvious grid.' : ''}
-                ${subLayoutStyle === 'GRID' ? 'STYLE: Grid/Geometric alignment. Motifs aligned in rows/columns.' : ''}
-                ${subLayoutStyle === 'ORGANIC' ? 'STYLE: Organic Flow. Vines/Waves connecting motifs continuously.' : ''}
+                ${subLayoutStyle === 'TOSS' ? 'SUB-STYLE: TOSSED. Elements scattered randomly, various rotations.' : ''}
+                ${subLayoutStyle === 'GRID' ? 'SUB-STYLE: GRID. Elements aligned in strict rows/columns.' : ''}
+                ${subLayoutStyle === 'ORGANIC' ? 'SUB-STYLE: ORGANIC FLOW. Continuous connecting vines/waves.' : ''}
                 `;
                 break;
         }
-    } else if (selvedgeInfo && selvedgeInfo !== 'NENHUMA') {
-        // Fallback para a lógica antiga de Ourela
-        layoutInstruction = `BORDER PRINT (Barrado). The design must have a decorative border aligned to the ${selvedgeInfo === 'Inferior' ? 'BOTTOM' : selvedgeInfo === 'Superior' ? 'TOP' : 'SIDE'} edge.`;
     }
 
-    // 3. SELEÇÃO DE TÉCNICA (CILINDRO VS DIGITAL)
+    // 4. SELEÇÃO DE TÉCNICA (CILINDRO VS DIGITAL)
     let TECHNIQUE_RULES = "";
-    
     if (technique === 'DIGITAL') {
-        // MODO DIGITAL: Profundidade, Detalhe, Sem Trama
         TECHNIQUE_RULES = `
-        STYLE: High-Fidelity Digital Print.
-        FEATURES: Rich details, depth of field, volumetric lighting, gradients, soft shadows, tone-on-tone overlay, 3D relief effects.
-        CRITICAL FORBIDDEN: DO NOT RENDER FABRIC TEXTURE. DO NOT RENDER WEAVE. DO NOT RENDER CANVAS GRAIN. The artwork must be pure graphics on a smooth background.
-        VIBE: Luxurious, complex, cinematic lighting, sophisticated shading.
+        PRINT TECH: DIGITAL PRINTING (Sublimation/Direct).
+        FEATURES: High fidelity, millions of colors, gradients allowed, photo-realistic details allowed.
         `;
     } else {
-        // MODO CILINDRO (Padrão): Chapado, Vetorial
-        // Lógica de Cores Indexadas
         const colorLimitInstruction = (colorCount > 0 && colorCount <= 12) 
-            ? `RESTRICTION: Reduce entire artwork to EXACTLY ${colorCount} DISTINCT SPOT COLORS (plus background). No gradients, no blending.` 
-            : "Use a limited spot color palette suitable for screen printing.";
+            ? `RESTRICTION: Reduce artwork to EXACTLY ${colorCount} SPOT COLORS.` 
+            : "Use a limited spot color palette.";
 
         TECHNIQUE_RULES = `
-        STYLE: Flat 2D Vector Art, Screen Printing (Rotary Screen) Style.
-        FEATURES: Clean lines, solid colors, high contrast, hard edges.
+        PRINT TECH: ROTARY SCREEN (Cilindro/Silk).
+        FEATURES: Flat solid colors, no gradients, no blending, clear separation between colors.
         ${colorLimitInstruction}
-        CRITICAL FORBIDDEN: NO Gradients, NO Shadows, NO Blur, NO 3D effects, NO Texture.
-        VIBE: Industrial, clean, ready for color separation/engraving.
         `;
     }
 
-    // 4. Prompt Final
+    // 5. Prompt Final
     const FULL_PROMPT = `Generate a professional textile pattern design.
     
     THEME/SUBJECT: ${prompt}.
-    REQUIRED LAYOUT: ${layoutInstruction}
+    
+    ${layoutInstruction}
+    
+    ${artStyleInstruction}
+    
     ${colorContext}
     
-    TECHNICAL SPECIFICATIONS (${technique} MODE):
+    TECHNICAL SPECS:
     ${TECHNIQUE_RULES}
     
     VISUAL RULES:
     - CLOSE-UP ARTWORK (Top-down view).
     - NO human models, NO mannequins, NO 3D garments.
-    - NO realistic photos of people.
-    - Image must be a flat rectangular/square swatch ready for printing.
+    - Image must be a flat rectangular/square swatch.
     `;
 
     try {
@@ -126,7 +134,7 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
             model: 'gemini-2.5-flash-image',
             contents: { parts: [{ text: FULL_PROMPT }] },
             config: {
-                imageConfig: { aspectRatio: layoutStyle === 'PAREO' ? "9:16" : "1:1" } // Pareô vertical, resto quadrado
+                imageConfig: { aspectRatio: layoutStyle === 'PAREO' ? "9:16" : "1:1" }
             }
         });
 
@@ -140,16 +148,11 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
             }
         }
 
-        if (!imageUrl) {
-            const textPart = response.candidates?.[0]?.content?.parts?.find(p => p.text);
-            if (textPart) console.warn("Recusa da IA:", textPart.text);
-            throw new Error("A IA não gerou a imagem. Tente simplificar o termo (Ex: 'Floral' em vez de 'Vestido Floral').");
-        }
-
+        if (!imageUrl) throw new Error("A IA não gerou a imagem.");
         return imageUrl;
 
     } catch (e) {
-        console.error("Erro no Gerador SDK:", e);
+        console.error("Generator Error:", e);
         throw e;
     }
 };

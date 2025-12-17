@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Wand2, Download, Eraser, Shirt, Move, FlipHorizontal, FlipVertical, RotateCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw, Layers, CopyCheck, Undo2, Redo2, Sliders, Check, X } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Eraser, Shirt, Move, FlipHorizontal, FlipVertical, RotateCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw, Layers, CopyCheck, Undo2, Redo2, Sliders, Check, X, BoxSelect, Grip, Maximize2, Grid } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 interface AppliedLayer {
@@ -8,6 +8,7 @@ interface AppliedLayer {
   maskCanvas: HTMLCanvasElement;
   maskX: number; maskY: number; maskW: number; maskH: number; maskCenter: { x: number, y: number };
   pattern: CanvasPattern | null;
+  patternSrc?: string; // Store source for UI feedback
   offsetX: number; offsetY: number; scale: number; rotation: number; flipX: boolean; flipY: boolean;
   timestamp?: number;
 }
@@ -25,14 +26,14 @@ export const MockupStudio: React.FC = () => {
 
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   
-  // Tools: 'WAND' (Fill), 'ADJUST' (Scale/Rot), 'HAND' (View)
+  // Tools: 'WAND' (Fill), 'ADJUST' (Scale/Rot/Mode), 'HAND' (View)
   const [activeTool, setActiveTool] = useState<'WAND' | 'ADJUST' | 'HAND'>('WAND');
   const [tolerance, setTolerance] = useState(40); 
   
   // Global Modifiers
   const [editAll, setEditAll] = useState(true);
   
-  // Active Adjustment Values (Reflects current selection or global)
+  // Active Adjustment Values
   const [activeScale, setActiveScale] = useState(0.5);
   const [activeRotation, setActiveRotation] = useState(0);
 
@@ -149,6 +150,11 @@ export const MockupStudio: React.FC = () => {
       updateTargetLayers(l => ({ scale: val }), commit);
   };
 
+  const handleModeSwitch = (mode: 'ALL' | 'SINGLE') => {
+      setEditAll(mode === 'ALL');
+      if (mode === 'ALL') setActiveLayerId(null);
+  };
+
   // --- RENDERER (FIXED) ---
   const render = useCallback(() => {
     const canvas = mainCanvasRef.current; 
@@ -164,7 +170,6 @@ export const MockupStudio: React.FC = () => {
 
     // 2. Draw Layers
     layers.forEach(layer => {
-        // CRITICAL FIX: Reset composite operation before drawing new mask
         tempCtx.globalCompositeOperation = 'source-over'; 
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         
@@ -184,7 +189,7 @@ export const MockupStudio: React.FC = () => {
         if (layer.pattern) { 
             tempCtx.fillStyle = layer.pattern; 
             const diag = Math.sqrt(layer.maskW**2 + layer.maskH**2); 
-            const safeSize = (diag * 2) / layer.scale; // Doubled safety margin
+            const safeSize = (diag * 2) / layer.scale; 
             tempCtx.fillRect(-safeSize, -safeSize, safeSize*2, safeSize*2); 
         }
         tempCtx.restore();
@@ -210,7 +215,7 @@ export const MockupStudio: React.FC = () => {
         }
     });
 
-    // 3. Multiply Shadows (Texture Overlay)
+    // 3. Multiply Shadows
     ctx.save(); 
     ctx.globalCompositeOperation = 'multiply'; 
     ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height); 
@@ -220,7 +225,26 @@ export const MockupStudio: React.FC = () => {
 
   useEffect(() => { requestAnimationFrame(render); }, [render]);
 
-  // --- FLOOD FILL ---
+  // --- INTERACTION & ZOOM LOGIC ---
+  const handleWheel = (e: React.WheelEvent) => {
+      if (e.ctrlKey || activeTool === 'HAND') { 
+          e.preventDefault();
+          const rect = containerRef.current!.getBoundingClientRect();
+          // Calculate mouse pos relative to canvas view
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          
+          const s = Math.exp(-e.deltaY * 0.001);
+          const newK = Math.min(Math.max(0.1, view.k * s), 8);
+          
+          // Zoom towards mouse pointer
+          const dx = (mouseX - view.x) * (newK / view.k - 1);
+          const dy = (mouseY - view.y) * (newK / view.k - 1);
+
+          setView({ k: newK, x: view.x - dx, y: view.y - dy });
+      }
+  };
+
   const createMaskFromClick = (startX: number, startY: number) => {
       if (!mainCanvasRef.current || !moldImgObj) return null;
       const width = mainCanvasRef.current.width; const height = mainCanvasRef.current.height;
@@ -270,8 +294,12 @@ export const MockupStudio: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-      const x = (clientX - rect.left) * (canvas.width / rect.width);
-      const y = (clientY - rect.top) * (canvas.height / rect.height);
+      
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (clientX - rect.left) * scaleX;
+      const y = (clientY - rect.top) * scaleY;
+      
       lastPos.current = { x: clientX, y: clientY };
 
       if (activeTool === 'HAND' || ('buttons' in e && e.buttons === 4)) {
@@ -287,12 +315,14 @@ export const MockupStudio: React.FC = () => {
               const newLayer: AppliedLayer = {
                   id: Date.now().toString(), maskCanvas: res.maskCanvas, 
                   maskX: res.minX, maskY: res.minY, maskW: res.maskW, maskH: res.maskH, maskCenter: { x: res.centerX, y: res.centerY },
-                  pattern: pat, offsetX: 0, offsetY: 0, 
+                  pattern: pat, patternSrc: patternImage!, offsetX: 0, offsetY: 0, 
                   scale: activeScale, rotation: activeRotation, flipX: false, flipY: false, timestamp: Date.now()
               };
               const nextLayers = [...layers, newLayer];
               saveToHistory(nextLayers);
+              // Auto-select the newly created layer and switch to Single Edit mode implicitly for UX
               setActiveLayerId(newLayer.id); 
+              setEditAll(false); 
           }
       } else if (activeTool === 'ADJUST') {
           let clickedId = null;
@@ -300,8 +330,15 @@ export const MockupStudio: React.FC = () => {
               const l = layers[i];
               if (Math.sqrt((x - l.maskCenter.x)**2 + (y - l.maskCenter.y)**2) < 50 / view.k) { clickedId = l.id; break; }
           }
-          if (clickedId) { setActiveLayerId(clickedId); isDragging.current = true; } 
-          else setActiveLayerId(null);
+          if (clickedId) { 
+              setActiveLayerId(clickedId); 
+              setEditAll(false); // Implicitly switch to single edit when clicking an object
+              isDragging.current = true; 
+          } else {
+              // Clicked empty space? Deselect or switch to Global?
+              // setActiveLayerId(null); 
+              // setEditAll(true); 
+          }
       }
   };
 
@@ -335,12 +372,12 @@ export const MockupStudio: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#111827] overflow-hidden text-white">
+    <div className="flex flex-col h-full w-full bg-[#000000] overflow-hidden text-white">
       {/* HEADER COMPACTO */}
-      <div className="bg-[#1f2937] px-4 py-2 flex items-center justify-between border-b border-gray-700 shrink-0 z-50">
+      <div className="bg-[#111111] px-4 py-2 flex items-center justify-between border-b border-gray-900 shrink-0 z-50 h-14">
           <div className="flex items-center gap-2"><Shirt size={18} className="text-vingi-400"/><span className="font-bold text-sm">Mockup Studio</span></div>
           <div className="flex gap-2">
-              <button onClick={() => { setMoldImage(null); setLayers([]); }} className="text-[10px] bg-gray-700 px-3 py-1.5 rounded hover:bg-gray-600">Novo</button>
+              <button onClick={() => { setMoldImage(null); setLayers([]); }} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium">Novo</button>
               <button onClick={handleDownload} className="text-[10px] bg-vingi-600 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-500 flex items-center gap-1"><Download size={12}/> Salvar</button>
           </div>
       </div>
@@ -351,12 +388,12 @@ export const MockupStudio: React.FC = () => {
               <ModuleLandingPage icon={Shirt} title="Mockup Técnico" description="Aplicação de estampas em moldes de corte." primaryActionLabel="Carregar Molde" onPrimaryAction={() => moldInputRef.current?.click()} />
           </div>
       ) : (
-          <div className="flex-1 flex flex-col relative h-full">
+          <div className="flex-1 flex flex-col relative min-h-0 bg-[#050505]">
               {/* CANVAS */}
               <div 
                 ref={containerRef} 
-                className={`flex-1 bg-[#0f172a] relative flex items-center justify-center overflow-hidden touch-none ${activeTool==='HAND'?'cursor-grab active:cursor-grabbing': activeTool==='WAND' ? 'cursor-cell' : 'cursor-default'}`} 
-                onWheel={(e) => { if(e.ctrlKey || activeTool==='HAND') { e.preventDefault(); const s=Math.exp(-e.deltaY*0.001); setView(v=>({...v, k:Math.min(Math.max(0.1,v.k*s),8)})); }}}
+                className={`flex-1 relative flex items-center justify-center overflow-hidden touch-none ${activeTool==='HAND'?'cursor-grab active:cursor-grabbing': activeTool==='WAND' ? 'cursor-cell' : 'cursor-default'}`} 
+                onWheel={handleWheel}
                 onTouchStart={(e) => { if(e.touches.length===2) { e.preventDefault(); lastDistRef.current=Math.sqrt((e.touches[0].clientX-e.touches[1].clientX)**2+(e.touches[0].clientY-e.touches[1].clientY)**2); } else handlePointerDown(e); }} 
                 onTouchMove={(e) => { if(e.touches.length===2) { e.preventDefault(); const d=Math.sqrt((e.touches[0].clientX-e.touches[1].clientX)**2+(e.touches[0].clientY-e.touches[1].clientY)**2); setView(v=>({...v, k:Math.min(Math.max(0.1,v.k*(d/lastDistRef.current)),8)})); lastDistRef.current=d; } else handlePointerMove(e); }}
                 onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={() => { isDragging.current=false; isPanning.current=false; }}
@@ -365,16 +402,21 @@ export const MockupStudio: React.FC = () => {
                       <canvas ref={mainCanvasRef} className="block bg-white" />
                   </div>
 
-                  {/* FLOATING ZOOM CONTROLS */}
-                  <div className="absolute top-4 right-4 flex flex-col gap-2 bg-black/50 backdrop-blur rounded-lg p-1.5 z-30 border border-white/10">
-                      <button onClick={()=>setView(v=>({...v, k: Math.min(v.k*1.2, 8)}))} className="p-1.5 hover:bg-white/20 rounded text-white"><ZoomIn size={16}/></button>
-                      <button onClick={()=>setView(v=>({...v, k: Math.max(v.k*0.8, 0.1)}))} className="p-1.5 hover:bg-white/20 rounded text-white"><ZoomOut size={16}/></button>
-                      <button onClick={()=>{ if(containerRef.current && moldImgObj) { const rect = containerRef.current.getBoundingClientRect(); setView({x:0, y:0, k: Math.min(rect.width/moldImgObj.width, rect.height/moldImgObj.height)*0.9}); } }} className="p-1.5 hover:bg-white/20 rounded text-white"><RotateCcw size={16}/></button>
-                  </div>
+                  {/* ACTIVE PATTERN INDICATOR */}
+                  {patternImage && (
+                      <div className="absolute top-4 left-4 z-30 animate-fade-in group">
+                          <div className="relative w-12 h-12 rounded-full border-2 border-white/20 shadow-lg overflow-hidden cursor-pointer hover:scale-110 transition-transform bg-black" onClick={() => patternInputRef.current?.click()}>
+                              <img src={patternImage} className="w-full h-full object-cover opacity-80" />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <RefreshCw size={14} className="text-white"/>
+                              </div>
+                          </div>
+                      </div>
+                  )}
 
                   {/* PATTERN SELECTOR (IF EMPTY) */}
                   {!patternImage && (
-                      <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-40 backdrop-blur-sm">
+                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 backdrop-blur-sm">
                           <button onClick={() => patternInputRef.current?.click()} className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 hover:scale-105 transition-transform"><UploadCloud size={20}/> Selecionar Estampa</button>
                       </div>
                   )}
@@ -382,79 +424,62 @@ export const MockupStudio: React.FC = () => {
               </div>
 
               {/* --- INSHOT STYLE TOOLBAR --- */}
-              <div className="bg-[#1f2937] border-t border-gray-800 flex flex-col shrink-0 z-50 shadow-[0_-5px_30px_rgba(0,0,0,0.5)]">
-                  
-                  {/* UPPER SLIDER PANEL (CONTEXTUAL) */}
-                  {activeTool === 'ADJUST' && (
-                      <div className="bg-[#111827] p-4 flex flex-col gap-4 animate-slide-up border-b border-gray-800">
-                          <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-gray-400 uppercase">Modo de Edição</span>
-                              <button onClick={() => setEditAll(!editAll)} className={`text-[10px] font-bold px-3 py-1 rounded-full border flex items-center gap-1 transition-colors ${editAll ? 'bg-purple-900/50 text-purple-300 border-purple-500' : 'bg-transparent text-gray-500 border-gray-600'}`}>
-                                  {editAll ? <Layers size={12}/> : <CopyCheck size={12}/>} {editAll ? 'Aplicar em Todos' : 'Somente Seleção'}
-                              </button>
+              {/* STATUS BAR: SINGLE VS ALL MODE (PERSISTENT & CLEAR) */}
+              <div className="bg-black/95 backdrop-blur-sm px-4 py-2 flex justify-center items-center shrink-0 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+                  <div className="bg-gray-900 rounded-full p-0.5 flex items-center border border-gray-800">
+                      <button 
+                          onClick={() => handleModeSwitch('ALL')} 
+                          className={`px-4 py-1 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-1 ${editAll ? 'bg-gray-700 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                          <Grid size={10} /> Todos
+                      </button>
+                      <button 
+                          onClick={() => handleModeSwitch('SINGLE')}
+                          className={`px-4 py-1 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-1 ${!editAll ? 'bg-vingi-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                          <BoxSelect size={10} /> Seleção {activeLayerId ? '' : '(Clique no molde)'}
+                      </button>
+                  </div>
+              </div>
+
+              {/* SLIDERS CONTEXTUAL PANEL */}
+              {activeTool === 'ADJUST' && (
+                  <div className="bg-black px-6 py-4 flex flex-col gap-4 animate-slide-up shrink-0 z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.8)] border-t border-white/5">
+                      <div className="flex gap-6">
+                          <div className="space-y-1 flex-1">
+                              <div className="flex justify-between text-[9px] text-gray-400 font-bold uppercase"><span>Escala</span><span>{Math.round(activeScale*100)}%</span></div>
+                              <input type="range" min="0.1" max="3" step="0.1" value={activeScale} onChange={(e) => handleScale(parseFloat(e.target.value))} onMouseUp={(e) => handleScale(parseFloat((e.target as HTMLInputElement).value), true)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-white cursor-pointer"/>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                  <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase"><span>Escala</span><span>{Math.round(activeScale*100)}%</span></div>
-                                  <input type="range" min="0.1" max="3" step="0.1" value={activeScale} onChange={(e) => handleScale(parseFloat(e.target.value))} onMouseUp={(e) => handleScale(parseFloat((e.target as HTMLInputElement).value), true)} className="w-full h-1 bg-gray-600 rounded-lg appearance-none accent-vingi-500"/>
-                              </div>
-                              <div className="space-y-1">
-                                  <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase"><span>Rotação</span><span>{activeRotation}°</span></div>
-                                  <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} onMouseUp={(e) => handleRotate(parseInt((e.target as HTMLInputElement).value), true)} className="w-full h-1 bg-gray-600 rounded-lg appearance-none accent-vingi-500"/>
-                              </div>
+                          <div className="space-y-1 flex-1">
+                              <div className="flex justify-between text-[9px] text-gray-400 font-bold uppercase"><span>Rotação</span><span>{activeRotation}°</span></div>
+                              <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} onMouseUp={(e) => handleRotate(parseInt((e.target as HTMLInputElement).value), true)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-white cursor-pointer"/>
                           </div>
                       </div>
-                  )}
+                  </div>
+              )}
 
-                  {/* BOTTOM ICONS SCROLL - FIXED SCROLLBAR ISSUE */}
+              {/* BOTTOM DOCK (INSHOT STYLE) - COMPACT & DARK */}
+              <div className="bg-black flex flex-col shrink-0 z-50 pb-[env(safe-area-inset-bottom)] border-t border-white/5">
                   <div className="w-full overflow-hidden relative">
-                      <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-[#1f2937] to-transparent z-10 pointer-events-none"></div>
-                      <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-[#1f2937] to-transparent z-10 pointer-events-none"></div>
-
-                      <div className="flex items-center gap-3 px-4 py-3 overflow-x-auto w-full no-scrollbar pb-safe-offset" 
+                      <div className="flex items-center justify-between px-4 py-2 overflow-x-auto w-full no-scrollbar gap-4" 
                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
-                          <style>{`
-                            .no-scrollbar::-webkit-scrollbar { 
-                                display: none !important; 
-                                height: 0px !important;
-                                background: transparent !important;
-                            }
-                            .no-scrollbar {
-                                -ms-overflow-style: none;
-                                scrollbar-width: none;
-                                touch-action: pan-x;
-                            }
-                            .pb-safe-offset {
-                                padding-bottom: max(1rem, env(safe-area-inset-bottom));
-                            }
-                          `}</style>
+                          <style>{`.no-scrollbar::-webkit-scrollbar { display: none !important; width: 0 !important; }`}</style>
                           
-                          {/* TOOL GROUP */}
-                          <div className="flex items-center gap-1 shrink-0">
-                              <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
-                              <ToolBtn icon={Sliders} label="Ajustar" active={activeTool==='ADJUST'} onClick={() => setActiveTool('ADJUST')} />
-                              <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
-                          </div>
+                          <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
+                          <ToolBtn icon={Sliders} label="Ajustar" active={activeTool==='ADJUST'} onClick={() => setActiveTool('ADJUST')} />
+                          <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
                           
-                          <div className="w-px h-8 bg-gray-700 mx-1 shrink-0"></div>
+                          <div className="w-px h-6 bg-gray-800 shrink-0 mx-1"></div>
 
-                          {/* ACTION GROUP */}
-                          <div className="flex items-center gap-1 shrink-0">
-                              <ToolBtn icon={FlipHorizontal} label="Espelhar H" onClick={handleFlipX} />
-                              <ToolBtn icon={FlipVertical} label="Espelhar V" onClick={handleFlipY} />
-                              <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => patternInputRef.current?.click()} highlight />
-                          </div>
+                          <ToolBtn icon={FlipHorizontal} label="Espelhar H" onClick={handleFlipX} />
+                          <ToolBtn icon={FlipVertical} label="Espelhar V" onClick={handleFlipY} />
+                          <ToolBtn icon={RotateCcw} label="Girar +90" onClick={() => handleRotate((activeRotation + 90) % 360, true)} />
+                          <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => patternInputRef.current?.click()} />
 
-                          <div className="w-px h-8 bg-gray-700 mx-1 shrink-0"></div>
+                          <div className="w-px h-6 bg-gray-800 shrink-0 mx-1"></div>
 
-                          {/* HISTORY GROUP */}
-                          <div className="flex items-center gap-1 shrink-0">
-                              <ToolBtn icon={Undo2} onClick={undo} disabled={historyIndex <= -1} />
-                              <ToolBtn icon={Redo2} onClick={redo} disabled={historyIndex >= history.length - 1} />
-                              <ToolBtn icon={Eraser} onClick={() => { const newL = layers.filter(x => x.id !== activeLayerId); saveToHistory(newL); setActiveLayerId(null); }} disabled={!activeLayerId} danger />
-                          </div>
-                          
-                          <div className="w-4 shrink-0"></div>
+                          <ToolBtn icon={Undo2} label="Desfazer" onClick={undo} disabled={historyIndex <= -1} />
+                          <ToolBtn icon={Eraser} label="Apagar" onClick={() => { const newL = layers.filter(x => x.id !== activeLayerId); saveToHistory(newL); setActiveLayerId(null); }} disabled={!activeLayerId} danger />
                       </div>
                   </div>
               </div>
@@ -468,11 +493,11 @@ const ToolBtn = ({ icon: Icon, label, active, onClick, disabled, highlight, dang
     <button 
         onClick={onClick} 
         disabled={disabled}
-        className={`flex flex-col items-center justify-center min-w-[68px] h-[64px] p-1 rounded-xl transition-all active:scale-95 gap-1.5 shrink-0 ${
-            disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10 active:bg-white/20'
-        } ${active ? 'text-vingi-400 bg-white/10 ring-1 ring-white/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'text-gray-400'} ${highlight ? 'text-white' : ''} ${danger ? 'text-red-400' : ''}`}
+        className={`flex flex-col items-center justify-center min-w-[60px] h-[56px] rounded-lg transition-all active:scale-95 gap-1 shrink-0 ${
+            disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-900 active:bg-gray-800'
+        } ${active ? 'text-white' : 'text-gray-500'} ${highlight ? 'text-white' : ''} ${danger ? 'text-red-500' : ''}`}
     >
-        <Icon size={22} className={highlight ? 'drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]' : ''} />
-        {label && <span className="text-[10px] font-medium tracking-wide">{label}</span>}
+        <Icon size={20} strokeWidth={1.5} className={active ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]' : ''} />
+        {label && <span className="text-[9px] font-medium tracking-wide leading-none">{label}</span>}
     </button>
 );

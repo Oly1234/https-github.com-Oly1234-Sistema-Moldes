@@ -1,52 +1,32 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
-import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
 
-// --- NOVO: CHIP PANTONE AVANÇADO ---
+// --- COMPONENTS ---
 const PantoneChip: React.FC<{ color: PantoneColor, onDelete?: () => void }> = ({ color, onDelete }) => {
     const [showMenu, setShowMenu] = useState(false);
-    
     const handleCopy = (e: React.MouseEvent) => {
         e.stopPropagation();
         navigator.clipboard.writeText(color.hex);
-        // Feedback visual poderia ser um toast, aqui usamos alert simples ou nada para manter flow
     };
-
     return (
-        <div 
-            onClick={() => setShowMenu(!showMenu)}
-            className="flex flex-col bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden cursor-pointer h-20 w-full group relative hover:scale-105 transition-transform"
-        >
-            <div className="h-10 w-full relative" style={{ backgroundColor: color.hex }}>
-                {onDelete && (
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="absolute top-1 right-1 bg-white/20 hover:bg-red-500 hover:text-white text-white rounded-full p-0.5 backdrop-blur-sm transition-colors">
-                        <XCircle size={12} />
-                    </button>
-                )}
+        <div onClick={() => setShowMenu(!showMenu)} className="flex flex-col bg-[#111] shadow-sm border border-gray-800 rounded-lg overflow-hidden cursor-pointer h-14 w-full group relative hover:scale-105 transition-transform">
+            <div className="h-8 w-full relative" style={{ backgroundColor: color.hex }}>
+                {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="absolute top-1 right-1 bg-black/40 hover:bg-red-500 hover:text-white text-white rounded-full p-0.5 backdrop-blur-sm transition-colors"><XCircle size={10} /></button>}
             </div>
-            <div className="flex-1 flex flex-col justify-center bg-white border-t border-gray-100 px-2 py-1">
-                <span className="text-[10px] font-bold text-gray-900 truncate">{color.name}</span>
-                <span className="text-[9px] text-gray-500 font-mono truncate">{color.code || color.hex}</span>
+            <div className="flex-1 flex flex-col justify-center bg-[#1a1a1a] px-1.5 py-0.5">
+                <span className="text-[9px] font-bold text-gray-300 truncate">{color.name}</span>
+                <span className="text-[8px] text-gray-600 font-mono truncate">{color.code || color.hex}</span>
             </div>
-            
-            {showMenu && (
-                <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 animate-fade-in z-10">
-                    <button onClick={handleCopy} className="text-white text-[10px] font-bold flex items-center gap-1 hover:text-vingi-400"><Copy size={10}/> HEX</button>
-                </div>
-            )}
+            {showMenu && <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-2 animate-fade-in z-10"><button onClick={handleCopy} className="text-white text-[9px] font-bold flex items-center gap-1 hover:text-vingi-400"><Copy size={10}/> HEX</button></div>}
         </div>
     );
 };
 
-// Ícone XCircle inline para evitar erro de importação se não estiver no lucide
-const XCircle = ({ size = 24, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
-);
+const XCircle = ({ size = 24, className = "" }) => ( <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> );
 
-// --- HELPERS ---
 const triggerTransfer = (targetModule: string, imageData: string) => {
     if (targetModule === 'MOCKUP') localStorage.setItem('vingi_mockup_pattern', imageData);
     if (targetModule === 'LAYER') localStorage.setItem('vingi_layer_studio_source', imageData);
@@ -63,8 +43,7 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
             if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
             canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
-            if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.8)); }
-            else reject(new Error("Canvas error"));
+            if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.8)); } else reject(new Error("Canvas error"));
         };
         img.onerror = () => reject(new Error("Load error"));
     });
@@ -75,61 +54,71 @@ interface AtelierSystemProps {
     onNavigateToLayerStudio?: () => void;
 }
 
+// --- CONFIGURAÇÕES DE LAYOUT E ESTILO ---
 const LAYOUT_OPTIONS = [
-    { id: 'ORIGINAL', label: 'Original', desc: 'Rapport Padrão' },
-    { id: 'CORRIDA', label: 'Corrida', desc: 'All-over Repeat' },
-    { id: 'BARRADO', label: 'Barrado', desc: 'Border Print' },
-    { id: 'LENCO', label: 'Lenço', desc: 'Engineered Scarf' },
-    { id: 'PAREO', label: 'Pareô', desc: 'Painel Canga' },
-    { id: 'LOCALIZADA', label: 'Localizada', desc: 'T-Shirt Placement' },
+    { id: 'ORIGINAL', label: 'Original', icon: ImageIcon },
+    { id: 'CORRIDA', label: 'Corrida', icon: Layers },
+    { id: 'BARRADO', label: 'Barrado', icon: ArrowDownToLine },
+    { id: 'LENCO', label: 'Lenço', icon: Frame }, 
+    { id: 'LOCALIZADA', label: 'Localizada', icon: Target },
+    { id: 'PAREO', label: 'Pareô', icon: Maximize },
 ];
 
 const SUB_LAYOUT_CONFIG: Record<string, { id: string, label: string, icon: any }[]> = {
     'LENCO': [
-        { id: 'MEDALHAO', label: 'Medalhão (Carré)', icon: Target },
-        { id: 'BANDANA', label: 'Bandana (Paisley)', icon: BoxSelect },
-        { id: 'GEOMETRICO', label: 'Geométrico', icon: Grid3X3 },
-        { id: 'MOLDURA', label: 'Moldura Simples', icon: Maximize },
+        { id: 'MEDALHAO', label: 'Medalhão', icon: Target },
+        { id: 'BANDANA', label: 'Bandana', icon: BoxSelect },
+        { id: 'LISTRADO', label: 'Listrado', icon: Grid3X3 },
+        { id: 'FLORAL', label: 'Floral Frame', icon: Feather },
     ],
     'BARRADO': [
-        { id: 'SIMPLES', label: 'Simples (Barra)', icon: ArrowDownToLine },
-        { id: 'DUPLO', label: 'Duplo (Espelhado)', icon: ArrowDownToLine }, 
-        { id: 'DEGRADE', label: 'Degradê (Fading)', icon: Droplets },
+        { id: 'SIMPLES', label: 'Simples', icon: ArrowDownToLine },
+        { id: 'DUPLO', label: 'Espelhado', icon: ArrowDownToLine }, 
+        { id: 'DEGRADE', label: 'Degradê', icon: Droplets },
     ],
     'CORRIDA': [
-        { id: 'TOSS', label: 'Toss (Aleatório)', icon: Sparkles },
-        { id: 'GRID', label: 'Grid (Alinhado)', icon: Grid3X3 },
-        { id: 'ORGANIC', label: 'Orgânico (Flow)', icon: Droplets },
+        { id: 'TOSS', label: 'Aleatório', icon: Sparkles },
+        { id: 'GRID', label: 'Grid', icon: Grid3X3 },
+        { id: 'ORGANIC', label: 'Orgânico', icon: Droplets },
     ]
 };
+
+const ART_STYLES = [
+    { id: 'ORIGINAL', label: 'Original', icon: ImageIcon },
+    { id: 'WATERCOLOR', label: 'Aquarela', icon: Droplets },
+    { id: 'GIZ', label: 'Giz Pastel', icon: Edit3 },
+    { id: 'ACRILICA', label: 'Acrílica', icon: Palette },
+    { id: 'VETOR', label: 'Vetor Flat', icon: Box },
+    { id: 'BORDADO', label: 'Bordado', icon: Scissors },
+    { id: 'LINHA', label: 'Line Art', icon: PenTool },
+    { id: 'ORNAMENTAL', label: 'Barroco', icon: Feather },
+];
 
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
     const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT'>('IMAGE');
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
-    const [userPrompt, setUserPrompt] = useState<string>('');
+    
+    // Prompt System
+    const [userPrompt, setUserPrompt] = useState<string>(''); // Prompt da IA
+    const [customInstruction, setCustomInstruction] = useState<string>(''); // Prompt do Usuário (Novo)
+
     const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
     const [colorCount, setColorCount] = useState<number>(0); 
+    
+    // LAYOUT & STYLE STATE
     const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
     const [subLayout, setSubLayout] = useState<string>(''); 
-    const [dimensions, setDimensions] = useState({ w: '', h: '' });
-    
-    // TEXTURE ENGINE
-    const [useTextureOverlay, setUseTextureOverlay] = useState(false);
-    const [textureOpacity, setTextureOpacity] = useState(30); 
-    const [textureType, setTextureType] = useState<'CANVAS' | 'LINEN' | 'SILK' | 'WATERCOLOR' | 'CUSTOM'>('CANVAS');
-    const [textureBlend, setTextureBlend] = useState<'multiply' | 'overlay' | 'soft-light'>('multiply');
-    
-    // CUSTOM COLOR INPUT
-    const [customColorInput, setCustomColorInput] = useState('');
+    const [artStyle, setArtStyle] = useState<string>('ORIGINAL');
 
+    const [customColorInput, setCustomColorInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
-    const [loadingColors, setLoadingColors] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Initial Load Transfer Check
     useEffect(() => {
         const transferImage = localStorage.getItem('vingi_transfer_image');
         if (transferImage) {
@@ -141,8 +130,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     useEffect(() => { setSubLayout(''); }, [targetLayout]);
 
     const resetSession = () => {
-        setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setColors([]); setError(null); setCreationMode('IMAGE');
-        setTargetLayout('ORIGINAL'); setSubLayout(''); setColorCount(0); setUseTextureOverlay(false); setDimensions({ w: '', h: '' });
+        setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setCustomInstruction(''); setColors([]); setError(null); setCreationMode('IMAGE');
+        setTargetLayout('ORIGINAL'); setSubLayout(''); setArtStyle('ORIGINAL'); setColorCount(0); 
     };
 
     const analyzePrompt = async (cleanBase64: string) => {
@@ -154,78 +143,51 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     };
 
     const analyzeColors = async (cleanBase64: string, variation: string = 'NATURAL') => {
-        setLoadingColors(true);
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ANALYZE_COLOR_TREND', mainImageBase64: cleanBase64, variation }) });
             const data = await res.json();
             if (data.success && data.colors) setColors(data.colors);
         } catch (e) { console.warn("Erro no Color Dept:", e); }
-        setLoadingColors(false);
     };
 
     const handleReferenceUpload = async (imgBase64: string) => {
-        setReferenceImage(imgBase64); setCreationMode('IMAGE'); setIsProcessing(true); setStatusMessage("Iniciando Análise Modular...");
+        setReferenceImage(imgBase64); setCreationMode('IMAGE'); setIsProcessing(true); setStatusMessage("Extraindo DNA & Cores...");
         try {
             const compressed = await compressImage(imgBase64); const cleanBase64 = compressed.split(',')[1];
             await Promise.allSettled([ analyzePrompt(cleanBase64), analyzeColors(cleanBase64, 'NATURAL') ]);
         } catch (e) { console.error(e); } finally { setIsProcessing(false); }
     };
 
-    const handleColorVariation = async (variant: string) => {
-        if (!referenceImage) return;
-        const compressed = await compressImage(referenceImage);
-        analyzeColors(compressed.split(',')[1], variant);
-    };
-
-    const handleAddCustomColor = () => {
-        if (!customColorInput) return;
-        let hex = customColorInput;
-        let name = "Custom Color";
-        let code = "Manual";
-
-        // Detecção Básica de Hex vs Code
-        if (hex.startsWith('#') || /^[0-9A-F]{6}$/i.test(hex)) {
-            if (!hex.startsWith('#')) hex = '#' + hex;
-            name = "User Hex";
-            code = hex;
-        } else {
-            // Assume que é um código Pantone, gera um hex placeholder (ou o sistema poderia buscar num DB real)
-            name = `Pantone ${hex}`;
-            code = `${hex} TCX`;
-            hex = "#000000"; // Placeholder preto se não souber o hex
-            alert("Código Pantone registrado. A IA tentará interpretar a cor na geração.");
-        }
-
-        const newColor: PantoneColor = { name, code, hex, role: 'Manual' };
-        setColors(prev => [newColor, ...prev]);
-        setCustomColorInput('');
-    };
-
     const handleGenerate = async () => {
-        if (!userPrompt.trim()) { setError("Por favor, descreva a estampa."); return; }
+        if (!userPrompt.trim()) { setError("Aguarde a análise da referência ou digite um prompt."); return; }
+        
+        // CONCATENATE USER INSTRUCTION TO PROMPT
+        const finalPrompt = customInstruction 
+            ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` 
+            : userPrompt;
+
         setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Detalhes 4K..." : "Gerando Vetores Chapados...");
         setGeneratedPattern(null); setError(null);
-        let finalPrompt = userPrompt;
-        if (dimensions.w && dimensions.h) { finalPrompt += ` REQUIRED DIMENSIONS: ${dimensions.w}cm x ${dimensions.h}cm.`; }
-        setTimeout(() => setStatusMessage(printTechnique === 'DIGITAL' ? "Aplicando Iluminação..." : `Separando em ${colorCount || 'Auto'} cores...`), 1500);
+        setTimeout(() => setStatusMessage("Aplicando Layout & Estilo..."), 1200);
+        
         try {
-            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'GENERATE_PATTERN', prompt: finalPrompt, colors: colors, selvedge: 'NENHUMA', layoutStyle: targetLayout, subLayoutStyle: subLayout, colorCount: colorCount, technique: printTechnique }) });
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                action: 'GENERATE_PATTERN', 
+                prompt: finalPrompt, 
+                colors: colors, 
+                selvedge: 'NENHUMA', 
+                layoutStyle: targetLayout, 
+                subLayoutStyle: subLayout, 
+                artStyle: artStyle,
+                colorCount: colorCount, 
+                technique: printTechnique 
+            }) });
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
-                // Auto-apply texture for digital or watercolor
-                if (printTechnique === 'DIGITAL' || textureType === 'WATERCOLOR') setUseTextureOverlay(true);
             } else { throw new Error(data.error || "A IA não conseguiu gerar."); }
         } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => handleReferenceUpload(ev.target?.result as string);
-            reader.readAsDataURL(file);
-        }
     };
 
     const handleTransfer = (target: string) => {
@@ -235,201 +197,185 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         if (target === 'LAYER' && onNavigateToLayerStudio) onNavigateToLayerStudio();
     };
 
-    const downloadTechPack = () => {
-        if (!generatedPattern) return;
-        
-        // Criar Canvas de Tech Pack (Imagem + Cores)
-        const canvas = document.createElement('canvas');
-        canvas.width = 1200; canvas.height = 800;
-        const ctx = canvas.getContext('2d')!;
-        
-        // Fundo Branco
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,1200,800);
-        
-        // 1. Desenhar Estampa
-        const img = new Image(); img.src = generatedPattern;
-        img.onload = () => {
-            // Estampa na Esquerda (Quadrada)
-            ctx.drawImage(img, 50, 50, 600, 600);
-            
-            // Header
-            ctx.fillStyle = '#0f172a'; ctx.font = 'bold 30px Arial'; ctx.fillText('VINGI AI - FICHA TÉCNICA', 700, 80);
-            ctx.fillStyle = '#64748b'; ctx.font = '16px Arial'; ctx.fillText(`Técnica: ${printTechnique}`, 700, 110);
-            ctx.fillText(`Data: ${new Date().toLocaleDateString()}`, 700, 130);
-
-            // Paleta de Cores (Direita)
-            let y = 180;
-            ctx.font = 'bold 14px Arial'; ctx.fillStyle = '#000'; ctx.fillText('PALETA DE CORES (SUGESTÃO)', 700, 160);
-            
-            if (colors.length > 0) {
-                colors.slice(0, 6).forEach(c => {
-                    ctx.fillStyle = c.hex;
-                    ctx.fillRect(700, y, 60, 60);
-                    ctx.fillStyle = '#000';
-                    ctx.font = 'bold 12px Arial'; ctx.fillText(c.name, 770, y + 20);
-                    ctx.font = '12px Arial'; ctx.fillText(c.code || c.hex, 770, y + 40);
-                    ctx.font = 'italic 10px Arial'; ctx.fillText(c.role || '', 770, y + 55);
-                    y += 80;
-                });
-            } else {
-                ctx.fillText('Cores automáticas geradas pela IA.', 700, 190);
-            }
-
-            const link = document.createElement('a');
-            link.download = `vingi-techpack-${Date.now()}.jpg`;
-            link.href = canvas.toDataURL('image/jpeg');
-            link.click();
-        };
+    const handleAddCustomColor = () => {
+        if (!customColorInput) return;
+        const newColor: PantoneColor = { name: "Manual", code: customColorInput, hex: customColorInput.startsWith('#') ? customColorInput : '#000', role: 'User' };
+        setColors(prev => [newColor, ...prev]); setCustomColorInput('');
     };
 
     const hasActiveSession = referenceImage || generatedPattern;
-    const getTextureStyle = () => {
-        let svg = "";
-        switch(textureType) {
-            case 'WATERCOLOR': 
-                // Aquarela: Turbulence suave + Displacement para efeito "poça" + Grão de papel
-                svg = `data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='watercolor'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.03' numOctaves='4' seed='5' result='noise'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='noise' scale='20' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='0.4' filter='url(%23watercolor)'/%3E%3Crect width='100%25' height='100%25' opacity='0.3' style='filter:contrast(150%25) sepia(20%25)'/%3E%3C/svg%3E`;
-                break;
-            case 'LINEN': svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E`; break;
-            case 'SILK': svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0.2'/%3E%3Cstop offset='100%25' stop-color='%23000000' stop-opacity='0.1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23g)'/%3E%3C/svg%3E`; break;
-            default: svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E`; break;
-        }
-        return { backgroundImage: `url("${svg}")`, opacity: textureOpacity / 100, mixBlendMode: textureBlend };
-    };
 
     return (
-        <div className="h-full bg-[#f8fafc] flex flex-col overflow-hidden">
-            <ModuleHeader icon={Palette} title="Estúdio de Criação" subtitle={hasActiveSession ? (printTechnique === 'CYLINDER' ? "Modo Cilindro (Vetorial)" : "Modo Digital (Alta Definição)") : undefined} actionLabel={hasActiveSession ? "Reiniciar" : undefined} onAction={resetSession} />
-            {referenceImage && <FloatingReference image={referenceImage} label="Inspiração" />}
+        <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
+            {/* HEADER COMPACTO DARK */}
+            <div className="bg-[#111111] px-4 py-2 flex items-center justify-between border-b border-gray-900 shrink-0 z-50 h-14">
+                <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
+                <div className="flex gap-2">
+                    {hasActiveSession && (
+                        <button onClick={resetSession} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium border border-gray-700">Novo</button>
+                    )}
+                    {generatedPattern && (
+                        <div className="flex gap-1">
+                            <button onClick={() => handleTransfer('MOCKUP')} className="text-[10px] bg-vingi-900 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-800 flex items-center gap-1 border border-vingi-700"><Settings2 size={12}/> Provar</button>
+                            <button onClick={() => { const l=document.createElement('a'); l.download='vingi-pattern.png'; l.href=generatedPattern; l.click(); }} className="text-[10px] bg-green-900 text-white px-3 py-1.5 rounded font-bold hover:bg-green-800 flex items-center gap-1 border border-green-700"><Download size={12}/> Baixar</button>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {!hasActiveSession ? (
-                <div className="flex-1 overflow-y-auto">
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                    <ModuleLandingPage icon={Palette} title="Estúdio de Criação" description="Inteligência Artificial Generativa para criação têxtil." features={["Prompt to Print", "Image to Pattern", "Separação de Cores", "Rapport Automático"]} partners={["STORK", "EPSON TEXTILE", "REGGIANI", "MS PRINTING"]} customContent={
-                        <div className="flex flex-col gap-6 mt-8">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Selecione o Motor de Geração</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div onClick={() => { setPrintTechnique('CYLINDER'); fileInputRef.current?.click(); }} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm hover:shadow-xl hover:border-vingi-300 transition-all cursor-pointer group flex flex-col gap-4 relative overflow-hidden">
-                                    <div className="w-12 h-12 bg-vingi-50 text-vingi-600 rounded-xl flex items-center justify-center"><Cylinder size={24}/></div>
-                                    <div><h3 className="text-xl font-bold text-slate-800 mb-1">Cilindro (Vetorial)</h3><p className="text-sm text-slate-500 leading-relaxed">Artes chapadas com cores sólidas. Ideal para quadros e cilindros.</p></div>
+                <div className="flex-1 bg-[#050505] overflow-y-auto">
+                    <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onload=(ev)=>handleReferenceUpload(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
+                    <ModuleLandingPage 
+                        icon={Palette} 
+                        title="Atelier Generativo" 
+                        description="Crie estampas exclusivas a partir de referências visuais. Combine estilos artísticos, layouts de lenço e paletas Pantone." 
+                        primaryActionLabel="Criar Estampa" 
+                        onPrimaryAction={() => fileInputRef.current?.click()} 
+                        features={["Vetorial & Digital", "Variação de Estilo", "Layouts de Lenço", "Pantone TCX"]}
+                        customContent={
+                            <div className="flex flex-col gap-6 mt-8 w-full max-w-2xl mx-auto">
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest text-center">Escolha a Tecnologia de Impressão</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button onClick={() => { setPrintTechnique('CYLINDER'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-vingi-500 transition-all flex flex-col items-center gap-3 group text-center">
+                                        <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-vingi-900 transition-colors"><Cylinder size={24} className="text-gray-400 group-hover:text-vingi-400"/></div>
+                                        <div><h3 className="text-lg font-bold text-white">Cilindro (Vetorial)</h3><p className="text-xs text-gray-500 mt-1">Cores chapadas, separação nítida.</p></div>
+                                    </button>
+                                    <button onClick={() => { setPrintTechnique('DIGITAL'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-purple-500 transition-all flex flex-col items-center gap-3 group text-center">
+                                        <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-purple-900 transition-colors"><Printer size={24} className="text-gray-400 group-hover:text-purple-400"/></div>
+                                        <div><h3 className="text-lg font-bold text-white">Digital (4K)</h3><p className="text-xs text-gray-500 mt-1">Textura fotográfica, degradês complexos.</p></div>
+                                    </button>
                                 </div>
-                                <div onClick={() => { setPrintTechnique('DIGITAL'); fileInputRef.current?.click(); }} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm hover:shadow-xl hover:border-purple-300 transition-all cursor-pointer group flex flex-col gap-4 relative overflow-hidden">
-                                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Printer size={24}/></div>
-                                    <div><h3 className="text-xl font-bold text-slate-800 mb-1">Digital (4K)</h3><p className="text-sm text-slate-500 leading-relaxed">Artes com profundidade e textura. Ideal para sublimação.</p></div>
+                            </div>
+                        }
+                    />
+                </div>
+            ) : (
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
+                    {/* CANVAS AREA */}
+                    <div className="flex-1 bg-[#050505] relative flex items-center justify-center p-4 min-h-[40vh]">
+                        {/* Background Grid */}
+                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                        
+                        {isProcessing ? (
+                            <div className="text-center relative z-10 animate-fade-in flex flex-col items-center">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-vingi-500 blur-xl opacity-20 animate-pulse rounded-full"></div>
+                                    <Loader2 size={48} className="text-vingi-400 animate-spin relative z-10 mb-6"/>
+                                </div>
+                                <h2 className="text-white font-bold text-xl tracking-tight">{statusMessage}</h2>
+                                <p className="text-gray-500 text-xs mt-2 font-mono uppercase tracking-widest">Processando IA...</p>
+                            </div>
+                        ) : generatedPattern ? (
+                            <div className="relative shadow-2xl bg-white w-full h-full max-h-[80vh] max-w-[80vh] flex items-center justify-center border border-gray-800 animate-fade-in group overflow-hidden rounded-sm">
+                                <SmartImageViewer src={generatedPattern} />
+                            </div>
+                        ) : (
+                            <div className="relative shadow-xl w-full h-full max-h-[60vh] max-w-[60vh] flex items-center justify-center border-2 border-dashed border-gray-800 rounded-xl opacity-50">
+                                <div className="text-center">
+                                    <Grid3X3 size={48} className="mx-auto mb-4 text-gray-700"/>
+                                    <p className="text-gray-500 text-sm">Preview da Estampa</p>
+                                </div>
+                            </div>
+                        )}
+                        {error && ( <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-900/90 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-700 max-w-md backdrop-blur"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div> )}
+                        
+                        {/* Floating Reference (Mini) */}
+                        {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20"><img src={referenceImage} className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" /></div>}
+                    </div>
+
+                    {/* CONTROL DECK (INSHOT STYLE - SIDEBAR ON DESKTOP, BOTTOM SHEET ON MOBILE) */}
+                    <div className="w-full md:w-[380px] bg-[#111] border-t md:border-t-0 md:border-l border-gray-800 flex flex-col z-20 shadow-2xl h-[55vh] md:h-full shrink-0">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
+                            
+                            {/* 1. MAGIC INPUT (DIREÇÃO CRIATIVA) */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa</h3>
+                                </div>
+                                <div className="relative group">
+                                    <textarea 
+                                        value={customInstruction} 
+                                        onChange={(e) => setCustomInstruction(e.target.value)} 
+                                        className="w-full h-20 p-3 bg-[#1a1a1a] border border-gray-800 rounded-xl text-xs resize-none focus:border-vingi-500 outline-none text-white placeholder-gray-600 transition-all focus:bg-black" 
+                                        placeholder="Ex: Deixe mais vintage, adicione flores azuis, fundo preto..."
+                                    />
+                                    <div className="absolute bottom-2 right-2 text-[8px] text-gray-600 font-mono">IA PROMPT MODIFIER</div>
+                                </div>
+                            </div>
+
+                            {/* 2. CORES (EXTRAÍDAS) */}
+                            {(colors.length > 0) && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12}/> Paleta Detectada</h3>
+                                        <span className="text-[9px] text-gray-600">{colors.length} Cores</span>
+                                    </div>
+                                    <div className="grid grid-cols-5 gap-1.5">
+                                        {colors.map((c, i) => ( <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 3. SCROLL HORIZONTAL DE LAYOUTS */}
+                            <div className="space-y-3">
+                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3>
+                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                    {LAYOUT_OPTIONS.map(opt => (
+                                        <button 
+                                            key={opt.id} 
+                                            onClick={() => setTargetLayout(opt.id)}
+                                            className={`flex flex-col items-center justify-center min-w-[64px] h-[64px] p-1 rounded-lg border transition-all ${targetLayout === opt.id ? 'bg-vingi-900 border-vingi-500 text-white shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}
+                                        >
+                                            <opt.icon size={20} strokeWidth={1.5} className="mb-1.5"/>
+                                            <span className="text-[9px] font-bold">{opt.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                
+                                {/* SUB-LAYOUT CONTEXTUAL (Expandido) */}
+                                {SUB_LAYOUT_CONFIG[targetLayout] && (
+                                    <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {SUB_LAYOUT_CONFIG[targetLayout].map(sub => (
+                                                <button 
+                                                    key={sub.id} 
+                                                    onClick={() => setSubLayout(sub.id)}
+                                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold transition-all ${subLayout === sub.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                >
+                                                    <sub.icon size={12} /> {sub.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 4. ESTILO ARTÍSTICO (GRID) */}
+                            <div className="space-y-3">
+                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Brush size={12}/> Estilo Artístico</h3>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {ART_STYLES.map(style => (
+                                        <button 
+                                            key={style.id} 
+                                            onClick={() => setArtStyle(style.id)}
+                                            className={`flex flex-col items-center justify-center h-16 p-1 rounded-lg border transition-all ${artStyle === style.id ? 'bg-purple-900/50 border-purple-500 text-purple-200 shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}
+                                        >
+                                            <style.icon size={18} strokeWidth={1.5} className="mb-1"/>
+                                            <span className="text-[9px] font-bold text-center leading-none">{style.label}</span>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
-                    }/>
-                </div>
-            ) : (
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                    <div className="flex-1 bg-slate-900 relative flex items-center justify-center p-4 min-h-[40vh]">
-                        {isProcessing ? (
-                            <div className="text-center relative z-10 animate-fade-in">
-                                <Loader2 size={48} className="text-vingi-400 animate-spin mx-auto mb-4"/>
-                                <h2 className="text-white font-bold text-xl tracking-tight">{statusMessage}</h2>
-                            </div>
-                        ) : generatedPattern ? (
-                            <div className="relative shadow-2xl bg-white w-full h-full max-h-[80vh] flex items-center justify-center border border-white/20 animate-fade-in group overflow-hidden rounded-xl">
-                                <SmartImageViewer src={generatedPattern} />
-                                {useTextureOverlay && ( <div className="absolute inset-0 pointer-events-none w-full h-full" style={getTextureStyle()} /> )}
-                            </div>
-                        ) : (
-                            <div className="text-center opacity-30 select-none"><Grid3X3 size={64} className="mx-auto mb-4 text-white"/><p className="text-white text-sm">Área de Criação</p></div>
-                        )}
-                        {error && ( <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-400 max-w-md"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div> )}
-                    </div>
 
-                    <div className="w-full md:w-[420px] bg-white border-l border-gray-200 flex flex-col z-20 shadow-xl overflow-y-auto custom-scrollbar h-[50vh] md:h-full">
-                        <div className="p-6 space-y-6">
-                            {creationMode === 'IMAGE' && (
-                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><ImageIcon size={14}/> Base Visual</h3>
-                                    <div className="flex gap-4 items-center">
-                                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 bg-white border border-gray-200 text-gray-600 rounded-lg py-3 text-xs font-bold hover:bg-vingi-50 flex items-center justify-center gap-2"><ImageIcon size={16}/> {referenceImage ? "Trocar Imagem" : "Carregar Foto"}</button>
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                                    </div>
-                                </div>
+                        {/* BIG GENERATE BUTTON */}
+                        <div className="p-4 border-t border-gray-800 bg-[#0a0a0a] pb-[env(safe-area-inset-bottom)]">
+                            {!isProcessing && (
+                                <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-white transition-transform active:scale-95 text-sm ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110'}`}>
+                                    <Wand2 size={18}/> {generatedPattern ? "Regerar Variação" : "Gerar Estampa"}
+                                </button>
                             )}
-                            <div>
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Sparkles size={14}/> Instrução Criativa</h3>
-                                <textarea value={userPrompt} onChange={(e) => setUserPrompt(e.target.value)} placeholder="Descreva sua ideia..." className="w-full h-24 p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all shadow-inner text-gray-800"/>
-                            </div>
-                            
-                            {/* SELEÇÃO DE TEXTURA E ACABAMENTO */}
-                            {generatedPattern && (
-                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                    <h3 className="text-xs font-bold text-blue-800 uppercase tracking-widest mb-3 flex items-center gap-2"><Layers size={14}/> Acabamento Real</h3>
-                                    <div className="grid grid-cols-2 gap-2 mb-2">
-                                        {['CANVAS', 'LINEN', 'SILK', 'WATERCOLOR'].map(t => (
-                                            <button 
-                                                key={t}
-                                                onClick={() => { setTextureType(t as any); setUseTextureOverlay(true); }}
-                                                className={`text-[10px] font-bold py-2 rounded-lg border ${textureType === t && useTextureOverlay ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                                            >
-                                                {t === 'WATERCOLOR' ? 'AQUARELA' : t}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold text-blue-700 w-12">Opacidade</span>
-                                        <input type="range" min="0" max="100" value={textureOpacity} onChange={(e) => setTextureOpacity(parseInt(e.target.value))} className="flex-1 h-1.5 bg-blue-200 rounded-lg appearance-none accent-blue-600"/>
-                                    </div>
-                                </div>
-                            )}
-                            
-                            {(colors.length > 0 || printTechnique === 'CYLINDER') && (
-                                <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h3 className="text-xs font-bold text-orange-800 uppercase tracking-widest flex items-center gap-2"><Palette size={14}/> Paleta & Separação</h3>
-                                        <div className="flex bg-white rounded-lg p-0.5 border border-orange-200">
-                                            <button onClick={() => handleColorVariation('NATURAL')} title="Natural" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Droplets size={12}/></button>
-                                            <button onClick={() => handleColorVariation('VIVID')} title="Mais Vivo" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Sun size={12}/></button>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* LISTA DE CORES */}
-                                    <div className="grid grid-cols-4 gap-2 mb-3">
-                                        {colors.map((c, i) => ( 
-                                            <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> 
-                                        ))}
-                                    </div>
-
-                                    {/* INPUT DE COR PERSONALIZADA */}
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <input 
-                                                type="text" 
-                                                value={customColorInput}
-                                                onChange={(e) => setCustomColorInput(e.target.value)}
-                                                placeholder="#HEX ou Codigo"
-                                                className="w-full pl-8 pr-2 py-2 rounded-lg text-xs border border-orange-200 focus:border-orange-400 outline-none uppercase"
-                                                onKeyDown={(e) => e.key === 'Enter' && handleAddCustomColor()}
-                                            />
-                                            <Pipette size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-orange-400"/>
-                                        </div>
-                                        <button 
-                                            onClick={handleAddCustomColor}
-                                            disabled={!customColorInput}
-                                            className="bg-orange-500 text-white rounded-lg px-3 py-2 hover:bg-orange-600 disabled:opacity-50 transition-colors"
-                                        >
-                                            <PlusCircle size={16}/>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-3 pt-4 border-t border-gray-100">
-                                {!isProcessing && (
-                                    <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-white ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-vingi-900'}`}><Wand2 size={18}/> {generatedPattern ? "GERAR NOVAMENTE" : `CRIAR ESTAMPA`}</button>
-                                )}
-                                {generatedPattern && !isProcessing && (
-                                    <div className="grid grid-cols-2 gap-2 animate-fade-in">
-                                        <button onClick={() => handleTransfer('MOCKUP')} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><Settings2 size={14}/> PROVAR</button>
-                                        <button onClick={downloadTechPack} className="py-3 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2"><FileText size={14}/> FICHA TÉCNICA</button>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
