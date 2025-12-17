@@ -93,8 +93,7 @@ export default async function handler(req, res) {
                 if (descText) finalPrompt = descText.trim();
             }
 
-            // 2. Geração de Queries via IA (MODO CONTRASTE EXTREMO & VOLUME)
-            // Instrução explícita para pele morena/negra, fundo escuro e VOLUME ALTO (25 queries)
+            // 2. Geração de Queries via IA
             const MOCKUP_PROMPT = `
             CONTEXT: We need base images for a virtual dressing room.
             TARGET GARMENT: "${finalPrompt}".
@@ -107,7 +106,7 @@ export default async function handler(req, res) {
                - REASON: White garment on pale skin is hard to mask. White garment on dark skin is perfect.
             3. **BACKGROUND:** Dark, Black, Grey, or Deep Color (Fundo escuro). 
             
-            TASK: Generate 25 DISTINCT search queries optimized to find this specific combination.
+            TASK: Generate 30 DISTINCT search queries optimized to find this specific combination.
             Vary the terms: "black background", "dark studio", "fashion photography", "tanned skin", "african model", "latina model", "high contrast".
             
             OUTPUT JSON: { "queries": ["string"] }
@@ -127,8 +126,8 @@ export default async function handler(req, res) {
         }
 
         // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico com Bias de Contraste e Volume)
-        // Se a IA falhar ou retornar pouco, injetamos uma lista massiva manualmente.
-        if (queries.length < 5) {
+        // Lista expandida para 40 queries manuais para garantir preenchimento do grid
+        if (queries.length < 10) {
             const base = finalPrompt.replace(/[^\w\s]/gi, '');
             queries = [
                 `white ${base} on black model dark background`,
@@ -150,7 +149,23 @@ export default async function handler(req, res) {
                 `white ${base} on grey background`,
                 `white ${base} model looking forward dark background`,
                 `white ${base} isolated black background`,
-                `white ${base} professional studio photo dark`
+                `white ${base} professional studio photo dark`,
+                // Variações Adicionais
+                `white ${base} fashion model dark theme`,
+                `white ${base} studio lighting dark backdrop`,
+                `white ${base} contrast photography`,
+                `white ${base} elegant black background`,
+                `white ${base} deep skin tone model`,
+                `white ${base} fashion editorial dark`,
+                `white ${base} catalog photo black background`,
+                `white ${base} clothing mockup high contrast`,
+                `white ${base} female model dark studio`,
+                `white ${base} minimalist dark photography`,
+                `white ${base} luxury fashion dark background`,
+                `white ${base} dramatic lighting model`,
+                `white ${base} portrait dark background`,
+                `white ${base} full body black background`,
+                `white ${base} posing dark studio`
             ];
         }
         

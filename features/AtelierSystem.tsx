@@ -1,18 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 import { SelvedgeTool, SelvedgePosition } from '../components/SelvedgeTool';
 
 // --- NOVO: CHIP PANTONE AVANÇADO ---
-const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => {
+const PantoneChip: React.FC<{ color: PantoneColor, onDelete?: () => void }> = ({ color, onDelete }) => {
     const [showMenu, setShowMenu] = useState(false);
     
     const handleCopy = (e: React.MouseEvent) => {
         e.stopPropagation();
         navigator.clipboard.writeText(color.hex);
-        alert(`Cor ${color.hex} copiada!`);
+        // Feedback visual poderia ser um toast, aqui usamos alert simples ou nada para manter flow
     };
 
     return (
@@ -20,7 +20,13 @@ const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => {
             onClick={() => setShowMenu(!showMenu)}
             className="flex flex-col bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden cursor-pointer h-20 w-full group relative hover:scale-105 transition-transform"
         >
-            <div className="h-10 w-full relative" style={{ backgroundColor: color.hex }}></div>
+            <div className="h-10 w-full relative" style={{ backgroundColor: color.hex }}>
+                {onDelete && (
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="absolute top-1 right-1 bg-white/20 hover:bg-red-500 hover:text-white text-white rounded-full p-0.5 backdrop-blur-sm transition-colors">
+                        <XCircle size={12} />
+                    </button>
+                )}
+            </div>
             <div className="flex-1 flex flex-col justify-center bg-white border-t border-gray-100 px-2 py-1">
                 <span className="text-[10px] font-bold text-gray-900 truncate">{color.name}</span>
                 <span className="text-[9px] text-gray-500 font-mono truncate">{color.code || color.hex}</span>
@@ -28,12 +34,17 @@ const PantoneChip: React.FC<{ color: PantoneColor }> = ({ color }) => {
             
             {showMenu && (
                 <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 animate-fade-in z-10">
-                    <button onClick={handleCopy} className="text-white text-[10px] font-bold flex items-center gap-1 hover:text-vingi-400"><Copy size={10}/> COPIAR HEX</button>
+                    <button onClick={handleCopy} className="text-white text-[10px] font-bold flex items-center gap-1 hover:text-vingi-400"><Copy size={10}/> HEX</button>
                 </div>
             )}
         </div>
     );
 };
+
+// Ícone XCircle inline para evitar erro de importação se não estiver no lucide
+const XCircle = ({ size = 24, className = "" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+);
 
 // --- HELPERS ---
 const triggerTransfer = (targetModule: string, imageData: string) => {
@@ -103,10 +114,16 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
     const [subLayout, setSubLayout] = useState<string>(''); 
     const [dimensions, setDimensions] = useState({ w: '', h: '' });
+    
+    // TEXTURE ENGINE
     const [useTextureOverlay, setUseTextureOverlay] = useState(false);
     const [textureOpacity, setTextureOpacity] = useState(30); 
-    const [textureType, setTextureType] = useState<'CANVAS' | 'LINEN' | 'SILK' | 'CUSTOM'>('CANVAS');
+    const [textureType, setTextureType] = useState<'CANVAS' | 'LINEN' | 'SILK' | 'WATERCOLOR' | 'CUSTOM'>('CANVAS');
     const [textureBlend, setTextureBlend] = useState<'multiply' | 'overlay' | 'soft-light'>('multiply');
+    
+    // CUSTOM COLOR INPUT
+    const [customColorInput, setCustomColorInput] = useState('');
+
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -160,6 +177,30 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         analyzeColors(compressed.split(',')[1], variant);
     };
 
+    const handleAddCustomColor = () => {
+        if (!customColorInput) return;
+        let hex = customColorInput;
+        let name = "Custom Color";
+        let code = "Manual";
+
+        // Detecção Básica de Hex vs Code
+        if (hex.startsWith('#') || /^[0-9A-F]{6}$/i.test(hex)) {
+            if (!hex.startsWith('#')) hex = '#' + hex;
+            name = "User Hex";
+            code = hex;
+        } else {
+            // Assume que é um código Pantone, gera um hex placeholder (ou o sistema poderia buscar num DB real)
+            name = `Pantone ${hex}`;
+            code = `${hex} TCX`;
+            hex = "#000000"; // Placeholder preto se não souber o hex
+            alert("Código Pantone registrado. A IA tentará interpretar a cor na geração.");
+        }
+
+        const newColor: PantoneColor = { name, code, hex, role: 'Manual' };
+        setColors(prev => [newColor, ...prev]);
+        setCustomColorInput('');
+    };
+
     const handleGenerate = async () => {
         if (!userPrompt.trim()) { setError("Por favor, descreva a estampa."); return; }
         setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Detalhes 4K..." : "Gerando Vetores Chapados...");
@@ -172,7 +213,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
-                if (printTechnique === 'DIGITAL') setUseTextureOverlay(true);
+                // Auto-apply texture for digital or watercolor
+                if (printTechnique === 'DIGITAL' || textureType === 'WATERCOLOR') setUseTextureOverlay(true);
             } else { throw new Error(data.error || "A IA não conseguiu gerar."); }
         } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
     };
@@ -244,6 +286,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const getTextureStyle = () => {
         let svg = "";
         switch(textureType) {
+            case 'WATERCOLOR': 
+                // Aquarela: Turbulence suave + Displacement para efeito "poça" + Grão de papel
+                svg = `data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='watercolor'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.03' numOctaves='4' seed='5' result='noise'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='noise' scale='20' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='0.4' filter='url(%23watercolor)'/%3E%3Crect width='100%25' height='100%25' opacity='0.3' style='filter:contrast(150%25) sepia(20%25)'/%3E%3C/svg%3E`;
+                break;
             case 'LINEN': svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E`; break;
             case 'SILK': svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0.2'/%3E%3Cstop offset='100%25' stop-color='%23000000' stop-opacity='0.1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23g)'/%3E%3C/svg%3E`; break;
             default: svg = `data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E`; break;
@@ -310,7 +356,29 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <textarea value={userPrompt} onChange={(e) => setUserPrompt(e.target.value)} placeholder="Descreva sua ideia..." className="w-full h-24 p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-vingi-500 focus:bg-white outline-none transition-all shadow-inner text-gray-800"/>
                             </div>
                             
-                            {(colors.length > 0) && printTechnique === 'CYLINDER' && (
+                            {/* SELEÇÃO DE TEXTURA E ACABAMENTO */}
+                            {generatedPattern && (
+                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                    <h3 className="text-xs font-bold text-blue-800 uppercase tracking-widest mb-3 flex items-center gap-2"><Layers size={14}/> Acabamento Real</h3>
+                                    <div className="grid grid-cols-2 gap-2 mb-2">
+                                        {['CANVAS', 'LINEN', 'SILK', 'WATERCOLOR'].map(t => (
+                                            <button 
+                                                key={t}
+                                                onClick={() => { setTextureType(t as any); setUseTextureOverlay(true); }}
+                                                className={`text-[10px] font-bold py-2 rounded-lg border ${textureType === t && useTextureOverlay ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                            >
+                                                {t === 'WATERCOLOR' ? 'AQUARELA' : t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-blue-700 w-12">Opacidade</span>
+                                        <input type="range" min="0" max="100" value={textureOpacity} onChange={(e) => setTextureOpacity(parseInt(e.target.value))} className="flex-1 h-1.5 bg-blue-200 rounded-lg appearance-none accent-blue-600"/>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {(colors.length > 0 || printTechnique === 'CYLINDER') && (
                                 <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
                                     <div className="flex justify-between items-center mb-3">
                                         <h3 className="text-xs font-bold text-orange-800 uppercase tracking-widest flex items-center gap-2"><Palette size={14}/> Paleta & Separação</h3>
@@ -319,8 +387,34 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                             <button onClick={() => handleColorVariation('VIVID')} title="Mais Vivo" className="p-1 hover:bg-orange-100 rounded text-gray-500 hover:text-orange-600"><Sun size={12}/></button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {colors.slice(0, 4).map((c, i) => ( <PantoneChip key={i} color={c} /> ))}
+                                    
+                                    {/* LISTA DE CORES */}
+                                    <div className="grid grid-cols-4 gap-2 mb-3">
+                                        {colors.map((c, i) => ( 
+                                            <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> 
+                                        ))}
+                                    </div>
+
+                                    {/* INPUT DE COR PERSONALIZADA */}
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <input 
+                                                type="text" 
+                                                value={customColorInput}
+                                                onChange={(e) => setCustomColorInput(e.target.value)}
+                                                placeholder="#HEX ou Codigo"
+                                                className="w-full pl-8 pr-2 py-2 rounded-lg text-xs border border-orange-200 focus:border-orange-400 outline-none uppercase"
+                                                onKeyDown={(e) => e.key === 'Enter' && handleAddCustomColor()}
+                                            />
+                                            <Pipette size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-orange-400"/>
+                                        </div>
+                                        <button 
+                                            onClick={handleAddCustomColor}
+                                            disabled={!customColorInput}
+                                            className="bg-orange-500 text-white rounded-lg px-3 py-2 hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                                        >
+                                            <PlusCircle size={16}/>
+                                        </button>
                                     </div>
                                 </div>
                             )}

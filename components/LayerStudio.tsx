@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap, ZoomIn, ZoomOut, RotateCcw, X } from 'lucide-react';
 import { DesignLayer } from '../types';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
-// --- HELPER: RGB to LAB (For Color Distance) ---
+// ... (RGB to LAB and Helper Functions remain the same)
 const rgbToLab = (r: number, g: number, b: number) => {
     let r1 = r / 255, g1 = g / 255, b1 = b / 255;
     r1 = (r1 > 0.04045) ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
@@ -19,7 +19,6 @@ const rgbToLab = (r: number, g: number, b: number) => {
     return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
 };
 
-// --- HELPER: SMART OBJECT EXTRACTION ---
 const getSmartObjectMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, existingMask?: Uint8Array) => {
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
@@ -170,6 +169,9 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     const [isTransforming, setIsTransforming] = useState<'NONE' | 'DRAG' | 'RESIZE' | 'ROTATE'>('NONE');
     const [transformMode, setTransformMode] = useState<'IDLE' | 'PAN'>('IDLE');
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
+    
+    // Pinch to Zoom Refs
+    const lastDistRef = useRef<number>(0);
 
     // --- TRANSFER LISTENER ---
     useEffect(() => {
@@ -395,6 +397,25 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         }
     };
 
+    // Touch handlers for Pinch Zoom
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
+            lastDistRef.current = dist;
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
+            const scale = dist / lastDistRef.current;
+            setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * scale), 5) }));
+            lastDistRef.current = dist;
+        }
+    };
+
     const handlePointerUp = () => { lastPointerPos.current = null; setTransformMode('IDLE'); setIsTransforming('NONE'); };
     const handleWheel = (e: React.WheelEvent) => {
         if (e.ctrlKey || tool === 'HAND') { e.preventDefault(); const s = Math.exp(-e.deltaY * 0.001); setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * s), 5) })); }
@@ -423,7 +444,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     }
 
     return (
-        <div className="flex flex-col h-full w-full bg-[#1e293b] text-white overflow-hidden" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
+        <div className="flex flex-col h-full w-full bg-[#1e293b] text-white overflow-hidden" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
             <ModuleHeader icon={Layers} title="Layer Studio" subtitle="Composição & Edição" />
             
             {!layers.length && !incomingPayload ? (
@@ -460,12 +481,13 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                         </div>
                     </div>
 
-                    {/* CONFIRM SELECTION */}
+                    {/* CONFIRM SELECTION - MOVED TO BOTTOM CENTER */}
                     {activeMask && tool === 'SMART_EXTRACT' && (
-                        <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-vingi-600 text-white px-4 py-2 rounded-full shadow-xl z-50 flex items-center gap-3 animate-fade-in">
-                            <span className="text-xs font-bold">Seleção Ativa</span>
-                            <button onClick={finishExtraction} className="bg-white text-vingi-900 px-3 py-1 rounded-full text-xs font-bold hover:bg-gray-100">EXTRAIR AGORA</button>
-                            <button onClick={() => { setActiveMask(null); setMaskPreviewSrc(null); }} className="p-1 hover:bg-vingi-700 rounded-full"><Trash2 size={12}/></button>
+                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-vingi-600 text-white px-4 py-3 rounded-full shadow-2xl z-[60] flex items-center gap-4 animate-fade-in border-2 border-white/20">
+                            <span className="text-xs font-bold whitespace-nowrap">Seleção Ativa</span>
+                            <div className="h-4 w-px bg-white/30"></div>
+                            <button onClick={finishExtraction} className="bg-white text-vingi-900 px-4 py-1.5 rounded-full text-xs font-bold hover:bg-gray-100 shadow-md transform active:scale-95 transition-all">EXTRAIR AGORA</button>
+                            <button onClick={() => { setActiveMask(null); setMaskPreviewSrc(null); }} className="p-1 hover:bg-vingi-700 rounded-full text-white/80 hover:text-white"><X size={16}/></button>
                         </div>
                     )}
 
@@ -484,7 +506,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                                 {maskPreviewSrc && <div className="absolute inset-0 pointer-events-none z-[1000] opacity-50 mix-blend-screen"><img src={maskPreviewSrc} className="w-full h-full" /></div>}
                             </div>
                             {isProcessing && <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[1000]"><div className="text-xl font-bold text-white animate-pulse">{processStatus}</div></div>}
-                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-gray-900/80 rounded-full text-[10px] text-gray-400 font-mono pointer-events-none backdrop-blur border border-gray-700">
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-gray-900/80 rounded-full text-[10px] text-gray-400 font-mono pointer-events-none backdrop-blur border border-gray-700">
                                 {Math.round(view.k * 100)}% | {canvasSize.w}x{canvasSize.h}px
                             </div>
                         </div>

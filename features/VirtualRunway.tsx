@@ -109,6 +109,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const [view, setView] = useState({ x: 0, y: 0, k: 1 });
     const isPanning = useRef(false);
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
+    const lastDistRef = useRef<number>(0);
 
     // Controls
     const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('WAND');
@@ -286,10 +287,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             clientY = (e as React.MouseEvent).clientY;
         }
 
-        // Mapeamento correto com transform CSS
-        // canvas.width é a largura real em pixels
-        // rect.width é a largura visual na tela (afetada pelo zoom view.k)
-        // (clientX - rect.left) é a posição visual dentro do rect
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
         
@@ -339,6 +336,29 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         lastPosRef.current = { x, y };
         // Update lastPointerPos for drag continuity (though not used for drawing math)
         lastPointerPos.current = { x: clientX, y: clientY };
+    };
+
+    // --- PINCH TO ZOOM HANDLERS ---
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
+            lastDistRef.current = dist;
+        } else {
+            handlePointerDown(e);
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
+            const scale = dist / lastDistRef.current;
+            setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * scale), 5) }));
+            lastDistRef.current = dist;
+        } else {
+            handlePointerMove(e);
+        }
     };
 
     const handlePointerUp = () => { 
@@ -538,7 +558,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <button onClick={() => refInputRef.current?.click()} className={`w-full py-5 border-2 border-dashed rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white active:bg-gray-50'}`}>
-                                        <input type="file" ref={refInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onload=(ev)=>{ setReferenceImage(ev.target?.result as string); setStep('STUDIO'); }; r.readAsDataURL(f); } }} className="hidden" accept="image/*"/>
+                                        <input type="file" ref={refInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onload=(ev)=>setReferenceImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*"/>
                                         {referenceImage ? <><Check size={18}/> Imagem Carregada</> : <><ImageIcon size={20}/> Carregar Foto de Referência</>}
                                     </button>
                                     {referenceImage && !isSearching && (
@@ -573,7 +593,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
 
             {step === 'STUDIO' && (
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden animate-fade-in">
-                    <div ref={containerRef} className={`flex-1 bg-gray-200 relative flex items-center justify-center overflow-hidden touch-none ${activeTool==='HAND'?'cursor-grab active:cursor-grabbing':'cursor-crosshair'}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={handleWheel}>
+                    <div ref={containerRef} className={`flex-1 bg-gray-200 relative flex items-center justify-center overflow-hidden touch-none ${activeTool==='HAND'?'cursor-grab active:cursor-grabbing':'cursor-crosshair'}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
                         <div 
                             className="relative shadow-2xl origin-center transition-transform duration-75 ease-out" 

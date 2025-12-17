@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 interface AppliedLayer {
@@ -32,6 +32,7 @@ export const MockupStudio: React.FC = () => {
   // Viewport Zoom
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const isPanning = useRef(false);
+  const lastDistRef = useRef<number>(0);
 
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,7 +55,9 @@ export const MockupStudio: React.FC = () => {
 
   useEffect(() => {
     if (moldImage) {
-      const img = new Image(); img.src = moldImage; img.crossOrigin = "anonymous";
+      const img = new Image(); 
+      img.src = moldImage; 
+      img.crossOrigin = "anonymous";
       img.onload = () => {
         if (mainCanvasRef.current) {
             const canvas = mainCanvasRef.current;
@@ -72,7 +75,11 @@ export const MockupStudio: React.FC = () => {
                 setView({ x: 0, y: 0, k });
             }
         }
-        setMoldImgObj(img); setLayers([]); setActiveLayerId(null);
+        setMoldImgObj(img); 
+        setLayers([]); 
+        setActiveLayerId(null);
+        // Force render
+        requestAnimationFrame(render);
       };
     }
   }, [moldImage]);
@@ -261,6 +268,29 @@ export const MockupStudio: React.FC = () => {
       lastPos.current = { x: clientX, y: clientY };
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+          e.preventDefault();
+          const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
+          lastDistRef.current = dist;
+      } else {
+          // Pass single touch to pointer down
+          handlePointerDown(e);
+      }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+          e.preventDefault();
+          const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
+          const scale = dist / lastDistRef.current;
+          setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * scale), 5) }));
+          lastDistRef.current = dist;
+      } else {
+          handlePointerMove(e);
+      }
+  };
+
   const handleWheel = (e: React.WheelEvent) => {
       if (e.ctrlKey || tool === 'HAND') {
           e.preventDefault();
@@ -284,9 +314,16 @@ export const MockupStudio: React.FC = () => {
               <ModuleLandingPage icon={Shirt} title="Mockup Técnico" description="Ferramenta de engenharia para aplicação de estampas em moldes de corte." primaryActionLabel="Carregar Molde/Peça" onPrimaryAction={() => moldInputRef.current?.click()} features={["Preenchimento Inteligente", "Controle de Fio", "Escala Real", "Espelhamento"]} />
           </div>
       ) : (
-          <div className="flex-1 flex flex-col relative">
-              {/* CANVAS AREA */}
-              <div ref={containerRef} className={`flex-1 bg-gray-100 relative flex items-center justify-center overflow-hidden touch-none ${tool==='HAND'?'cursor-grab active:cursor-grabbing':'cursor-crosshair'}`} onWheel={handleWheel}>
+          // MAIN LAYOUT FIX: FLEX COLUMN to keep Toolbar Visible
+          <div className="flex-1 flex flex-col relative h-full">
+              {/* CANVAS AREA (Takes remaining space) */}
+              <div 
+                ref={containerRef} 
+                className={`flex-1 bg-gray-100 relative flex items-center justify-center overflow-hidden touch-none ${tool==='HAND'?'cursor-grab active:cursor-grabbing':'cursor-crosshair'}`} 
+                onWheel={handleWheel}
+                onTouchStart={handleTouchStart} 
+                onTouchMove={handleTouchMove}
+              >
                   <div 
                       className="relative shadow-2xl transition-transform duration-75 ease-out origin-center" 
                       style={{ 
@@ -295,7 +332,14 @@ export const MockupStudio: React.FC = () => {
                           height: moldImgObj ? moldImgObj.height : 'auto'
                       }}
                   >
-                      <canvas ref={mainCanvasRef} onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={() => { isDragging.current = false; isPanning.current = false; }} onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={() => { isDragging.current = false; isPanning.current = false; }} className="block bg-white" />
+                      <canvas 
+                        ref={mainCanvasRef} 
+                        onMouseDown={handlePointerDown} 
+                        onMouseMove={handlePointerMove} 
+                        onMouseUp={() => { isDragging.current = false; isPanning.current = false; }} 
+                        onMouseLeave={() => { isDragging.current = false; isPanning.current = false; }}
+                        className="block bg-white" 
+                      />
                   </div>
 
                   {!patternImage && (
@@ -307,6 +351,14 @@ export const MockupStudio: React.FC = () => {
                           </div>
                       </div>
                   )}
+                  
+                  {/* INSTRUCTION OVERLAY IF PATTERN IS READY BUT NO LAYER */}
+                  {patternImage && layers.length === 0 && (
+                      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-vingi-600 text-white px-6 py-2 rounded-full text-xs font-bold shadow-xl animate-bounce z-50 flex items-center gap-2 pointer-events-none">
+                          <MousePointerClick size={16}/> Toque na peça para aplicar
+                      </div>
+                  )}
+
                   {/* ZOOM CONTROLS OVERLAY */}
                   <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white rounded-lg shadow-md p-1 z-30">
                       <button onClick={()=>setView(v=>({...v, k: Math.min(v.k*1.2, 8)}))} className="p-2 hover:bg-gray-100 rounded text-gray-600"><ZoomIn size={18}/></button>
@@ -315,11 +367,11 @@ export const MockupStudio: React.FC = () => {
                   </div>
               </div>
 
-              {/* EDITOR TOOLBAR (FIXED BOTTOM) */}
-              <div className="h-auto bg-white border-t border-gray-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-20 flex flex-col">
+              {/* EDITOR TOOLBAR (FIXED BOTTOM - Shrink-0 prevents crushing) */}
+              <div className="shrink-0 bg-white border-t border-gray-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-40 flex flex-col pb-safe">
                   {/* TOOLS SELECTOR */}
                   <div className="flex items-center justify-between p-2 border-b border-gray-100 overflow-x-auto gap-4 px-4">
-                      <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
+                      <div className="flex bg-gray-100 rounded-lg p-1 gap-1 shrink-0">
                           <button onClick={() => setTool('HAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='HAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Hand size={16}/> MOVER</button>
                           <button onClick={() => setTool('WAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='WAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Wand2 size={16}/> MÁGICA</button>
                           <button onClick={() => setTool('MOVE')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='MOVE' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Move size={16}/> EDITAR</button>
@@ -327,9 +379,9 @@ export const MockupStudio: React.FC = () => {
                       <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-vingi-900 text-white rounded-lg text-xs font-bold shadow-md hover:bg-vingi-800 shrink-0"><Download size={16}/> Exportar</button>
                   </div>
 
-                  {/* ACTIVE LAYER CONTROLS */}
+                  {/* ACTIVE LAYER CONTROLS (Only visible when layer active) */}
                   {activeLayerId && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center bg-gray-50">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center bg-gray-50 animate-fade-in border-b border-gray-200">
                           <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-gray-400 uppercase">Rotação ({activeRotation}°)</label>
                               <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/>
