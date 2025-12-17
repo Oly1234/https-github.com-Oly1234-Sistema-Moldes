@@ -246,9 +246,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` 
             : userPrompt;
 
-        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Arquivo Digital..." : "Gerando Vetores Chapados...");
+        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Arquivo Digital (4K)..." : "Gerando Vetores Chapados...");
         setGeneratedPattern(null); setError(null); setShowDownloadMenu(false);
-        setTimeout(() => setStatusMessage("Finalizando Arte 2D..."), 1200);
+        setTimeout(() => setStatusMessage("Aplicando Estilo & Cor..."), 1200);
         
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
@@ -586,51 +586,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         )}
                                     </div>
 
-                                    {/* NOVO: ACABAMENTO & TEXTURA */}
-                                    <div className="space-y-3 pb-4 border-t border-white/5 pt-4 animate-slide-up" style={{animationDelay: '0.35s'}}>
-                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Grid size={12}/> Acabamento & Textura (Overlay)</h3>
-                                        
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {TEXTURE_PRESETS.map(tex => (
-                                                <button 
-                                                    key={tex.id}
-                                                    onClick={() => { setActiveTexture(tex.id); if(tex.id === 'NONE') setGeneratedTextureUrl(null); }}
-                                                    className={`px-3 py-2 rounded-lg text-[10px] font-bold border transition-all ${activeTexture === tex.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
-                                                >
-                                                    {tex.label}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {activeTexture === 'CUSTOM_AI' && (
-                                            <div className="flex gap-2 animate-fade-in">
-                                                <input 
-                                                    type="text" 
-                                                    value={customTexturePrompt}
-                                                    onChange={(e) => setCustomTexturePrompt(e.target.value)}
-                                                    placeholder="Ex: Seda amassada, Tecido Bouclé..."
-                                                    className="flex-1 bg-[#1a1a1a] border border-gray-700 rounded-lg px-3 py-2 text-xs outline-none focus:border-vingi-500"
-                                                />
-                                                <button onClick={handleGenerateTexture} disabled={isGeneratingTexture} className="bg-vingi-900 border border-vingi-700 text-white rounded-lg px-3 flex items-center justify-center hover:bg-vingi-800">
-                                                    {isGeneratingTexture ? <Loader2 size={14} className="animate-spin"/> : <Wand2 size={14}/>}
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {activeTexture !== 'NONE' && (
-                                            <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 space-y-3 animate-slide-down">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[9px] font-bold text-gray-500 uppercase w-12">Intensidade</span>
-                                                    <input type="range" min="0.1" max="1" step="0.1" value={textureOpacity} onChange={(e) => setTextureOpacity(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[9px] font-bold text-gray-500 uppercase w-12">Densidade</span>
-                                                    <input type="range" min="0.5" max="3" step="0.1" value={textureScale} onChange={(e) => setTextureScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
                                     {/* GENERATE BUTTON MOVED HERE - LOGICAL FLOW */}
                                     <div className="pt-4 border-t border-white/5 animate-slide-up" style={{animationDelay: '0.4s'}}>
                                         {!isProcessing && !isUpscaling && (
@@ -645,6 +600,53 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                             </button>
                                         )}
                                     </div>
+
+                                    {/* NOVO: ACABAMENTO & TEXTURA (ONLY VISIBLE AFTER GENERATION) */}
+                                    {generatedPattern && (
+                                        <div className="space-y-3 pb-4 border-t border-white/5 pt-4 animate-slide-up" style={{animationDelay: '0.1s'}}>
+                                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Grid size={12}/> Acabamento & Textura (Overlay)</h3>
+                                            
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {TEXTURE_PRESETS.map(tex => (
+                                                    <button 
+                                                        key={tex.id}
+                                                        onClick={() => { setActiveTexture(tex.id); if(tex.id === 'NONE') setGeneratedTextureUrl(null); }}
+                                                        className={`px-3 py-2 rounded-lg text-[10px] font-bold border transition-all ${activeTexture === tex.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                    >
+                                                        {tex.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {activeTexture === 'CUSTOM_AI' && (
+                                                <div className="flex gap-2 animate-fade-in">
+                                                    <input 
+                                                        type="text" 
+                                                        value={customTexturePrompt}
+                                                        onChange={(e) => setCustomTexturePrompt(e.target.value)}
+                                                        placeholder="Ex: Seda amassada, Tecido Bouclé..."
+                                                        className="flex-1 bg-[#1a1a1a] border border-gray-700 rounded-lg px-3 py-2 text-xs outline-none focus:border-vingi-500"
+                                                    />
+                                                    <button onClick={handleGenerateTexture} disabled={isGeneratingTexture} className="bg-vingi-900 border border-vingi-700 text-white rounded-lg px-3 flex items-center justify-center hover:bg-vingi-800">
+                                                        {isGeneratingTexture ? <Loader2 size={14} className="animate-spin"/> : <Wand2 size={14}/>}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {activeTexture !== 'NONE' && (
+                                                <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 space-y-3 animate-slide-down">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[9px] font-bold text-gray-500 uppercase w-12">Intensidade</span>
+                                                        <input type="range" min="0.1" max="1" step="0.1" value={textureOpacity} onChange={(e) => setTextureOpacity(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[9px] font-bold text-gray-500 uppercase w-12">Densidade</span>
+                                                        <input type="range" min="0.5" max="3" step="0.1" value={textureScale} onChange={(e) => setTextureScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>

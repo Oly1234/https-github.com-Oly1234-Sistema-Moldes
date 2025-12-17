@@ -10,24 +10,23 @@ export const generateHighResProductionFile = async (apiKey, imageBase64, targetS
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     const TECH_SPEC = technique === 'CYLINDER' 
-        ? "Ensure colors are FLAT and SOLID (Vector style). Remove JPG artifacts." 
-        : "Enhance details and sharpness. Remove noise.";
+        ? "Style: Vector Graphic. Flat solid colors. Sharp edges." 
+        : "Style: High-End Digital Print. Rich details, perfect gradients, sharp focus.";
 
-    // Prompt ajustado para RESTAURAÇÃO e não CRIAÇÃO
+    // PROMPT REVISADO: "RE-IMAGINE" em vez de "RESTAURE"
+    // Isso evita que o modelo recuse a imagem por achar que não pode editar o original.
+    // Pedimos para ele criar uma "Variante em Alta Definição" baseada na entrada.
     const PRODUCTION_PROMPT = `
-    ACT AS: Image Restoration & Upscaling AI.
+    TASK: Generate a High-Definition version of this textile pattern.
     
-    INPUT: A draft textile pattern image.
-    TASK: UPSCALING and REFINEMENT (High Fidelity Restoration).
+    INSTRUCTIONS:
+    1. Use the provided image as the REFERENCE for composition, colors, and motifs.
+    2. OUTPUT: A pristine, high-resolution digital asset (4K quality).
+    3. FIX: Remove any blur, compression artifacts, or noise from the reference.
+    4. ACCURACY: Keep the design identical, just upgrade the quality.
     
-    STRICT RULES:
-    1. DO NOT CHANGE THE DESIGN. Keep the exact same motifs, composition, and colors.
-    2. INCREASE RESOLUTION: Make lines sharper and details crisper.
-    3. REMOVE NOISE: Clean up compression artifacts or blurriness.
-    4. OUTPUT FORMAT: Flat 2D digital file ready for print.
-    
-    Target Use: Large format printing (${targetSize || "Standard Width"}).
-    Specifics: ${TECH_SPEC}
+    ${TECH_SPEC}
+    Target Output: Flat 2D Print File.
     `;
 
     const payload = {
@@ -48,13 +47,18 @@ export const generateHighResProductionFile = async (apiKey, imageBase64, targetS
         }
 
         const data = await response.json();
+        
+        // Verifica se houve recusa (safety ratings ou finishReason)
+        if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+            throw new Error("A IA recusou a imagem por motivos de segurança. Tente uma estampa diferente.");
+        }
+
         const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
         
         if (imagePart) {
             return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         }
         
-        // Se a IA se recusar a gerar imagem (safety ou outro motivo), retornamos erro para a UI tratar
         throw new Error("O motor de produção não retornou uma imagem válida.");
 
     } catch (e) {

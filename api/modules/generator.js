@@ -8,52 +8,104 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
 
     // 1. Contexto de Cor
     const colorContext = (colors && colors.length > 0) 
-        ? `STRICT PALETTE: ${colors.map(c => c.name).join(', ')}. Dominant tones: ${colors.slice(0,2).map(c => c.hex).join(', ')}.` 
+        ? `PALETTE GUIDANCE: Use these tones: ${colors.map(c => c.name).join(', ')}.` 
         : "Use colors that match the requested theme.";
 
-    // 2. Contexto de Estilo - REFORÇO ANTI-TRAMA
+    // 2. LÓGICA BIFURCADA: DIGITAL vs CILINDRO
+    let TECHNIQUE_PROMPT = "";
+    let NEGATIVE_PROMPT = "";
+
+    if (technique === 'DIGITAL') {
+        // --- MODO DIGITAL (RICHEZA, PROFUNDIDADE, DEGRADÊ) ---
+        TECHNIQUE_PROMPT = `
+        MODE: DIGITAL PRINTING (Sublimation/Direct-to-Fabric).
+        
+        VISUAL STYLE:
+        - HIGH FIDELITY ARTWORK.
+        - RICH DETAILS: Allow complex gradients, soft shadows, depth, lighting effects, and tone-on-tone nuances.
+        - COLOR: Unlimited color palette. Blends, watercolors, and photographic details are allowed.
+        - FINISH: The file should look like a high-end digital artwork (Photoshop/Procreate finish).
+        `;
+        
+        // No modo digital, proibimos apenas a TRAMA DO TECIDO (o fio), mas permitimos textura ARTÍSTICA (papel, pincelada)
+        NEGATIVE_PROMPT = `
+        NEGATIVE PROMPT (DO NOT INCLUDE):
+        - Fabric weave threads (linen texture, canvas grain) -> Unless it's part of the art.
+        - Low resolution, jagged lines.
+        - Flat vector look (unless requested).
+        - Color banding.
+        `;
+
+    } else {
+        // --- MODO CILINDRO (VETORIAL, CHAPADO, SEPARAÇÃO) ---
+        TECHNIQUE_PROMPT = `
+        MODE: ROTARY SCREEN PRINTING (Cylinder/Separated Colors).
+        
+        VISUAL STYLE:
+        - FLAT VECTOR ARTWORK (Adobe Illustrator style).
+        - SOLID COLORS ONLY: No gradients, no opacity, no blurs, no soft shadows.
+        - HARD EDGES: Distinct separation between colors.
+        - COMPOSITION: 2D Flat view. No perspective.
+        `;
+
+        NEGATIVE_PROMPT = `
+        NEGATIVE PROMPT (DO NOT INCLUDE):
+        - Gradients, Shadows, Lighting effects, 3D depth.
+        - Fabric texture, noise, grain.
+        - Blur, glow, transparency.
+        - Realistic photo elements.
+        `;
+    }
+
+    // 3. Contexto de Estilo (Adaptado à técnica)
     let artStyleInstruction = "";
-    const CLEANUP_TOKEN = "RENDER STYLE: VECTOR FLAT. NO NOISE. NO TEXTURE. NO GRAIN. SOLID COLORS.";
-    
     if (artStyle === 'CUSTOM' && customStyle) {
-        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. ${CLEANUP_TOKEN}`;
+        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}.`;
     } else {
         switch (artStyle) {
-            case 'WATERCOLOR': artStyleInstruction = "ART STYLE: DIGITAL WATERCOLOR. Wet effects on PURE WHITE digital canvas. NO PAPER TEXTURE."; break;
-            case 'GIZ': artStyleInstruction = "ART STYLE: DIGITAL PASTEL. Chalk texture only on strokes, solid background."; break;
-            case 'ACRILICA': artStyleInstruction = "ART STYLE: DIGITAL PAINTING. Smooth gradients, no canvas bumps."; break;
-            case 'VETOR': artStyleInstruction = "ART STYLE: ADOBE ILLUSTRATOR VECTOR. Sharp geometric lines. Unlimited resolution feel."; break;
-            case 'BORDADO': artStyleInstruction = "ART STYLE: FLAT EMBROIDERY VECTOR. Stitch look but purely graphical. No fabric shadows."; break;
-            default: artStyleInstruction = `ART STYLE: ${CLEANUP_TOKEN}`; break;
+            case 'WATERCOLOR': 
+                artStyleInstruction = technique === 'DIGITAL' 
+                    ? "ART STYLE: Realistic Watercolor. Wet-on-wet bleeds, translucency, paper grain effect allowed in art."
+                    : "ART STYLE: Vector Watercolor. Imitation of watercolor using solid flat shapes (posterization).";
+                break;
+            case 'GIZ': 
+                artStyleInstruction = "ART STYLE: Pastel/Chalk texture."; 
+                break;
+            case 'ACRILICA': 
+                artStyleInstruction = technique === 'DIGITAL'
+                    ? "ART STYLE: Oil/Acrylic Painting. Visible brush strokes, impasto depth."
+                    : "ART STYLE: Vector Painting. Clean shapes mimicking brush strokes.";
+                break;
+            case 'VETOR': 
+                artStyleInstruction = "ART STYLE: Clean Vector Illustration. Geometric, sharp."; 
+                break;
+            case 'BORDADO': 
+                artStyleInstruction = technique === 'DIGITAL'
+                    ? "ART STYLE: Realistic Embroidery. Satin stitch shine, thread depth."
+                    : "ART STYLE: Flat Embroidery Vector. Simplified stitch simulation.";
+                break;
+            default: artStyleInstruction = "ART STYLE: High quality textile design."; break;
         }
     }
 
-    // 3. Layout & Specs
+    // 4. Layout
     let layoutInstruction = "Seamless repeat pattern (All-over).";
-    if (layoutStyle === 'BARRADO') layoutInstruction = "LAYOUT: BORDER PRINT (Barrado). Heavy motifs at bottom, white space top.";
-    if (layoutStyle === 'LENCO') layoutInstruction = "LAYOUT: ENGINEERED SCARF (Carré). Symmetrical borders.";
-    if (layoutStyle === 'PAREO') layoutInstruction = "LAYOUT: PAREO PANEL (Rectangular).";
+    if (layoutStyle === 'BARRADO') layoutInstruction = "LAYOUT: BORDER PRINT. Heavy motifs at bottom, fading/empty at top.";
+    if (layoutStyle === 'LENCO') layoutInstruction = "LAYOUT: ENGINEERED SCARF (Square). Symmetrical/Framed composition.";
+    if (layoutStyle === 'PAREO') layoutInstruction = "LAYOUT: PAREO PANEL (Rectangular Vertical).";
 
-    // 4. Prompt Final - TRAVA AGRESSIVA DE TEXTURA
+    // 5. Prompt Final
     const FULL_PROMPT = `
-    GENERATE A TEXTILE PRINT FILE (SOURCE ASSET).
+    GENERATE A TEXTILE PRINT DESIGN FILE.
     
     THEME: ${prompt}.
     
-    CRITICAL EXCLUSION LIST (NEGATIVE PROMPT):
-    - NO FABRIC WEAVE (Linen, Twill, Canvas).
-    - NO SURFACE NOISE (Dust, Scratches, Heather, Slub).
-    - NO LIGHTING EFFECTS (Shadows, Folds, Drapes).
-    - NO REALISM (Do not make it look like a photo of cloth).
-    
-    VISUAL TARGET:
-    - Pure Digital Art File.
-    - Perfect for Sublimation or Rotary Printing.
-    - Clean lines, distinct colors.
-    
+    ${TECHNIQUE_PROMPT}
     ${layoutInstruction}
     ${artStyleInstruction}
     ${colorContext}
+    
+    ${NEGATIVE_PROMPT}
     `;
 
     try {
