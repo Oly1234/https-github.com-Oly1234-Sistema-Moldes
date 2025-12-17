@@ -106,7 +106,7 @@ export interface PantoneColor {
   role?: string;
 }
 
-// NOVO TIPO PARA CAMADAS DO STUDIO
+// TIPO PARA CAMADAS DO STUDIO
 export interface DesignLayer {
   id: string;
   type: 'BACKGROUND' | 'ELEMENT';
@@ -116,8 +116,8 @@ export interface DesignLayer {
   y: number;
   scale: number;
   rotation: number;
-  flipX: boolean; // NOVO
-  flipY: boolean; // NOVO
+  flipX: boolean;
+  flipY: boolean;
   visible: boolean;
   locked: boolean;
   zIndex: number;

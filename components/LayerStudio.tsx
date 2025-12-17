@@ -1,528 +1,384 @@
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap, ZoomIn, ZoomOut, RotateCcw, X, Brush, Focus, ShieldCheck, Grid, PaintBucket, Loader2, RefreshCcw, BringToFront, SendToBack, CopyPlus, MinusCircle, PlusCircle, SlidersHorizontal } from 'lucide-react';
+import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap, ZoomIn, ZoomOut, RotateCcw, X, Brush, Focus, ShieldCheck, Grid, PaintBucket, Loader2, RefreshCcw, BringToFront, SendToBack, CopyPlus, MinusCircle, PlusCircle, SlidersHorizontal, Settings2, Magnet, Crop, Download, Square, Check, Cpu, Rotate3d, Move3d } from 'lucide-react';
 import { DesignLayer } from '../types';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
-// --- HELPERS DE IMAGEM & MATEMÁTICA ---
+// --- HELPERS DE IMAGEM ---
 
-const rgbToLab = (r: number, g: number, b: number) => {
-    let r1 = r / 255, g1 = g / 255, b1 = b / 255;
-    r1 = (r1 > 0.04045) ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
-    g1 = (g1 > 0.04045) ? Math.pow((g1 + 0.055) / 1.055, 2.4) : g1 / 12.92;
-    b1 = (b1 > 0.04045) ? Math.pow((b1 + 0.055) / 1.055, 2.4) : b1 / 12.92;
-    let x = (r1 * 0.4124 + g1 * 0.3576 + b1 * 0.1805) / 0.95047;
-    let y = (r1 * 0.2126 + g1 * 0.7152 + b1 * 0.0722) / 1.00000;
-    let z = (r1 * 0.0193 + g1 * 0.1192 + b1 * 0.9505) / 1.08883;
-    x = (x > 0.008856) ? Math.pow(x, 1/3) : (7.787 * x) + 16/116;
-    y = (y > 0.008856) ? Math.pow(y, 1/3) : (7.787 * y) + 16/116;
-    z = (z > 0.008856) ? Math.pow(z, 1/3) : (7.787 * z) + 16/116;
-    return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
-};
-
-// Algoritmo de Seleção Inteligente (Wand)
-const getSmartObjectMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tolerance: number, mode: 'SINGLE' | 'GLOBAL') => {
+const createLayerMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tolerance: number) => {
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
+    const visited = new Uint8Array(width * height);
+    const stack = [[Math.floor(startX), Math.floor(startY)]];
     const mask = new Uint8Array(width * height);
-    
-    const p = (startY * width + startX) * 4;
-    if (p < 0 || p >= data.length) return { mask, hasPixels: false }; 
-    
-    const [l0, a0, b0] = rgbToLab(data[p], data[p+1], data[p+2]);
-    const labTolerance = tolerance * 2.5; 
-
-    if (mode === 'GLOBAL') {
-        let count = 0;
-        for (let i = 0; i < width * height; i++) {
-            const idx = i * 4;
-            if (data[idx+3] === 0) continue;
-            const [l, a, b] = rgbToLab(data[idx], data[idx+1], data[idx+2]);
-            const dist = Math.sqrt((l-l0)**2 + (a-a0)**2 + (b-b0)**2);
-            if (dist < labTolerance) { mask[i] = 255; count++; }
+    const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
+    if (startPos < 0 || startPos >= data.length) return null;
+    const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
+    while (stack.length) {
+        const [x, y] = stack.pop()!;
+        const idx = y * width + x;
+        if (visited[idx]) continue;
+        visited[idx] = 1;
+        const pos = idx * 4;
+        const diff = Math.abs(data[pos] - r0) + Math.abs(data[pos+1] - g0) + Math.abs(data[pos+2] - b0);
+        if (diff <= tolerance * 3) {
+            mask[idx] = 255;
+            if (x > 0) stack.push([x-1, y]); if (x < width - 1) stack.push([x+1, y]);
+            if (y > 0) stack.push([x, y-1]); if (y < height - 1) stack.push([x, y+1]);
         }
-        return { mask, hasPixels: count > 0 };
-    } else {
-        const stack = [[startX, startY]];
-        const visited = new Uint8Array(width * height);
-        let count = 0;
-        while (stack.length) {
-            const [x, y] = stack.pop()!;
-            const idx = y * width + x;
-            if (visited[idx]) continue;
-            visited[idx] = 1;
-            const pos = idx * 4;
-            if (data[pos+3] === 0) continue;
-            const [l, a, b] = rgbToLab(data[pos], data[pos+1], data[pos+2]);
-            const dist = Math.sqrt((l-l0)**2 + (a-a0)**2 + (b-b0)**2);
-            if (dist < labTolerance) {
-                mask[idx] = 255; count++;
-                if (x > 0) stack.push([x-1, y]); if (x < width - 1) stack.push([x+1, y]);
-                if (y > 0) stack.push([x, y-1]); if (y < height - 1) stack.push([x, y+1]);
-            }
-        }
-        return { mask, hasPixels: count > 0 };
     }
+    return mask;
 };
 
-const healBackground = (ctx: CanvasRenderingContext2D, width: number, height: number, mask: Uint8Array) => {
-    const imgData = ctx.getImageData(0, 0, width, height);
-    const data = imgData.data;
-    const tempBuffer = new Uint8ClampedArray(data);
-    const iterations = 20; 
-
-    for (let it = 0; it < iterations; it++) {
-        let changed = false;
-        const readBuffer = new Uint8ClampedArray(tempBuffer);
-        for (let i = 0; i < width * height; i++) {
-            if (mask[i] === 255) { 
-                let rSum=0, gSum=0, bSum=0, count=0;
-                const x = i % width; const y = Math.floor(i / width);
-                const neighbors = [{dx: -1, dy: 0}, {dx: 1, dy: 0}, {dx: 0, dy: -1}, {dx: 0, dy: 1}, {dx: -1, dy: -1}, {dx: 1, dy: -1}, {dx: -1, dy: 1}, {dx: 1, dy: 1}];
-                for (const n of neighbors) {
-                    const nx = x + n.dx; const ny = y + n.dy;
-                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                        const ni = ny * width + nx;
-                        if (mask[ni] === 0) {
-                            const nIdx = ni * 4;
-                            if (readBuffer[nIdx+3] > 0) { rSum += readBuffer[nIdx]; gSum += readBuffer[nIdx+1]; bSum += readBuffer[nIdx+2]; count++; }
-                        }
-                    }
-                }
-                if (count > 0) {
-                    const idx = i * 4;
-                    tempBuffer[idx] = rSum / count; tempBuffer[idx+1] = gSum / count; tempBuffer[idx+2] = bSum / count; tempBuffer[idx+3] = 255;
-                    mask[i] = 0; changed = true;
-                }
-            }
-        }
-        if (!changed) break;
-    }
-    data.set(tempBuffer);
-    ctx.putImageData(imgData, 0, 0);
-};
-
-const createTextureLayerImage = async (url: string, width: number, height: number, opacity: number): Promise<string> => {
-    return new Promise((resolve) => {
-        const img = new Image(); img.crossOrigin = "anonymous"; img.src = url;
-        img.onload = () => {
-            const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext('2d')!; const pat = ctx.createPattern(img, 'repeat');
-            if (pat) { ctx.fillStyle = pat; ctx.globalAlpha = opacity; ctx.fillRect(0, 0, width, height); }
-            resolve(canvas.toDataURL());
-        };
-        img.onerror = () => resolve(''); 
-    });
-};
-
-interface LayerStudioProps {
-    onNavigateBack?: () => void;
-    onNavigateToMockup?: () => void;
-}
-
-export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavigateToMockup }) => {
-    const [history, setHistory] = useState<DesignLayer[][]>([]);
-    const [historyIndex, setHistoryIndex] = useState(-1);
+export const LayerStudio: React.FC<{ onNavigateBack?: () => void }> = ({ onNavigateBack }) => {
+    const [originalSrc, setOriginalSrc] = useState<string | null>(null);
     const [layers, setLayers] = useState<DesignLayer[]>([]);
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-    const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 1000 });
+    const [history, setHistory] = useState<DesignLayer[][]>([]);
+    const [canvasSize, setCanvasSize] = useState({ w: 1024, h: 1024 });
     
-    // TOOLS
-    const [tool, setTool] = useState<'MOVE' | 'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('MOVE');
-    const [wandMode, setWandMode] = useState<'SINGLE' | 'GLOBAL'>('SINGLE');
-    const [wandAction, setWandAction] = useState<'NEW' | 'ADD' | 'SUB'>('NEW'); // Nova feature: + / -
-    const [brushSize, setBrushSize] = useState(30);
-    const [wandTolerance, setWandTolerance] = useState(40);
-    const [smartEdge, setSmartEdge] = useState(true);
-    const [feather, setFeather] = useState(2);
+    // Tools
+    const [tool, setTool] = useState<'MOVE' | 'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'OFFSET'>('HAND');
+    const [wandTolerance, setWandTolerance] = useState(30);
+    const [brushSize, setBrushSize] = useState(50);
+    const [pixelLock, setPixelLock] = useState(true);
+    const [edgeFeather, setEdgeFeather] = useState(1);
+    
+    // Mask State
+    const [activeMask, setActiveMask] = useState<Uint8Array | null>(null);
+    const [showSelectionOverlay, setShowSelectionOverlay] = useState(false);
 
-    // AI EDIT
-    const [magicPrompt, setMagicPrompt] = useState('');
-    const [isMagicLoading, setIsMagicLoading] = useState(false);
-
-    // VIEWPORT
+    // Viewport
     const [view, setView] = useState({ x: 0, y: 0, k: 0.8 });
     const isPanning = useRef(false);
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
-    const lastDistRef = useRef<number>(0);
-
-    // MASKING
-    const [activeMask, setActiveMask] = useState<Uint8Array | null>(null);
-    const [maskPreviewSrc, setMaskPreviewSrc] = useState<string | null>(null);
-    const [maskHistory, setMaskHistory] = useState<Uint8Array[]>([]);
     
     const containerRef = useRef<HTMLDivElement>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [processStatus, setProcessStatus] = useState('');
-    const [incomingPayload, setIncomingPayload] = useState<any | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const isDrawing = useRef(false);
 
-    const [isTransforming, setIsTransforming] = useState<'NONE' | 'DRAG' | 'RESIZE' | 'ROTATE'>('NONE');
-    const isDrawingRef = useRef(false);
-    const lastDrawPos = useRef<{x: number, y: number} | null>(null);
-
-    // --- TRANSFER LISTENER ---
+    // --- ATALHOS DE TECLADO ---
     useEffect(() => {
-        const checkStorage = () => {
-            const stored = localStorage.getItem('vingi_layer_studio_data');
-            const legacy = localStorage.getItem('vingi_layer_studio_source');
-            if (stored) {
-                setIncomingPayload(JSON.parse(stored));
-                localStorage.removeItem('vingi_layer_studio_data');
-            } else if (legacy) {
-                setIncomingPayload({ mainImage: legacy, texture: null });
-                localStorage.removeItem('vingi_layer_studio_source');
-            }
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+            if (e.key === 'v') setTool('MOVE');
+            if (e.key === 'w') setTool('WAND');
+            if (e.key === 'h') setTool('HAND');
+            if (e.key === 'b') setTool('BRUSH');
+            if (e.key === 'o') setTool('OFFSET');
         };
-        checkStorage();
-        window.addEventListener('vingi_transfer', (e: any) => { if (e.detail?.module === 'LAYER') checkStorage(); });
-    }, []);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [history]);
 
-    // --- HISTORY MANAGER ---
-    const addToLayerHistory = useCallback((newLayers: DesignLayer[]) => {
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push(newLayers);
-        if (newHistory.length > 20) newHistory.shift();
-        setHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
+    const saveHistory = (newLayers: DesignLayer[]) => {
+        setHistory(prev => [...prev.slice(-20), layers]);
         setLayers(newLayers);
-    }, [history, historyIndex]);
+    };
 
-    const undoMask = () => {
-        if (maskHistory.length > 1) {
-            const prev = maskHistory[maskHistory.length - 2];
-            setMaskHistory(curr => curr.slice(0, -1));
-            setActiveMask(new Uint8Array(prev));
-            updateMaskPreview(prev);
-        } else if (maskHistory.length === 1) {
-            setMaskHistory([]); setActiveMask(null); setMaskPreviewSrc(null);
+    const undo = () => {
+        if (history.length > 0) {
+            const prev = history[history.length - 1];
+            setLayers(prev);
+            setHistory(h => h.slice(0, -1));
         }
     };
 
-    const updateMaskPreview = (mask: Uint8Array) => {
-        const canvas = document.createElement('canvas'); canvas.width = canvasSize.w; canvas.height = canvasSize.h;
-        const ctx = canvas.getContext('2d')!; const imgData = ctx.createImageData(canvas.width, canvas.height); const data = imgData.data;
-        for(let i=0; i<mask.length; i++) {
-            if(mask[i] === 255) {
-                const idx = i * 4;
-                // Neon Selection Style based on mode
-                if (wandAction === 'SUB') {
-                    data[idx] = 255; data[idx+1] = 0; data[idx+2] = 50; data[idx+3] = 180; // Red
-                } else {
-                    data[idx] = 0; data[idx+1] = 255; data[idx+2] = 255; data[idx+3] = 150; // Cyan
-                }
-            }
+    const resetToZero = () => {
+        if (!originalSrc) return;
+        if (confirm("Deseja reiniciar o projeto? Todas as camadas e edições serão perdidas.")) {
+            initFromImage(originalSrc);
         }
-        ctx.putImageData(imgData, 0, 0);
-        setMaskPreviewSrc(canvas.toDataURL());
     };
 
-    const startSession = async (payload: { mainImage: string, texture?: any }) => {
-        const image = new Image(); image.src = payload.mainImage;
-        image.onload = async () => {
-            const maxDim = 1500;
-            let finalW = image.width, finalH = image.height;
-            if (image.width > maxDim || image.height > maxDim) {
-                const ratio = image.width/image.height;
-                if (image.width > image.height) { finalW = maxDim; finalH = Math.round(maxDim / ratio); } 
-                else { finalH = maxDim; finalW = Math.round(maxDim * ratio); }
+    const initFromImage = (src: string) => {
+        const img = new Image(); img.src = src;
+        img.onload = () => {
+            const layer: DesignLayer = {
+                id: 'base-' + Date.now(), type: 'BACKGROUND', name: 'Original', src,
+                x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false,
+                visible: true, locked: false, zIndex: 0, opacity: 1
+            };
+            setOriginalSrc(src);
+            setCanvasSize({ w: img.width, h: img.height });
+            setLayers([layer]);
+            setSelectedLayerId(layer.id);
+            setHistory([]);
+            setTool('MOVE');
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                setView({ x: 0, y: 0, k: Math.min(rect.width / img.width, rect.height / img.height) * 0.8 });
             }
-            setCanvasSize({ w: finalW, h: finalH });
-            const initialLayers: DesignLayer[] = [{ id: 'layer-base', type: 'BACKGROUND', name: 'Arte Original', src: payload.mainImage, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: false, zIndex: 0 }];
-            
-            if (payload.texture && payload.texture.url) {
-                const texImg = await createTextureLayerImage(payload.texture.url, finalW, finalH, payload.texture.opacity || 0.5);
-                if (texImg) { initialLayers.push({ id: 'layer-texture', type: 'ELEMENT', name: `Textura (${payload.texture.type})`, src: texImg, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: true, zIndex: 999 }); }
-            }
-            
-            setLayers(initialLayers); setHistory([initialLayers]); setHistoryIndex(0); setIncomingPayload(null); 
-            setTool('WAND');
-            setTimeout(() => { if (containerRef.current) { const rect = containerRef.current.getBoundingClientRect(); const k = Math.min(rect.width / finalW, rect.height / finalH) * 0.8; setView({ x: 0, y: 0, k }); } }, 100);
-            setActiveMask(null); setMaskPreviewSrc(null); setMaskHistory([]);
         };
     };
 
-    // --- TOOL ACTIONS ---
-    const applySelectionTool = (clickX: number, clickY: number, isDrag: boolean) => {
-        const targetLayer = layers.find(l => !l.locked && l.visible && l.id !== 'layer-texture');
-        if (!targetLayer) { alert("Selecione uma camada desbloqueada primeiro."); return; }
+    // --- SELECTION ACTIONS (APLICAR) ---
+    const applySelectionAction = (action: 'EXTRACT' | 'DELETE' | 'HIDE') => {
+        if (!activeMask || !selectedLayerId) return;
+        const target = layers.find(l => l.id === selectedLayerId);
+        if (!target) return;
 
-        const img = new Image(); img.src = targetLayer.src; img.crossOrigin = "anonymous";
-        const canvas = document.createElement('canvas'); canvas.width = canvasSize.w; canvas.height = canvasSize.h;
-        const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0, canvasSize.w, canvasSize.h);
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasSize.w; canvas.height = canvasSize.h;
+        const ctx = canvas.getContext('2d')!;
+        const img = new Image(); img.src = target.src; img.crossOrigin = "anonymous";
+        img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pix = imgData.data;
 
-        // Logic to MERGE mask based on wandAction
-        const currentMask = activeMask ? new Uint8Array(activeMask) : new Uint8Array(canvasSize.w * canvasSize.h);
-        
-        if (tool === 'WAND' && !isDrag) {
-            const { mask: newMask, hasPixels } = getSmartObjectMask(ctx, canvasSize.w, canvasSize.h, Math.floor(clickX), Math.floor(clickY), wandTolerance, wandMode);
-            
-            if (hasPixels) {
-                for(let i=0; i<currentMask.length; i++) {
-                    if (wandAction === 'NEW') currentMask[i] = newMask[i];
-                    else if (wandAction === 'ADD') currentMask[i] = (currentMask[i] === 255 || newMask[i] === 255) ? 255 : 0;
-                    else if (wandAction === 'SUB') currentMask[i] = (newMask[i] === 255) ? 0 : currentMask[i];
-                }
-                // Save history only on click release (handled in pointer up ideally, but wand is instant)
-                // For wand we save immediately
-                setMaskHistory(prev => [...prev.slice(-10), new Uint8Array(currentMask)]);
-                setActiveMask(currentMask);
-                updateMaskPreview(currentMask);
+            if (action === 'EXTRACT') {
+                // Manter apenas o que está na máscara
+                for (let i = 0; i < activeMask.length; i++) { if (activeMask[i] === 0) pix[i*4 + 3] = 0; }
+                ctx.putImageData(imgData, 0, 0);
+                const newLayer: DesignLayer = {
+                    ...target, id: 'ext-' + Date.now(), name: 'Recorte ' + (layers.length),
+                    src: canvas.toDataURL(), zIndex: layers.length
+                };
+                saveHistory([...layers, newLayer]);
+                setSelectedLayerId(newLayer.id);
+            } else if (action === 'DELETE') {
+                // Apagar o que está na máscara
+                for (let i = 0; i < activeMask.length; i++) { if (activeMask[i] === 255) pix[i*4 + 3] = 0; }
+                ctx.putImageData(imgData, 0, 0);
+                const updated = layers.map(l => l.id === selectedLayerId ? { ...l, src: canvas.toDataURL() } : l);
+                saveHistory(updated);
             }
-        } 
-        // Brush logic simplified for this snippet
+            setActiveMask(null);
+            setShowSelectionOverlay(false);
+        };
     };
 
-    // --- MAGIC SWAP ---
-    const handleMagicSwap = async () => {
-        if (!selectedLayerId || !magicPrompt.trim()) return;
-        const targetLayer = layers.find(l => l.id === selectedLayerId);
-        if (!targetLayer) return;
-
-        setIsMagicLoading(true);
-        try {
-            // Get crop of current element as reference
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    action: 'TRANSFORM_ELEMENT', 
-                    cropBase64: targetLayer.src, // Using full src as reference for now
-                    userPrompt: magicPrompt
-                })
-            });
-            const data = await response.json();
-            if (data.success && data.src) {
-                const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, src: data.src, name: `✨ ${magicPrompt}` } : l);
-                setLayers(newLayers);
-                addToLayerHistory(newLayers);
-                setMagicPrompt('');
-            } else {
-                alert("Falha ao gerar elemento.");
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsMagicLoading(false);
-        }
-    };
-
-    // --- TRANSFORM HELPERS ---
-    const updateSelectedLayer = (updates: Partial<DesignLayer>) => {
-        if (!selectedLayerId) return;
-        const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, ...updates } : l);
-        setLayers(newLayers);
-    };
-    
-    const commitLayerChange = () => addToLayerHistory(layers);
-
-    const duplicateLayer = () => {
-        if (!selectedLayerId) return;
-        const original = layers.find(l => l.id === selectedLayerId);
-        if (original) {
-            const newLayer = { ...original, id: `copy-${Date.now()}`, x: original.x + 20, y: original.y + 20, name: `${original.name} (Copy)` };
-            const newLayers = [...layers, newLayer];
-            setLayers(newLayers);
-            addToLayerHistory(newLayers);
-            setSelectedLayerId(newLayer.id);
-        }
-    };
-
-    // --- RENDER ---
-    // ... [Previous render code for canvas/viewport] ...
+    // --- INTERACTION ---
     const getCanvasCoords = (clientX: number, clientY: number) => {
         if (!containerRef.current) return { x: 0, y: 0 };
         const rect = containerRef.current.getBoundingClientRect();
         const cx = rect.width / 2; const cy = rect.height / 2;
-        const relX = (clientX - rect.left - cx - view.x) / view.k + canvasSize.w / 2;
-        const relY = (clientY - rect.top - cy - view.y) / view.k + canvasSize.h / 2;
-        return { x: relX, y: relY };
+        const px = (clientX - rect.left - cx - view.x) / view.k + canvasSize.w / 2;
+        const py = (clientY - rect.top - cy - view.y) / view.k + canvasSize.h / 2;
+        return { x: px, y: py };
     };
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        e.preventDefault();
-        lastPointerPos.current = { x: e.clientX, y: e.clientY };
-        if (tool === 'HAND' || e.button === 1) { isPanning.current = true; return; }
         const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-        if (tool === 'MOVE' && selectedLayerId) setIsTransforming('DRAG');
-        else if (['WAND'].includes(tool)) applySelectionTool(x, y, false);
+        lastPointerPos.current = { x: e.clientX, y: e.clientY };
+
+        if (tool === 'HAND' || e.button === 1) { isPanning.current = true; return; }
+
+        if (tool === 'WAND' && selectedLayerId) {
+            const target = layers.find(l => l.id === selectedLayerId);
+            if (!target) return;
+            const tempC = document.createElement('canvas');
+            tempC.width = canvasSize.w; tempC.height = canvasSize.h;
+            const tCtx = tempC.getContext('2d')!;
+            const img = new Image(); img.src = target.src; img.crossOrigin = "anonymous";
+            img.onload = () => {
+                tCtx.drawImage(img, 0, 0, canvasSize.w, canvasSize.h);
+                const mask = createLayerMask(tCtx, canvasSize.w, canvasSize.h, x, y, wandTolerance);
+                setActiveMask(mask);
+                setShowSelectionOverlay(true);
+            };
+        } else if (tool === 'MOVE' || tool === 'OFFSET') {
+            isDrawing.current = true;
+        }
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-        if (!lastPointerPos.current) return;
-        const dx = e.clientX - lastPointerPos.current.x;
-        const dy = e.clientY - lastPointerPos.current.y;
-        lastPointerPos.current = { x: e.clientX, y: e.clientY };
-        if (isPanning.current) { setView(v => ({ ...v, x: v.x + dx, y: v.y + dy })); return; }
-        if (isTransforming === 'DRAG' && selectedLayerId) {
-            const newLayers = layers.map(l => l.id === selectedLayerId ? { ...l, x: l.x + dx/view.k, y: l.y + dy/view.k } : l);
-            setLayers(newLayers);
+        if (isPanning.current && lastPointerPos.current) {
+            const dx = e.clientX - lastPointerPos.current.x;
+            const dy = e.clientY - lastPointerPos.current.y;
+            setView(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
+            lastPointerPos.current = { x: e.clientX, y: e.clientY };
+            return;
+        }
+
+        if (isDrawing.current && lastPointerPos.current && selectedLayerId) {
+            const dx = (e.clientX - lastPointerPos.current.x) / view.k;
+            const dy = (e.clientY - lastPointerPos.current.y) / view.k;
+            setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, x: l.x + dx, y: l.y + dy } : l));
+            lastPointerPos.current = { x: e.clientX, y: e.clientY };
         }
     };
 
     const handlePointerUp = () => {
-        if (isTransforming === 'DRAG') commitLayerChange();
-        isPanning.current = false; setIsTransforming('NONE'); lastPointerPos.current = null;
+        if (isDrawing.current && (tool === 'MOVE' || tool === 'OFFSET')) saveHistory(layers);
+        isPanning.current = false; isDrawing.current = false; lastPointerPos.current = null;
     };
 
-    if (incomingPayload) return <div className="flex items-center justify-center h-full bg-black text-white"><Loader2 size={32} className="animate-spin"/></div>;
+    const handleWheel = (e: React.WheelEvent) => {
+        if (e.ctrlKey || tool === 'HAND') {
+            e.preventDefault();
+            const s = Math.exp(-e.deltaY * 0.001);
+            setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * s), 10) }));
+        }
+    };
 
     const selectedLayer = layers.find(l => l.id === selectedLayerId);
 
     return (
-        <div className="flex flex-col h-full w-full bg-[#1e293b] text-white overflow-hidden" 
-             onPointerUp={handlePointerUp} onPointerMove={handlePointerMove}>
-            
-            <ModuleHeader icon={Layers} title="Layer Studio" subtitle="Laboratório de Extração" />
-            
+        <div className="flex flex-col h-full bg-[#050505] text-white overflow-hidden select-none">
+            <ModuleHeader icon={Layers} title="Layer Studio" subtitle="Editor Industrial" 
+                onAction={resetToZero} actionLabel="Reiniciar" referenceImage={originalSrc} />
+
             {!layers.length ? (
                 <div className="flex-1 bg-white overflow-y-auto">
-                    <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>startSession({mainImage: ev.target?.result as string}); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
-                    <ModuleLandingPage icon={Layers} title="Layer Lab" description="Separação inteligente e reconstrução de elementos." primaryActionLabel="Abrir Imagem" onPrimaryAction={() => fileInputRef.current?.click()} />
+                    <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>initFromImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
+                    <ModuleLandingPage icon={Layers} title="Layer Lab Pro" description="Isole elementos, remova fundos e posicione estampas com inteligência artificial industrial." primaryActionLabel="Abrir Imagem" onPrimaryAction={() => fileInputRef.current?.click()} />
                 </div>
             ) : (
-                <>
-                    {/* TOP TOOLBAR */}
-                    <div className="h-14 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-4 shrink-0 z-30 justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
-                                <button onClick={() => setTool('MOVE')} className={`p-2 rounded-md ${tool==='MOVE' ? 'bg-vingi-600 text-white' : 'text-gray-400'}`} title="Mover (V)"><Move size={18}/></button>
-                                <div className="w-px h-6 bg-gray-700 mx-1 self-center"></div>
-                                <button onClick={() => setTool('WAND')} className={`p-2 rounded-md ${tool==='WAND' ? 'bg-purple-600 text-white' : 'text-gray-400'}`} title="Varinha (W)"><Wand2 size={18}/></button>
-                                <button onClick={() => setTool('HAND')} className={`p-2 rounded-md ${tool==='HAND' ? 'bg-gray-600 text-white' : 'text-gray-400'}`} title="Hand (H)"><Hand size={18}/></button>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setView(v => ({ ...v, k: v.k * 1.2 }))} className="p-2 hover:bg-gray-800 rounded-full text-gray-400"><ZoomIn size={18}/></button>
-                            <button onClick={() => setView({ x: 0, y: 0, k: 0.5 })} className="p-2 hover:bg-gray-800 rounded-full text-gray-400"><RotateCcw size={18}/></button>
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+                    
+                    {/* CANVAS AREA */}
+                    <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center touch-none bg-[#0a0a0a] ${tool==='HAND'?'cursor-grab':tool==='MOVE'?'cursor-move':'cursor-crosshair'}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
+                        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+                        
+                        <div className="relative shadow-2xl transition-transform duration-75 ease-out origin-center" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
+                            {layers.map(l => l.visible && (
+                                <div key={l.id} className="absolute inset-0 pointer-events-none" style={{ transform: `translate(${l.x}px, ${l.y}px) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, zIndex: l.zIndex, opacity: l.opacity ?? 1 }}>
+                                    <img src={l.src} className={`w-full h-full object-contain ${selectedLayerId===l.id ? 'ring-2 ring-vingi-500 shadow-2xl' : ''}`} draggable={false} />
+                                </div>
+                            ))}
+                            {/* Mask Overlay Visualizer */}
+                            {showSelectionOverlay && activeMask && (
+                                <div className="absolute inset-0 pointer-events-none z-50 mix-blend-screen opacity-60">
+                                    <svg width="100%" height="100%" viewBox={`0 0 ${canvasSize.w} ${canvasSize.h}`}>
+                                        <rect width="100%" height="100%" fill="rgba(0,255,255,0.1)" stroke="#00ffff" strokeWidth="2" strokeDasharray="5,5" className="animate-pulse" />
+                                    </svg>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                        {/* CANVAS AREA */}
-                        <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center bg-[#101010]`} 
-                             onPointerDown={handlePointerDown} style={{ cursor: tool === 'MOVE' ? 'default' : tool === 'HAND' ? 'grab' : 'crosshair' }}>
+                    {/* PROPERTIES PANEL */}
+                    <div className="w-full md:w-80 bg-[#111] border-t md:border-t-0 md:border-l border-gray-800 flex flex-col shadow-2xl z-40 h-[40vh] md:h-full shrink-0">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
                             
-                            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#444 1px, transparent 1px)', backgroundSize: '20px 20px', transform: `scale(${view.k})`, transformOrigin: 'center' }} />
-
-                            <div className="relative shadow-2xl transition-transform duration-75 ease-out origin-center" 
-                                 style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
-                                <div className="absolute inset-0 bg-white" />
-                                {layers.map(l => l.visible && (
-                                    <div key={l.id} className={`absolute select-none pointer-events-none`} 
-                                         style={{ 
-                                             left: '50%', top: '50%', 
-                                             width: (l.type==='BACKGROUND') ? '100%' : 'auto', 
-                                             height: (l.type==='BACKGROUND') ? '100%' : 'auto', 
-                                             transform: `translate(calc(-50% + ${l.x}px), calc(-50% + ${l.y}px)) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, 
-                                             zIndex: l.zIndex,
-                                             opacity: l.opacity ?? 1
-                                         }}>
-                                        <img src={l.src} className={`max-w-none ${l.type==='BACKGROUND' ? 'w-full h-full object-contain' : ''} ${selectedLayerId===l.id && tool==='MOVE' ? 'ring-2 ring-blue-500 shadow-xl' : ''}`} draggable={false} />
+                            {selectedLayer ? (
+                                <div className="space-y-4 animate-fade-in">
+                                    <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+                                        <h3 className="text-[10px] font-bold text-vingi-400 uppercase tracking-widest flex items-center gap-2"><Settings2 size={12}/> {selectedLayer.name}</h3>
+                                        <button onClick={() => setSelectedLayerId(null)} className="text-gray-500 hover:text-white"><X size={14}/></button>
                                     </div>
-                                ))}
-                                {maskPreviewSrc && <div className="absolute inset-0 pointer-events-none z-[100] mix-blend-normal opacity-100"><img src={maskPreviewSrc} className="w-full h-full object-contain" /></div>}
-                            </div>
-                        </div>
 
-                        {/* PROPERTIES PANEL */}
-                        <div className="w-full md:w-80 bg-[#1e293b] border-t md:border-t-0 md:border-l border-gray-700 flex flex-col shadow-2xl z-20 h-[45vh] md:h-full">
-                            <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-                                
-                                {/* WAND SETTINGS */}
-                                {tool === 'WAND' && (
-                                    <div className="space-y-4 animate-slide-down bg-gray-800/50 p-3 rounded-xl border border-gray-700">
-                                        <h3 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2"><Wand2 size={12}/> Seleção Inteligente</h3>
-                                        
-                                        <div className="flex bg-gray-900 rounded-lg p-1">
-                                            <button onClick={() => setWandAction('NEW')} className={`flex-1 py-2 text-[10px] font-bold rounded flex items-center justify-center gap-1 ${wandAction==='NEW' ? 'bg-gray-700 text-white' : 'text-gray-500'}`}><RefreshCcw size={12}/> Nova</button>
-                                            <button onClick={() => setWandAction('ADD')} className={`flex-1 py-2 text-[10px] font-bold rounded flex items-center justify-center gap-1 ${wandAction==='ADD' ? 'bg-vingi-600 text-white' : 'text-gray-500'}`}><PlusCircle size={12}/> Somar</button>
-                                            <button onClick={() => setWandAction('SUB')} className={`flex-1 py-2 text-[10px] font-bold rounded flex items-center justify-center gap-1 ${wandAction==='SUB' ? 'bg-red-600 text-white' : 'text-gray-500'}`}><MinusCircle size={12}/> Subtrair</button>
-                                        </div>
-
+                                    {/* TRANSFORMATIONS */}
+                                    <div className="space-y-4 bg-gray-900/50 p-3 rounded-xl border border-gray-800">
                                         <div className="space-y-1">
-                                            <div className="flex justify-between text-[10px] text-gray-400 font-bold"><span>Tolerância</span><span>{wandTolerance}%</span></div>
-                                            <input type="range" min="5" max="100" value={wandTolerance} onChange={(e) => setWandTolerance(parseInt(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none accent-purple-500"/>
+                                            <div className="flex justify-between text-[9px] font-bold text-gray-500 uppercase"><span>Opacidade</span><span>{Math.round((selectedLayer.opacity || 1)*100)}%</span></div>
+                                            <input type="range" min="0" max="1" step="0.1" value={selectedLayer.opacity || 1} onChange={e => setLayers(ls => ls.map(l => l.id === selectedLayerId ? { ...l, opacity: parseFloat(e.target.value) } : l))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
                                         </div>
-
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setWandMode(m => m === 'SINGLE' ? 'GLOBAL' : 'SINGLE')} className={`flex-1 py-2 text-[10px] font-bold rounded border ${wandMode==='GLOBAL' ? 'bg-purple-900/30 border-purple-500 text-purple-300' : 'border-gray-600 text-gray-400'}`}>
-                                                {wandMode === 'SINGLE' ? 'Contíguo (Flood)' : 'Global (Cor)'}
-                                            </button>
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between text-[9px] font-bold text-gray-500 uppercase"><span>Escala</span><span>{Math.round(selectedLayer.scale*100)}%</span></div>
+                                            <input type="range" min="0.1" max="4" step="0.1" value={selectedLayer.scale} onChange={e => setLayers(ls => ls.map(l => l.id === selectedLayerId ? { ...l, scale: parseFloat(e.target.value) } : l))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            <button onClick={() => setLayers(ls => ls.map(l => l.id === selectedLayerId ? { ...l, flipX: !l.flipX } : l))} className="p-2 bg-gray-800 hover:bg-gray-700 rounded flex justify-center"><FlipHorizontal size={14}/></button>
+                                            <button onClick={() => setLayers(ls => ls.map(l => l.id === selectedLayerId ? { ...l, flipY: !l.flipY } : l))} className="p-2 bg-gray-800 hover:bg-gray-700 rounded flex justify-center"><FlipVertical size={14}/></button>
+                                            <button onClick={() => setLayers(ls => ls.map(l => l.id === selectedLayerId ? { ...l, zIndex: l.zIndex + 1 } : l))} className="p-2 bg-gray-800 hover:bg-gray-700 rounded flex justify-center"><BringToFront size={14}/></button>
+                                            <button onClick={() => setLayers(ls => ls.filter(l => l.id !== selectedLayerId))} className="p-2 bg-red-900/20 text-red-500 hover:bg-red-900/40 rounded flex justify-center"><Trash2 size={14}/></button>
                                         </div>
                                     </div>
-                                )}
 
-                                {/* SELECTED LAYER EDITOR */}
-                                {selectedLayer && selectedLayer.type === 'ELEMENT' && tool === 'MOVE' && (
-                                    <div className="space-y-4 animate-slide-up">
-                                        <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-xl">
-                                            <h3 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-3 flex items-center gap-2"><SlidersHorizontal size={12}/> Transformação</h3>
-                                            
-                                            <div className="space-y-3">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[10px] w-12 text-gray-400 font-bold">Escala</span>
-                                                    <input type="range" min="0.1" max="3" step="0.1" value={selectedLayer.scale} onChange={(e) => updateSelectedLayer({ scale: parseFloat(e.target.value) })} onMouseUp={commitLayerChange} className="flex-1 h-1 bg-gray-700 rounded appearance-none accent-blue-500"/>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[10px] w-12 text-gray-400 font-bold">Rotação</span>
-                                                    <input type="range" min="0" max="360" value={selectedLayer.rotation} onChange={(e) => updateSelectedLayer({ rotation: parseInt(e.target.value) })} onMouseUp={commitLayerChange} className="flex-1 h-1 bg-gray-700 rounded appearance-none accent-blue-500"/>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[10px] w-12 text-gray-400 font-bold">Opacidade</span>
-                                                    <input type="range" min="0" max="1" step="0.1" value={selectedLayer.opacity ?? 1} onChange={(e) => updateSelectedLayer({ opacity: parseFloat(e.target.value) })} onMouseUp={commitLayerChange} className="flex-1 h-1 bg-gray-700 rounded appearance-none accent-blue-500"/>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-4 gap-2 mt-4">
-                                                <button onClick={() => { updateSelectedLayer({ flipX: !selectedLayer.flipX }); commitLayerChange(); }} className="p-2 bg-gray-800 hover:bg-blue-600 rounded flex justify-center" title="Espelhar H"><FlipHorizontal size={16}/></button>
-                                                <button onClick={() => { updateSelectedLayer({ flipY: !selectedLayer.flipY }); commitLayerChange(); }} className="p-2 bg-gray-800 hover:bg-blue-600 rounded flex justify-center" title="Espelhar V"><FlipVertical size={16}/></button>
-                                                <button onClick={() => { updateSelectedLayer({ zIndex: selectedLayer.zIndex + 1 }); commitLayerChange(); }} className="p-2 bg-gray-800 hover:bg-blue-600 rounded flex justify-center" title="Trazer para Frente"><BringToFront size={16}/></button>
-                                                <button onClick={duplicateLayer} className="p-2 bg-gray-800 hover:bg-green-600 rounded flex justify-center" title="Duplicar"><CopyPlus size={16}/></button>
-                                            </div>
+                                    {/* EDGE REFINEMENT */}
+                                    <div className="space-y-3 bg-gray-900/30 p-3 rounded-xl border border-white/5">
+                                        <h4 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1"><Scissors size={10}/> Refinamento de Borda</h4>
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between text-[8px] font-bold text-gray-400 uppercase"><span>Suavização (Feather)</span><span>{edgeFeather}px</span></div>
+                                            <input type="range" min="0" max="10" step="0.5" value={edgeFeather} onChange={e => setEdgeFeather(parseFloat(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-vingi-400"/>
                                         </div>
-
-                                        {/* MAGIC SWAP */}
-                                        <div className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 border border-purple-500/30 p-3 rounded-xl">
-                                            <h3 className="text-[10px] font-bold text-purple-300 uppercase tracking-widest mb-2 flex items-center gap-2"><Sparkles size={12}/> Troca Mágica (Gen AI)</h3>
-                                            <div className="flex gap-2">
-                                                <input 
-                                                    type="text" 
-                                                    value={magicPrompt}
-                                                    onChange={(e) => setMagicPrompt(e.target.value)}
-                                                    placeholder="Ex: Transformar em rosa vermelha..." 
-                                                    className="flex-1 bg-black/50 border border-purple-500/30 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-400"
-                                                />
-                                                <button onClick={handleMagicSwap} disabled={isMagicLoading || !magicPrompt} className="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-lg disabled:opacity-50">
-                                                    {isMagicLoading ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Camadas</h3>
+                                    <div className="space-y-2">
+                                        {layers.slice().reverse().map(l => (
+                                            <div key={l.id} onClick={() => setSelectedLayerId(l.id)} className={`p-2 rounded-xl flex items-center gap-3 cursor-pointer border transition-all ${selectedLayerId===l.id ? 'bg-vingi-900/30 border-vingi-500/50 shadow-lg' : 'bg-[#1a1a1a] border-gray-800 hover:border-gray-600'}`}>
+                                                <div className="w-10 h-10 bg-black rounded-lg overflow-hidden border border-gray-800 shrink-0"><img src={l.src} className="w-full h-full object-cover" /></div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-xs font-bold truncate ${selectedLayerId===l.id ? 'text-white' : 'text-gray-400'}`}>{l.name}</p>
+                                                    <span className="text-[9px] text-gray-600 uppercase font-mono">{l.type}</span>
+                                                </div>
+                                                <button onClick={(e) => { e.stopPropagation(); setLayers(ls => ls.map(lay => lay.id === l.id ? { ...lay, visible: !lay.visible } : lay)); }} className="text-gray-600 hover:text-white p-1">
+                                                    {l.visible ? <Eye size={14}/> : <EyeOff size={14}/>}
                                                 </button>
                                             </div>
-                                            <p className="text-[9px] text-purple-400/60 mt-1 italic">O elemento será substituído por um novo gerado por IA.</p>
-                                        </div>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
-                                {/* LAYERS LIST */}
-                                <div className="space-y-1">
-                                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1 mb-2">Camadas</h3>
-                                    {layers.slice().reverse().map(l => (
-                                        <div key={l.id} onClick={() => !l.locked && setSelectedLayerId(l.id)} className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer border transition-all ${selectedLayerId===l.id ? 'bg-blue-900/30 border-blue-500/50' : 'bg-transparent border-transparent hover:bg-gray-800'} ${l.locked ? 'opacity-50' : ''}`}>
-                                            <button onClick={(e)=>{e.stopPropagation(); updateSelectedLayer({visible: !l.visible})}} className={`p-1 rounded ${l.visible?'text-gray-400':'text-gray-600'}`}>{l.visible?<Eye size={12}/>:<EyeOff size={12}/>}</button>
-                                            <div className="w-8 h-8 bg-gray-700 rounded border border-gray-600 overflow-hidden shrink-0"><img src={l.src} className="w-full h-full object-contain" /></div>
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className={`text-[11px] font-medium truncate ${selectedLayerId===l.id ? 'text-white' : 'text-gray-400'}`}>{l.name}</h4>
-                                                <span className="text-[9px] text-gray-600 uppercase">{l.type === 'BACKGROUND' ? 'Base' : 'Elemento'}</span>
-                                            </div>
-                                            {l.locked && <Lock size={10} className="text-gray-600"/>}
-                                        </div>
-                                    ))}
+                    {/* CONTEXTUAL "APPLY" BAR (WAND ACTIVE) */}
+                    {showSelectionOverlay && (
+                        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[100] animate-slide-up flex flex-col gap-3 items-center">
+                            <div className="bg-black/95 backdrop-blur-xl border border-vingi-500/50 p-4 rounded-2xl shadow-[0_0_40px_rgba(59,130,246,0.4)] flex items-center gap-4">
+                                <div className="text-center pr-4 border-r border-white/10">
+                                    <p className="text-[9px] font-bold text-vingi-400 uppercase tracking-widest">Seleção Ativa</p>
+                                    <p className="text-xs text-white font-medium">O que deseja fazer?</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => applySelectionAction('EXTRACT')} className="px-4 py-2 bg-vingi-600 hover:bg-vingi-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-2 transition-all"><Check size={14}/> EXTRAIR CAMADA</button>
+                                    <button onClick={() => applySelectionAction('DELETE')} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-2 transition-all"><Trash2 size={14}/> APAGAR ÁREA</button>
+                                    <button onClick={() => { setActiveMask(null); setShowSelectionOverlay(false); }} className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg"><X size={16}/></button>
                                 </div>
                             </div>
                         </div>
+                    )}
+
+                    {/* TOOL SLIDERS */}
+                    {!showSelectionOverlay && (
+                        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-4 pointer-events-none">
+                            <div className="bg-black/95 backdrop-blur-md border border-white/10 p-4 rounded-2xl shadow-2xl pointer-events-auto animate-slide-up flex flex-col gap-3">
+                                {tool === 'WAND' && (
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Tolerância Visual</span><span>{wandTolerance}%</span></div>
+                                        <input type="range" min="1" max="100" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-white"/>
+                                    </div>
+                                )}
+                                {(tool === 'BRUSH' || tool === 'ERASER') && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase flex-1"><span>Tamanho</span><span>{brushSize}px</span></div>
+                                            <button onClick={() => setPixelLock(!pixelLock)} className={`ml-4 px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all flex items-center gap-2 ${pixelLock ? 'bg-vingi-900 border-vingi-500 text-vingi-300' : 'bg-gray-800 border-gray-700 text-gray-500'}`}>
+                                                <Magnet size={10}/> {pixelLock ? 'Travar Pixels' : 'Livre'}
+                                            </button>
+                                        </div>
+                                        <input type="range" min="5" max="300" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-white"/>
+                                    </div>
+                                )}
+                                {tool === 'HAND' && (
+                                    <div className="text-center py-1"><p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Navegação: Arraste com 2 dedos ou botão do meio</p></div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* BOTTOM DOCK */}
+                    <div className="bg-[#111] border-t border-gray-800 shrink-0 z-50 pb-[env(safe-area-inset-bottom)]">
+                        <div className="flex items-center justify-between px-2 py-2 overflow-x-auto no-scrollbar gap-1 max-w-4xl mx-auto">
+                            <ToolBtn icon={Hand} label="Mover Tela" active={tool==='HAND'} onClick={() => setTool('HAND')} />
+                            <ToolBtn icon={Move} label="Mover Elemento" active={tool==='MOVE'} onClick={() => setTool('MOVE')} />
+                            <ToolBtn icon={Move3d} label="Posicionar" active={tool==='OFFSET'} onClick={() => setTool('OFFSET')} />
+                            <div className="w-px h-8 bg-gray-800 mx-1"></div>
+                            <ToolBtn icon={Wand2} label="Varinha" active={tool==='WAND'} onClick={() => setTool('WAND')} />
+                            <ToolBtn icon={Brush} label="Pincel" active={tool==='BRUSH'} onClick={() => setTool('BRUSH')} />
+                            <ToolBtn icon={Eraser} label="Apagar" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
+                            <div className="w-px h-8 bg-gray-800 mx-1"></div>
+                            <ToolBtn icon={Undo2} label="Desfazer" onClick={undo} disabled={history.length === 0} />
+                            <ToolBtn icon={RefreshCcw} label="Nova Arte" onClick={() => fileInputRef.current?.click()} />
+                        </div>
                     </div>
-                </>
+                </div>
             )}
         </div>
     );
 };
+
+const ToolBtn = ({ icon: Icon, label, active, onClick, disabled }: any) => (
+    <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center min-w-[64px] h-14 rounded-xl gap-1 transition-all active:scale-90 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:bg-white/5'} ${active ? 'bg-vingi-900/50 text-white border border-vingi-500/30 shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>
+        <Icon size={20} strokeWidth={active ? 2.5 : 1.5} className={active ? 'drop-shadow-lg' : ''} /> 
+        <span className="text-[9px] font-bold uppercase tracking-tight">{label}</span>
+    </button>
+);

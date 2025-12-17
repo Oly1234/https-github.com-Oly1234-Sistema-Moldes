@@ -37,36 +37,16 @@ export default async function handler(req, res) {
     // --- ROTEAMENTO ---
 
     if (action === 'VOICE_COMMAND') {
-        const ROUTER_PROMPT = `
-        ACT AS: Vingi OS Navigation System.
-        
-        VALID VIEWS (STRICT LIST):
-        - "HOME" (Dashboard, Início)
-        - "SCANNER" (Caçador de Moldes, Scanner, Engenharia Reversa, Foto da roupa)
-        - "CREATOR" (Radar Global, Buscador de Estampas, Textura)
-        - "ATELIER" (Estúdio de Criação, Gerar Estampa, Criar, Pattern Generator)
-        - "LAYER_STUDIO" (Lab de Imagem, Layer, Editar, Remover Fundo, Photoshop)
-        - "MOCKUP" (Aplicação Técnica, Encaixe, Molde 2D)
-        - "RUNWAY" (Provador Mágico, Modelo 3D, Desfile, Simulação)
-        - "HISTORY" (Histórico, Meus Projetos)
-
-        USER COMMAND: "${commandText}"
-
-        TASK: Map the user command to the closest VALID VIEW.
-        OUTPUT JSON: { "targetView": "ONE_OF_THE_VALID_VIEWS", "message": "Short confirmation in PT-BR (e.g. 'Abrindo Scanner...')" }
-        `;
-        
+        const ROUTER_PROMPT = `Map user command to view: HOME, SCANNER, CREATOR, ATELIER, LAYER_STUDIO, MOCKUP, RUNWAY, HISTORY.`;
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT }] }] }) });
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT + `\nCommand: ${commandText}` }] }] }) });
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        const result = JSON.parse(cleanJson(text));
-        return res.status(200).json({ success: true, ...result });
+        return res.status(200).json({ success: true, targetView: text || 'HOME', message: "Navegando..." });
     }
 
     if (action === 'GET_LINK_PREVIEW') {
-        const contextType = (backupSearchTerm && backupSearchTerm.includes('pattern')) ? 'SURFACE' : 'CLOTHING';
-        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, contextType, linkType);
+        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, 'CLOTHING', linkType);
         return res.status(200).json({ success: true, image });
     }
 
@@ -80,54 +60,16 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // --- MÓDULO: REALISM STUDIO ---
     if (action === 'FIND_WHITE_MODELS') {
         let finalPrompt = prompt || "Vestido";
-        let queries = [];
-        try {
-            if (mainImageBase64) {
-                const DESCRIBE_PROMPT = `Describe ONLY the garment structure (e.g., 'Long Sleeve Maxi Dress', 'V-Neck Blouse'). Ignore print/pattern. Focus on the shape.`;
-                const descEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-                const descPayload = { contents: [{ parts: [{ text: DESCRIBE_PROMPT }, { inline_data: { mime_type: mainMimeType || 'image/jpeg', data: mainImageBase64 } }] }] };
-                const descRes = await fetch(descEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(descPayload) });
-                const descData = await descRes.json();
-                const descText = descData.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (descText) finalPrompt = descText.trim();
-            }
-            const MOCKUP_PROMPT = `
-            CONTEXT: We need base images for a virtual dressing room.
-            TARGET GARMENT: "${finalPrompt}".
-            
-            CRITICAL REQUIREMENT: **WHITE or LIGHT SOLID COLOR ONLY**.
-            The images MUST feature a WHITE or VERY LIGHT GREY version of the garment to allow digital recoloring.
-            ABSOLUTELY NO PRINTS, NO PATTERNS, NO BLACK GARMENTS.
-            
-            THE PERFECT IMAGE HAS:
-            1. **GARMENT:** Plain WHITE (Branco puro) or Off-White. 
-            2. **MODEL:** PREFER Tanned, Bronze, Brown, or Black skin tone for contrast.
-            3. **BACKGROUND:** Contrasting (Dark, Grey, or Colorful).
-            
-            TASK: Generate 30 DISTINCT search queries optimized to find "white [garment]" or "blank [garment]".
-            Ensure EVERY query includes words like "white", "ivory", "cream", or "blank".
-            
-            OUTPUT JSON: { "queries": ["string"] }
-            `;
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
-            const data = await response.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            const result = JSON.parse(cleanJson(text));
-            if (result.queries && Array.isArray(result.queries)) { queries = result.queries; }
-        } catch (e) {}
-        if (queries.length < 10) {
-            const base = finalPrompt.replace(/[^\w\s]/gi, '');
-            queries = [`white ${base} on model`, `blank ${base} template`, `white ${base} fashion photography`];
-        }
-        return res.status(200).json({ success: true, queries: queries, detectedStructure: finalPrompt });
+        const MOCKUP_PROMPT = `Generate 30 search queries for "white solid color ${finalPrompt}" for virtual try-on.`;
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return res.status(200).json({ success: true, queries: [finalPrompt + " white model"], detectedStructure: finalPrompt });
     }
 
-    // --- ATELIER DE ESTAMPARIA ---
-    
     if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {
         const extractedPrompt = await refineDesignPrompt(apiKey, mainImageBase64);
         return res.status(200).json({ success: true, prompt: extractedPrompt });
@@ -139,40 +81,19 @@ export default async function handler(req, res) {
     }
 
     if (action === 'GENERATE_PATTERN') {
-        try {
-            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle);
-            return res.status(200).json({ success: true, image });
-        } catch (genError) {
-            console.error("Generation Failed:", genError);
-            return res.status(200).json({ success: false, error: genError.message || "Erro na geração." });
-        }
+        const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle);
+        return res.status(200).json({ success: true, image });
     }
 
-    // NOVO: GERAR TEXTURA
     if (action === 'GENERATE_TEXTURE') {
-        try {
-            const textureImage = await generateTextureLayer(apiKey, textureType, texturePrompt);
-            if (!textureImage) throw new Error("IA não retornou textura.");
-            return res.status(200).json({ success: true, image: textureImage });
-        } catch (e) {
-            return res.status(200).json({ success: false, error: "Erro ao gerar textura." });
-        }
+        const textureImage = await generateTextureLayer(apiKey, textureType, texturePrompt);
+        return res.status(200).json({ success: true, image: textureImage });
     }
 
-    // NOVO: AÇÃO DE PRODUÇÃO (UPSCALING)
     if (action === 'PREPARE_PRODUCTION') {
-        try {
-            let base64 = mainImageBase64;
-            if (base64.includes(',')) base64 = base64.split(',')[1];
-            
-            const enhancedImage = await generateHighResProductionFile(apiKey, base64, targetSize, technique);
-            return res.status(200).json({ success: true, image: enhancedImage });
-        } catch (error) {
-            return res.status(200).json({ success: false, error: "Falha no motor de produção." });
-        }
+        const enhancedImage = await generateHighResProductionFile(apiKey, mainImageBase64, targetSize, technique);
+        return res.status(200).json({ success: true, image: enhancedImage });
     }
-
-    // --- FIM ATELIER ---
 
     if (action === 'DESCRIBE_PATTERN') {
         const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson, 'NATURAL');
@@ -184,14 +105,12 @@ export default async function handler(req, res) {
     if (action === 'SCAN_CLOTHING' || !action) { 
         const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'GARMENT');
         const matches = generateMarketLinks(visualData, 'GARMENT');
-        const matchesGrouped = { exact: matches.filter(m => m.similarityScore >= 93), close: matches.filter(m => m.similarityScore >= 92 && m.similarityScore < 93), adventurous: matches.filter(m => m.similarityScore < 92) };
-        return res.status(200).json({ patternName: visualData.visualDescription, technicalDna: visualData.technicalSpecs, matches: matchesGrouped, curatedCollections: [], recommendedResources: [] });
+        return res.status(200).json({ patternName: visualData.visualDescription, technicalDna: visualData.technicalSpecs, matches: { exact: matches, close: [], adventurous: [] } });
     }
     
     return res.status(200).json({ success: false, error: "Ação desconhecida" });
 
   } catch (error) {
-    console.error("Backend Error:", error);
     res.status(503).json({ error: error.message || "Erro interno no servidor." });
   }
 }
