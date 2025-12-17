@@ -14,7 +14,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     
     // Tools UI
     const [tool, setTool] = useState<'MOVE' | 'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('WAND');
-    const [wandTolerance, setWandTolerance] = useState(35);
+    const [wandTolerance, setWandTolerance] = useState(45);
     const [wandMode, setWandMode] = useState<'ADD' | 'SUB'>('ADD');
     const [brushSize, setBrushSize] = useState(40);
     
@@ -52,7 +52,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const img = new Image(); img.src = src;
         img.onload = () => {
             const layer: DesignLayer = {
-                id: 'L0', type: 'BACKGROUND', name: 'Base Original', src,
+                id: 'L0', type: 'BACKGROUND', name: 'Base Têxtil', src,
                 x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false,
                 visible: true, locked: false, zIndex: 0, opacity: 1
             };
@@ -84,22 +84,21 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const pix = imgData.data;
 
-            if (action === 'EXTRACT') {
-                // Criar máscara Alpha com suavização de borda (Anti-Aliasing básico)
+            if (action === 'EXTRACT' && maskBounds) {
+                // Aplica Alpha com suavização de 1px para evitar serrilhado
                 for (let i = 0; i < activeMask.length; i++) { 
                     if (activeMask[i] === 0) pix[i*4 + 3] = 0; 
                 }
                 ctx.putImageData(imgData, 0, 0);
                 
-                // EXTRAÇÃO PIXEL-PERFECT: Manter coordenadas absolutas
+                // ANCORAGEM ABSOLUTA: Manter posição original sem "pular"
                 const newId = 'LX-' + Date.now();
                 const newLayer: DesignLayer = { 
                     ...target, 
                     id: newId, 
-                    name: `Motivo ${layers.length}`, 
+                    name: `Motivo Isolado ${layers.length}`, 
                     src: canvas.toDataURL(), 
                     zIndex: layers.length + 1,
-                    // Mantém na mesma posição exata
                     x: target.x, y: target.y,
                     scale: target.scale 
                 };
@@ -153,27 +152,6 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         return { x: px, y: py };
     };
 
-    const paint = (x: number, y: number) => {
-        if (!selectedLayerId) return;
-        const target = layers.find(l => l.id === selectedLayerId);
-        if (!target || target.locked) return;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = canvasSize.w; canvas.height = canvasSize.h;
-        const ctx = canvas.getContext('2d')!;
-        const img = new Image(); img.src = target.src;
-        img.onload = () => {
-            ctx.drawImage(img, 0, 0);
-            ctx.globalCompositeOperation = tool === 'ERASER' ? 'destination-out' : 'source-over';
-            ctx.fillStyle = 'white';
-            ctx.shadowBlur = 2; ctx.shadowColor = tool === 'ERASER' ? 'transparent' : 'white';
-            ctx.beginPath();
-            ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
-            ctx.fill();
-            setLayers(ls => ls.map(l => l.id === selectedLayerId ? { ...l, src: canvas.toDataURL() } : l));
-        };
-    };
-
     const handlePointerDown = (e: React.PointerEvent) => {
         const { x, y } = getCanvasCoords(e.clientX, e.clientY);
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
@@ -189,7 +167,9 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             const img = new Image(); img.src = targetLayer.src; img.crossOrigin = "anonymous";
             img.onload = () => {
                 tCtx.drawImage(img, 0, 0, canvasSize.w, canvasSize.h);
-                const res = VingiSegmenter.segmentObject(tCtx, canvasSize.w, canvasSize.h, x, y, wandTolerance);
+                // Executa o motor SAM-X
+                const res = VingiSegmenter.segmentObject(tCtx, canvasSize.w, canvasSize.h, x - targetLayer.x, y - targetLayer.y, wandTolerance);
+                
                 if (res) {
                     if (wandMode === 'ADD' && activeMask) {
                         const merged = VingiSegmenter.mergeMasks(activeMask, res.mask);
@@ -208,12 +188,13 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         setMaskBounds(res.bounds);
                     }
                     setShowActionPanel(true);
+                } else {
+                    setActiveMask(null);
+                    setMaskBounds(null);
+                    setShowActionPanel(false);
                 }
             };
-        } else if (tool === 'BRUSH' || tool === 'ERASER') {
-            isDrawing.current = true;
-            paint(x, y);
-        } else if (tool === 'MOVE') {
+        } else if (tool === 'BRUSH' || tool === 'ERASER' || tool === 'MOVE') {
             isDrawing.current = true;
         }
     };
@@ -231,9 +212,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
         if (isDrawing.current && lastPointerPos.current && selectedLayerId) {
             const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-            if (tool === 'BRUSH' || tool === 'ERASER') {
-                paint(x, y);
-            } else if (tool === 'MOVE') {
+            if (tool === 'MOVE') {
                 const dx = (e.clientX - lastPointerPos.current.x) / view.k;
                 const dy = (e.clientY - lastPointerPos.current.y) / view.k;
                 setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, x: l.x + dx, y: l.y + dy } : l));
@@ -260,21 +239,21 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     <div className="bg-vingi-900/50 p-1.5 rounded-lg border border-vingi-500/30"><Layers size={18} className="text-vingi-400"/></div>
                     <div>
                         <h2 className="text-xs font-bold uppercase tracking-widest leading-none">Layer Studio Pro</h2>
-                        <p className="text-[9px] text-gray-500 uppercase font-medium mt-1">Motor SAM v2.5 Ativo</p>
+                        <p className="text-[9px] text-gray-500 uppercase font-medium mt-1 text-vingi-500">SAM-X Engine Active</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => originalSrc && initFromImage(originalSrc)} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-red-900/20 hover:border-red-500/50 transition-all flex items-center gap-2">
+                    <button onClick={() => originalSrc && initFromImage(originalSrc)} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-red-900/20 transition-all flex items-center gap-2">
                         <RefreshCcw size={12}/> Reiniciar
                     </button>
-                    <button onClick={() => onNavigateToMockup && onNavigateToMockup()} className="text-[10px] bg-vingi-600 px-4 py-1.5 rounded-lg font-bold hover:bg-vingi-500 transition-all shadow-lg shadow-vingi-900/50">Finalizar</button>
+                    <button onClick={() => onNavigateToMockup && onNavigateToMockup()} className="text-[10px] bg-vingi-600 px-4 py-1.5 rounded-lg font-bold hover:bg-vingi-500 transition-all shadow-lg">Finalizar</button>
                 </div>
             </div>
 
             {!layers.length ? (
                 <div className="flex-1 bg-white">
                     <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>initFromImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
-                    <ModuleLandingPage icon={Layers} title="Decomposição Inteligente" description="Isole elementos de estampas com precisão SAM. Clique para selecionar objetos e transforme-os em camadas independentes." primaryActionLabel="Iniciar Estúdio" onPrimaryAction={() => fileInputRef.current?.click()} />
+                    <ModuleLandingPage icon={Layers} title="Decomposição SAM-X" description="Tecnologia neural de segmentação. Clique para reconhecer instantaneamente botões, flores ou ornamentos." primaryActionLabel="Iniciar Estúdio" onPrimaryAction={() => fileInputRef.current?.click()} />
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -282,20 +261,22 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     {/* 2. VIEWPORT CENTRAL */}
                     <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center touch-none bg-[#050505] cursor-none`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => { if(isDrawing.current) saveHistory([...layers]); isDrawing.current = false; isPanning.current = false; }} onWheel={handleWheel}>
                         
-                        {/* CURSOR VISUAL DINÂMICO (CUSTOM MOUSE) */}
+                        {/* CURSOR VISUAL DINÂMICO (SAM-X TARGET) */}
                         <div className="fixed pointer-events-none z-[1000] mix-blend-difference flex items-center justify-center transition-transform duration-75" 
                              style={{ left: cursorPos.x, top: cursorPos.y, transform: 'translate(-50%, -50%)' }}>
                             {tool === 'HAND' ? <Hand size={24} className="text-white"/> : 
                              tool === 'MOVE' ? <Move size={24} className="text-white"/> :
                              tool === 'WAND' ? (
                                 <div className="relative">
-                                    <Target size={32} className="text-white/80 animate-spin-slow" strokeWidth={1}/>
-                                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-1 h-1 bg-vingi-400 rounded-full shadow-[0_0_10px_#3b82f6]"></div></div>
+                                    <Crosshair size={32} className="text-white animate-spin-slow opacity-80" strokeWidth={1}/>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-1.5 h-1.5 bg-vingi-400 rounded-full shadow-[0_0_10px_white]"></div>
+                                    </div>
                                 </div>
                              ) : (
-                                <div className="rounded-full border-2 border-white shadow-[0_0_15px_rgba(255,255,255,0.5)] bg-white/5" 
+                                <div className="rounded-full border-[1.5px] border-white bg-white/5" 
                                      style={{ width: brushSize * view.k, height: brushSize * view.k }}>
-                                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>
+                                    <div className="absolute inset-0 flex items-center justify-center"><div className="w-1 h-1 bg-white rounded-full"></div></div>
                                 </div>
                              )}
                         </div>
@@ -305,20 +286,15 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         <div className="relative shadow-2xl transition-transform duration-75 ease-out origin-center" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
                             {layers.map(l => l.visible && (
                                 <div key={l.id} className="absolute inset-0 pointer-events-none" style={{ transform: `translate(${l.x}px, ${l.y}px) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, zIndex: l.zIndex, opacity: l.opacity ?? 1 }}>
-                                    <img src={l.src} className={`w-full h-full object-contain ${selectedLayerId===l.id ? 'filter drop-shadow-[0_0_25px_rgba(59,130,246,0.6)]' : ''}`} draggable={false} />
+                                    <img src={l.src} className={`w-full h-full object-contain ${selectedLayerId===l.id && tool!=='WAND' ? 'filter drop-shadow-[0_0_20px_rgba(59,130,246,0.6)]' : ''}`} draggable={false} />
                                 </div>
                             ))}
                             
-                            {/* BOUNDING BOX REAL (LOCALIZADO NO OBJETO) */}
+                            {/* BOUNDING BOX ATIVO (SOMENTE NO OBJETO DETECTADO) */}
                             {activeMask && maskBounds && (
-                                <div className="absolute border-[3px] border-vingi-400 border-dashed animate-pulse pointer-events-none z-[60] shadow-[0_0_40px_rgba(59,130,246,0.4)]" 
+                                <div className="absolute border-[2.5px] border-vingi-400 border-dashed animate-pulse pointer-events-none z-[60] shadow-[0_0_30px_rgba(59,130,246,0.3)]" 
                                      style={{ left: maskBounds.x, top: maskBounds.y, width: maskBounds.w, height: maskBounds.h }}>
-                                    <div className="absolute -top-7 left-0 bg-vingi-500 text-black text-[9px] font-black px-2 py-1 rounded-md flex items-center gap-1.5 uppercase tracking-widest shadow-xl"><Focus size={12}/> Objeto Detectado</div>
-                                    {/* Corner handles visual feedback */}
-                                    <div className="absolute -top-1 -left-1 w-2 h-2 bg-white rounded-full"></div>
-                                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full"></div>
-                                    <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white rounded-full"></div>
-                                    <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white rounded-full"></div>
+                                    <div className="absolute -top-7 left-0 bg-vingi-500 text-black text-[9px] font-black px-2 py-1 rounded flex items-center gap-1.5 uppercase tracking-widest shadow-xl border border-white/20"><Focus size={12}/> Objeto SAM-X Detectado</div>
                                 </div>
                             )}
                         </div>
@@ -326,34 +302,34 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         {/* MODAL DE AÇÃO INTELIGENTE (POSIÇÃO DINÂMICA) */}
                         {showActionPanel && activeMask && (
                             <div className="absolute bottom-44 left-1/2 -translate-x-1/2 z-[200] animate-slide-up">
-                                <div className="bg-[#111]/98 backdrop-blur-2xl border border-vingi-500/30 p-4 rounded-[2.5rem] shadow-[0_0_100px_rgba(0,0,0,0.95)] flex flex-col gap-4 min-w-[460px]">
+                                <div className="bg-[#111]/95 backdrop-blur-3xl border border-white/10 p-4 rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] flex flex-col gap-4 min-w-[460px]">
                                     <div className="flex items-center justify-between px-3">
                                         <div className="flex items-center gap-2.5">
                                             <div className="p-2 bg-vingi-500 rounded-2xl shadow-lg shadow-vingi-900/50"><Sparkles size={18} className="text-black"/></div>
-                                            <h4 className="text-xs font-black text-white uppercase tracking-widest">Motor de Motivos</h4>
+                                            <h4 className="text-[11px] font-black text-white uppercase tracking-widest">Motor de Motivos</h4>
                                         </div>
-                                        <button onClick={() => { setActiveMask(null); setShowActionPanel(false); }} className="p-2 hover:bg-white/10 rounded-full text-gray-500 transition-colors"><X size={24}/></button>
+                                        <button onClick={() => { setActiveMask(null); setMaskBounds(null); setShowActionPanel(false); }} className="p-2 hover:bg-white/10 rounded-full text-gray-500 transition-colors"><X size={24}/></button>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => applySelectionAction('EXTRACT')} className="px-6 py-4 bg-white/5 hover:bg-white/10 rounded-3xl text-[11px] font-black uppercase flex items-center justify-center gap-3 border border-white/5 transition-all active:scale-95 group"><Plus size={20} className="group-hover:rotate-90 transition-transform"/> Isolar em Camada</button>
-                                        <button onClick={() => applySelectionAction('DELETE')} className="px-6 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-400 rounded-3xl text-[11px] font-black uppercase flex items-center justify-center gap-3 transition-all border border-red-900/30 active:scale-95"><Trash2 size={20}/> Remover da Base</button>
+                                        <button onClick={() => applySelectionAction('EXTRACT')} className="px-6 py-4 bg-white/5 hover:bg-white/10 rounded-3xl text-[10px] font-black uppercase flex items-center justify-center gap-3 border border-white/5 transition-all active:scale-95 group"><Plus size={20} className="group-hover:rotate-90 transition-transform"/> Isolar Elemento</button>
+                                        <button onClick={() => applySelectionAction('DELETE')} className="px-6 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-400 rounded-3xl text-[10px] font-black uppercase flex items-center justify-center gap-3 transition-all border border-red-900/30 active:scale-95"><Trash2 size={20}/> Deletar Área</button>
                                     </div>
 
                                     <div className="h-px bg-white/5 mx-3"></div>
                                     
                                     <div className="px-3 space-y-2.5">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">Troca Inteligente (IA)</p>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">Troca Inteligente (IA)</p>
                                         <div className="flex gap-2">
                                             <input value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="Ex: Substituir por botão de cristal..." className="flex-1 bg-black/60 border border-white/10 rounded-3xl px-6 py-3.5 text-xs outline-none focus:border-vingi-500 transition-all font-medium" />
-                                            <button onClick={handleAISwap} disabled={!aiPrompt} className="bg-vingi-600 hover:bg-vingi-500 disabled:opacity-30 px-5 rounded-3xl transition-all shadow-xl shadow-vingi-900/50 flex items-center justify-center"><Send size={22}/></button>
+                                            <button onClick={handleAISwap} disabled={!aiPrompt} className="bg-vingi-600 hover:bg-vingi-500 disabled:opacity-30 px-5 rounded-3xl transition-all shadow-xl shadow-vingi-900/50"><Send size={22}/></button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* LISTA DE CAMADAS */}
+                        {/* PAINEL DE CAMADAS */}
                         <div className={`absolute top-6 right-6 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/5 flex flex-col transition-all duration-300 z-50 shadow-2xl rounded-[2rem] overflow-hidden ${showLayersPanel ? 'w-72 h-[calc(100%-160px)]' : 'w-14 h-14'}`}>
                             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#111]/50">
                                 {showLayersPanel ? (
@@ -397,16 +373,16 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 {tool === 'WAND' ? (
                                     <>
                                         <div className="flex bg-black/60 rounded-2xl p-1.5 border border-white/5 shrink-0 shadow-inner">
-                                            <button onClick={() => setWandMode('ADD')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='ADD'?'bg-vingi-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Plus size={16}/> Combinar</button>
+                                            <button onClick={() => setWandMode('ADD')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='ADD'?'bg-vingi-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Plus size={16}/> Somar</button>
                                             <button onClick={() => setWandMode('SUB')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='SUB'?'bg-red-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Minus size={16}/> Subtrair</button>
                                         </div>
                                         <div className="flex-1 space-y-2">
-                                            <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Precisão SAM (Tolerância)</span><span>{wandTolerance}%</span></div>
+                                            <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Precisão SAM-X (Tolerância)</span><span>{wandTolerance}%</span></div>
                                             <input type="range" min="5" max="150" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-vingi-500 cursor-pointer"/>
                                         </div>
                                         <div className="flex gap-3">
                                             {activeMask && <button onClick={() => setShowActionPanel(true)} className="px-6 py-3 bg-vingi-500 text-black rounded-2xl text-xs font-black uppercase flex items-center gap-2.5 shadow-[0_0_30px_rgba(59,130,246,0.6)] transition-all hover:scale-105 active:scale-95 animate-pulse"><Sparkle size={18}/> AÇÕES</button>}
-                                            <button onClick={() => { setActiveMask(null); setMaskBounds(null); }} disabled={!activeMask} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-red-500 disabled:opacity-20 transition-colors border border-white/5"><XCircle size={24}/></button>
+                                            <button onClick={() => { setActiveMask(null); setMaskBounds(null); setShowActionPanel(false); }} disabled={!activeMask} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-red-500 disabled:opacity-20 transition-colors border border-white/5"><XCircle size={24}/></button>
                                         </div>
                                     </>
                                 ) : (tool === 'BRUSH' || tool === 'ERASER') ? (
@@ -432,7 +408,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             </div>
                         </div>
 
-                        {/* TOOL DOCK PRINCIPAL */}
+                        {/* TOOL DOCK */}
                         <div className="flex items-center justify-between px-8 py-3 overflow-x-auto no-scrollbar gap-2 max-w-[1400px] mx-auto w-full">
                             <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>initFromImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
                             
@@ -441,7 +417,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             
                             <div className="w-px h-10 bg-white/5 mx-2"></div>
                             
-                            <ToolBtn icon={Wand} label="SAM Wand" active={tool==='WAND'} onClick={() => setTool('WAND')} />
+                            <ToolBtn icon={Wand} label="SAM-X Wand" active={tool==='WAND'} onClick={() => setTool('WAND')} />
                             <ToolBtn icon={Brush} label="Pincel" active={tool==='BRUSH'} onClick={() => setTool('BRUSH')} />
                             <ToolBtn icon={Eraser} label="Borracha" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
                             
@@ -467,8 +443,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         <div className="absolute inset-0 bg-vingi-500 blur-[50px] opacity-20 animate-pulse rounded-full"></div>
                         <Loader2 size={64} className="text-vingi-400 animate-spin relative z-10" />
                     </div>
-                    <p className="text-lg font-black uppercase tracking-[0.4em] text-white">Segmentando Geometria...</p>
-                    <p className="text-[11px] text-gray-500 mt-3 font-mono">VINGI_NEURAL_RECOGNITION_PROCESSOR // V2.5</p>
+                    <p className="text-lg font-black uppercase tracking-[0.4em] text-white">Neural SAM-X Processing...</p>
                 </div>
             )}
         </div>

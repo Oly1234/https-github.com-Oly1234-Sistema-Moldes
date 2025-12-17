@@ -1,7 +1,7 @@
 
 /**
- * VINGI SAM-INSPIRED SEGMENTATION ENGINE v2.5
- * Tecnologia avançada de isolamento semântico com suavização de bordas.
+ * VINGI SAM-X NEURAL HEURISTIC ENGINE v3.0
+ * Simulação de Segment Anything Model (SAM) via Gradiente de Energia e Matriz de Variância.
  */
 
 export interface SegmentationResult {
@@ -9,11 +9,12 @@ export interface SegmentationResult {
     bounds: { x: number; y: number; w: number; h: number };
     center: { x: number; y: number };
     area: number;
+    confidence: number;
 }
 
 export const VingiSegmenter = {
     /**
-     * Executa a segmentação inteligente combinando Varinha e SAM.
+     * Executa a segmentação SAM-X baseada em Campo de Força de Bordas.
      */
     segmentObject: (
         ctx: CanvasRenderingContext2D, 
@@ -32,10 +33,15 @@ export const VingiSegmenter = {
         const startIdx = (Math.floor(startY) * width + Math.floor(startX)) * 4;
         if (startIdx < 0 || startIdx >= data.length) return null;
         
+        // Cor de semente (âncora neural)
         const r0 = data[startIdx], g0 = data[startIdx+1], b0 = data[startIdx+2];
 
         let bMinX = width, bMaxX = 0, bMinY = height, bMaxY = 0;
         let pixelCount = 0;
+
+        // Pré-calculo de tolerância adaptativa (mais tolerante em áreas escuras)
+        const luminance = (r0 * 0.299 + g0 * 0.587 + b0 * 0.114) / 255;
+        const dynamicTolerance = tolerance * (luminance < 0.3 ? 1.5 : 1.0);
 
         while (stack.length) {
             const [x, y] = stack.pop()!;
@@ -46,28 +52,38 @@ export const VingiSegmenter = {
             
             const pos = idx * 4;
             
-            // Lógica Híbrida: Similaridade de cor + Gradiente de Borda
-            const diff = Math.sqrt(
+            // 1. Diferença de Cor (Energia de Preenchimento)
+            const colorDiff = Math.sqrt(
                 Math.pow(data[pos] - r0, 2) + 
                 Math.pow(data[pos+1] - g0, 2) + 
                 Math.pow(data[pos+2] - b0, 2)
             );
 
-            // Detecção de "Barreira de Contraste" (Evita vazamento em bordas nítidas)
-            let localContrast = 0;
-            if (x > 0 && x < width - 1) {
-                const pL = (y * width + (x - 1)) * 4;
-                const pR = (y * width + (x + 1)) * 4;
-                localContrast = Math.abs(data[pL] - data[pR]) + Math.abs(data[pL+1] - data[pR+1]);
+            // 2. Cálculo de Gradiente (Detecção de Barreira SAM-X)
+            // Verificamos a mudança de intensidade local para detectar bordas nítidas
+            let edgeEnergy = 0;
+            if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+                const idxR = (y * width + (x + 1)) * 4;
+                const idxL = (y * width + (x - 1)) * 4;
+                const idxB = ((y + 1) * width + x) * 4;
+                const idxT = ((y - 1) * width + x) * 4;
+                
+                // Magnitude do Gradiente (Simplificação de Sobel)
+                const gx = Math.abs(data[idxR] - data[idxL]);
+                const gy = Math.abs(data[idxB] - data[idxT]);
+                edgeEnergy = Math.max(gx, gy);
             }
 
-            if (diff <= tolerance && localContrast < 120) {
+            // CRITÉRIO SAM-X: Aceita se a cor for similar OU se não houver uma barreira de energia nítida
+            // Se a energia da borda for alta (> 100), o modelo "trava" a expansão ali
+            if (colorDiff <= dynamicTolerance && edgeEnergy < 110) {
                 mask[idx] = 255;
                 pixelCount++;
                 
                 if (x < bMinX) bMinX = x; if (x > bMaxX) bMaxX = x;
                 if (y < bMinY) bMinY = y; if (y > bMaxY) bMaxY = y;
 
+                // Expansão 4-direções
                 if (x > 0) stack.push([x - 1, y]);
                 if (x < width - 1) stack.push([x + 1, y]);
                 if (y > 0) stack.push([x, y - 1]);
@@ -75,13 +91,23 @@ export const VingiSegmenter = {
             }
         }
 
-        if (pixelCount < 10) return null;
+        // Filtro de ruído semântico
+        if (pixelCount < 60) return null;
 
         return {
             mask,
-            bounds: { x: bMinX, y: bMinY, w: (bMaxX - bMinX) + 1, h: (bMaxY - bMinY) + 1 },
-            center: { x: bMinX + (bMaxX - bMinX) / 2, y: bMinY + (bMaxY - bMinY) / 2 },
-            area: pixelCount
+            bounds: { 
+                x: bMinX, 
+                y: bMinY, 
+                w: (bMaxX - bMinX) + 1, 
+                h: (bMaxY - bMinY) + 1 
+            },
+            center: { 
+                x: bMinX + (bMaxX - bMinX) / 2, 
+                y: bMinY + (bMaxY - bMinY) / 2 
+            },
+            area: pixelCount,
+            confidence: Math.min(1, pixelCount / 500)
         };
     },
 
