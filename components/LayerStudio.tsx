@@ -16,12 +16,10 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     // Tools UI
     const [tool, setTool] = useState<'MOVE' | 'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('WAND');
     const [wandTolerance, setWandTolerance] = useState(45);
-    const [wandMode, setWandMode] = useState<'ADD' | 'SUB'>('ADD');
     const [brushSize, setBrushSize] = useState(40);
     
     // UI State - Tactical Selection
     const [activeMask, setActiveMask] = useState<Uint8Array | null>(null);
-    const [maskResult, setMaskResult] = useState<SegmentationResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
 
@@ -70,7 +68,13 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
     // --- MÁSCARA TÁTICA (GREEN OVERLAY) ---
     useEffect(() => {
-        if (!overlayCanvasRef.current || !activeMask) return;
+        if (!overlayCanvasRef.current || !activeMask) {
+            if (overlayCanvasRef.current) {
+                const ctx = overlayCanvasRef.current.getContext('2d')!;
+                ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
+            }
+            return;
+        }
         const ctx = overlayCanvasRef.current.getContext('2d')!;
         ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
         const imgData = ctx.createImageData(canvasSize.w, canvasSize.h);
@@ -80,7 +84,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 imgData.data[pos] = 0;     // R
                 imgData.data[pos+1] = 255; // G (Verde de Seleção)
                 imgData.data[pos+2] = 0;   // B
-                imgData.data[pos+3] = 120; // Alpha
+                imgData.data[pos+3] = 130; // Alpha
             }
         }
         ctx.putImageData(imgData, 0, 0);
@@ -123,7 +127,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     };
 
     const executeIsolation = () => {
-        if (!activeMask || !maskResult || !selectedLayerId) return;
+        if (!activeMask || !selectedLayerId) return;
         setIsProcessing(true);
         const target = layers.find(l => l.id === selectedLayerId)!;
         const canvas = document.createElement('canvas'); canvas.width = canvasSize.w; canvas.height = canvasSize.h;
@@ -142,16 +146,19 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             };
             saveHistory([...layers, newLayer]);
             setSelectedLayerId(newId);
-            setActiveMask(null); setMaskResult(null); setIsProcessing(false);
+            setActiveMask(null); setIsProcessing(false);
         };
     };
 
     const handlePointerDown = (e: React.PointerEvent) => {
         const { x, y } = getCanvasCoords(e.clientX, e.clientY);
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
+        
         if (tool === 'HAND' || e.button === 1) { isPanning.current = true; return; }
+        
         const targetLayer = layers.find(l => l.id === selectedLayerId);
         if (!targetLayer || targetLayer.locked) return;
+
         if (tool === 'WAND') {
             const tempC = document.createElement('canvas'); tempC.width = canvasSize.w; tempC.height = canvasSize.h;
             const tCtx = tempC.getContext('2d')!;
@@ -159,10 +166,19 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             img.onload = () => {
                 tCtx.drawImage(img, 0, 0, canvasSize.w, canvasSize.h);
                 const res = VingiSegmenter.segmentObject(tCtx, canvasSize.w, canvasSize.h, x - targetLayer.x, y - targetLayer.y, wandTolerance);
-                if (res) { setActiveMask(res.mask); setMaskResult(res); } 
-                else { setActiveMask(null); setMaskResult(null); }
+                
+                if (res) {
+                    if (activeMask) {
+                        // SELEÇÃO CUMULATIVA: Soma a nova máscara à existente
+                        setActiveMask(VingiSegmenter.mergeMasks(activeMask, res.mask));
+                    } else {
+                        setActiveMask(res.mask);
+                    }
+                }
             };
-        } else if (tool !== 'HAND') { isDrawing.current = true; }
+        } else if (tool !== 'HAND') { 
+            isDrawing.current = true; 
+        }
     };
 
     const getCanvasCoords = (clientX: number, clientY: number) => {
@@ -183,7 +199,6 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             lastPointerPos.current = { x: e.clientX, y: e.clientY }; return;
         }
         if (isDrawing.current && lastPointerPos.current && selectedLayerId) {
-            const { x, y } = getCanvasCoords(e.clientX, e.clientY);
             if (tool === 'MOVE') {
                 const dx = (e.clientX - lastPointerPos.current.x) / view.k;
                 const dy = (e.clientY - lastPointerPos.current.y) / view.k;
@@ -198,7 +213,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             <div className="bg-[#111] h-14 border-b border-white/5 px-4 flex items-center justify-between shrink-0 z-[100]">
                 <div className="flex items-center gap-2">
                     <div className="bg-vingi-900/50 p-1.5 rounded-lg border border-vingi-500/30 text-vingi-400"><Layers size={18}/></div>
-                    <div><h2 className="text-xs font-bold uppercase tracking-widest leading-none">Layer Studio Pro</h2><p className="text-[9px] text-vingi-500 uppercase font-medium mt-1">SAM-X v3.1 // Find & Execute</p></div>
+                    <div><h2 className="text-xs font-bold uppercase tracking-widest leading-none">Layer Studio Pro</h2><p className="text-[9px] text-vingi-500 uppercase font-medium mt-1">SAM-X v3.2 // Continuous Selection</p></div>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => originalSrc && initFromImage(originalSrc)} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-red-900/20 transition-all flex items-center gap-2"><RefreshCcw size={12}/> Reiniciar</button>
@@ -209,7 +224,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
             {!layers.length ? (
                 <div className="flex-1 bg-white">
                     <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>initFromImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
-                    <ModuleLandingPage icon={Layers} title="Lab de Imagem SAM-X" description="Isole elementos em segundos. Toque no objeto (Verde) e confirme no gatilho (Vermelho)." primaryActionLabel="Iniciar Estúdio" onPrimaryAction={() => fileInputRef.current?.click()} />
+                    <ModuleLandingPage icon={Layers} title="Lab de Imagem SAM-X" description="Isole elementos complexos com múltiplos cliques. Selecione as partes (Verde) e extraia para uma nova camada." primaryActionLabel="Iniciar Estúdio" onPrimaryAction={() => fileInputRef.current?.click()} />
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -229,23 +244,39 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 </div>
                             ))}
                             <canvas ref={overlayCanvasRef} width={canvasSize.w} height={canvasSize.h} className="absolute inset-0 pointer-events-none z-[55] opacity-80 mix-blend-screen animate-pulse" />
+                        </div>
 
-                            {/* TRIGGER GATILHO (O CÍRCULO VERMELHO) */}
-                            {maskResult && activeMask && (
-                                <div 
-                                    onClick={(e) => { e.stopPropagation(); executeIsolation(); }}
-                                    className="absolute z-[210] pointer-events-auto cursor-pointer group flex items-center justify-center"
-                                    style={{ left: maskResult.center.x, top: maskResult.center.y, transform: 'translate(-50%, -50%)' }}
-                                >
-                                    <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(239,68,68,0.8)] border-2 border-white transition-all group-hover:scale-125 group-active:scale-90">
-                                        <Zap size={24} className="text-white fill-white group-hover:animate-bounce"/>
+                        {/* HUD TÁTICO DE EXECUÇÃO (FLOATING DOCK - NÃO OBSTRUTIVO) */}
+                        {activeMask && tool === 'WAND' && (
+                            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-slide-up">
+                                <div className="bg-black/90 backdrop-blur-2xl border border-white/10 px-6 py-4 rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex items-center gap-6">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="text-[9px] font-black text-vingi-400 uppercase tracking-widest">SAM-X Target Locked</span>
+                                        <span className="text-[10px] text-gray-400">Continue clicando para somar áreas.</span>
                                     </div>
-                                    <div className="absolute -top-10 bg-black/90 text-[10px] font-black text-white px-3 py-1 rounded-full border border-white/20 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest">
-                                        Extrair Elemento
+                                    
+                                    <div className="h-8 w-px bg-white/10 mx-2"></div>
+
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => setActiveMask(null)}
+                                            className="p-3 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-full transition-all border border-white/5 group"
+                                            title="Limpar Seleção"
+                                        >
+                                            <X size={20} className="group-active:rotate-90 transition-transform" />
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={executeIsolation}
+                                            className="bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-3 shadow-[0_0_30px_rgba(220,38,38,0.4)] transition-all active:scale-95 group"
+                                        >
+                                            <Zap size={18} className="fill-white group-hover:animate-bounce" />
+                                            Extrair Motivo
+                                        </button>
                                     </div>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
 
                         {/* PANEL CAMADAS */}
                         <div className={`absolute top-6 right-6 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/5 flex flex-col transition-all duration-300 z-50 shadow-2xl rounded-[2rem] overflow-hidden ${showLayersPanel ? 'w-72 h-[calc(100%-160px)]' : 'w-14 h-14'}`}>
@@ -281,15 +312,11 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             <div className="flex items-center gap-8 flex-1 w-full max-w-6xl">
                                 {tool === 'WAND' ? (
                                     <>
-                                        <div className="flex bg-black/60 rounded-2xl p-1.5 border border-white/5 shrink-0 shadow-inner">
-                                            <button onClick={() => setWandMode('ADD')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='ADD'?'bg-vingi-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Plus size={16}/> Somar</button>
-                                            <button onClick={() => setWandMode('SUB')} className={`px-5 py-2.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase transition-all ${wandMode==='SUB'?'bg-red-600 text-white shadow-xl':'text-gray-600 hover:text-gray-400'}`}><Minus size={16}/> Subtrair</button>
-                                        </div>
                                         <div className="flex-1 space-y-2">
                                             <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Precisão SAM-X (Tolerância)</span><span>{wandTolerance}%</span></div>
                                             <input type="range" min="5" max="150" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-vingi-500 cursor-pointer"/>
                                         </div>
-                                        <button onClick={() => { setActiveMask(null); setMaskResult(null); }} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-red-500 transition-colors border border-white/5"><RefreshCcw size={20}/></button>
+                                        <button onClick={() => { setActiveMask(null); }} className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-red-500 transition-colors border border-white/5"><RefreshCcw size={20}/></button>
                                     </>
                                 ) : (
                                     <div className="flex-1 flex items-center justify-center text-[10px] font-bold text-gray-500 uppercase tracking-widest gap-2 animate-pulse"><Focus size={14}/> {tool === 'MOVE' ? 'Posicione os elementos na tela.' : 'Use as ferramentas para refinar o design.'}</div>

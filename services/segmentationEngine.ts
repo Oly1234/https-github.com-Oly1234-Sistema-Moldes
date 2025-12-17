@@ -1,7 +1,7 @@
 
 /**
- * VINGI SAM-X MODULAR ENGINE v3.1
- * Motor de segmentação por campo de energia, otimizado para renderização de feedback duplo.
+ * VINGI SAM-X MODULAR ENGINE v3.2
+ * Motor de segmentação por campo de energia com suporte a fusão de máscaras.
  */
 
 export interface SegmentationResult {
@@ -90,5 +90,16 @@ export const VingiSegmenter = {
             area: pixelCount,
             confidence: Math.min(1, pixelCount / 1000)
         };
+    },
+
+    /**
+     * Funde duas máscaras em uma única camada de bits.
+     */
+    mergeMasks: (m1: Uint8Array, m2: Uint8Array): Uint8Array => {
+        const result = new Uint8Array(m1.length);
+        for (let i = 0; i < m1.length; i++) {
+            result[i] = (m1[i] === 255 || m2[i] === 255) ? 255 : 0;
+        }
+        return result;
     }
 };
