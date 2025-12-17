@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2 } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 
 // --- HELPERS MATEMÁTICOS & VISÃO ---
@@ -60,7 +60,6 @@ const performAutoSegmentation = (baseImg: HTMLImageElement) => {
     const centerX = Math.floor(w/2), centerY = Math.floor(h/2);
     
     // Heurística de Contraste: Procura o ponto mais "branco" (roupa) no centro da imagem
-    // Evita o 255 puro (geralmente fundo branco queimado)
     for(let y = centerY - Math.floor(h*0.3); y < centerY + Math.floor(h*0.3); y+=10) {
         for(let x = centerX - Math.floor(w*0.2); x < centerX + Math.floor(w*0.2); x+=10) {
             const idx = (y * w + x) * 4;
@@ -101,12 +100,17 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
     const [whiteBases, setWhiteBases] = useState<string[]>([]);
     
+    // UI Flows
+    const [showPatternModal, setShowPatternModal] = useState(false);
+    const [showStudioToast, setShowStudioToast] = useState(false);
+    
     // Search Engine State
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchImage, setSearchImage] = useState<string | null>(null); // Imagem usada para buscar modelo
+    const [searchImage, setSearchImage] = useState<string | null>(null);
+    const [detectedStructure, setDetectedStructure] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [searchStatus, setSearchStatus] = useState('');
-    const [detectedStructure, setDetectedStructure] = useState<string | null>(null);
+    const [visibleResults, setVisibleResults] = useState(10); // Pagination limit
 
     // Studio Core
     const canvasRef = useRef<HTMLCanvasElement>(null); 
@@ -116,7 +120,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const [patternImgObj, setPatternImgObj] = useState<HTMLImageElement | null>(null);
     const [history, setHistory] = useState<ImageData[]>([]);
 
-    // Viewport State (Zoom & Pan - Robust Mobile/Desktop)
+    // Viewport
     const [view, setView] = useState({ x: 0, y: 0, k: 1 });
     const isPanning = useRef(false);
     const isPinching = useRef(false);
@@ -127,8 +131,9 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'AUTO'>('AUTO');
     const [brushSize, setBrushSize] = useState(40);
     const [wandTolerance, setWandTolerance] = useState(30);
+    const [showMaskHighlight, setShowMaskHighlight] = useState(false); // New visual feedback
     
-    // Render Parameters
+    // Render Params
     const [patternScale, setPatternScale] = useState(0.5);
     const [patternRotation, setPatternRotation] = useState(0);
     const [shadowIntensity, setShadowIntensity] = useState(0.8);
@@ -143,6 +148,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     
     const refInputRef = useRef<HTMLInputElement>(null);
     const searchImageInputRef = useRef<HTMLInputElement>(null);
+    const patternInputRef = useRef<HTMLInputElement>(null);
 
     // --- TRANSFER CHECK ---
     useEffect(() => {
@@ -150,11 +156,17 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         if (storedPattern) {
             setSelectedPattern(storedPattern);
             localStorage.removeItem('vingi_mockup_pattern');
-            // Se já temos modelo e estampa, vai pro estúdio.
-            // Se só tem estampa, fica na busca para escolher modelo.
-            if (referenceImage) setStep('STUDIO');
         }
     }, []);
+
+    // --- STUDIO ENTRY TOAST ---
+    useEffect(() => {
+        if (step === 'STUDIO') {
+            setShowStudioToast(true);
+            const t = setTimeout(() => setShowStudioToast(false), 4000);
+            return () => clearTimeout(t);
+        }
+    }, [step]);
 
     // --- IMAGE LOADING ---
     useEffect(() => {
@@ -167,7 +179,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                 maskCanvasRef.current = mCanvas;
                 setHistory([]);
                 
-                // Auto Fit Viewport Logic
+                // Auto Fit Viewport
                 if (containerRef.current) {
                     const rect = containerRef.current.getBoundingClientRect();
                     const k = Math.min(rect.width / img.width, rect.height / img.height) * 0.9;
@@ -209,18 +221,30 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(baseImgObj, 0, 0, w, h);
 
+        // Highlight Mode (Mask Feedback)
+        if (showMaskHighlight) {
+            const tempM = document.createElement('canvas'); tempM.width = w; tempM.height = h;
+            const tmCtx = tempM.getContext('2d')!;
+            tmCtx.drawImage(maskCanvas, 0, 0);
+            tmCtx.globalCompositeOperation = 'source-in';
+            tmCtx.fillStyle = 'rgba(0, 255, 255, 0.5)'; // Neon Cyan Highlight
+            tmCtx.fillRect(0,0,w,h);
+            
+            ctx.save();
+            ctx.drawImage(tempM, 0, 0);
+            ctx.restore();
+        }
+
         if (!patternImgObj) return;
 
         // 2. Pattern Layer (Masked)
         const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
         const tCtx = tempC.getContext('2d')!;
         
-        // Draw Mask
         if (edgeFeather > 0) tCtx.filter = `blur(${edgeFeather}px)`;
         tCtx.drawImage(maskCanvas, 0, 0);
         tCtx.filter = 'none';
         
-        // Clip & Draw Pattern
         tCtx.globalCompositeOperation = 'source-in';
         tCtx.save();
         tCtx.translate(w/2, h/2);
@@ -236,7 +260,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         ctx.drawImage(tempC, 0, 0);
         ctx.restore();
 
-        // 4. Realism (Shadows - Multiply)
+        // 4. Realism (Shadows & Lights)
         const shadowC = document.createElement('canvas'); shadowC.width = w; shadowC.height = h;
         const sCtx = shadowC.getContext('2d')!;
         if (edgeFeather > 0) sCtx.filter = `blur(${edgeFeather}px)`;
@@ -251,7 +275,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         ctx.drawImage(shadowC, 0, 0);
         ctx.restore();
 
-        // 5. Realism (Highlights/Folds - Soft Light/Screen)
         const lightC = document.createElement('canvas'); lightC.width = w; lightC.height = h;
         const lCtx = lightC.getContext('2d')!;
         if (edgeFeather > 0) lCtx.filter = `blur(${edgeFeather}px)`;
@@ -266,11 +289,11 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         ctx.drawImage(lightC, 0, 0);
         ctx.restore();
 
-    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, highlightIntensity, edgeFeather]);
+    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, highlightIntensity, edgeFeather, showMaskHighlight]);
 
     useEffect(() => { requestAnimationFrame(renderCanvas); }, [renderCanvas]);
 
-    // --- TOOLS ACTIONS ---
+    // --- ACTIONS ---
     const saveHistory = () => {
         if (!maskCanvasRef.current) return;
         const ctx = maskCanvasRef.current.getContext('2d')!;
@@ -295,6 +318,8 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         if (res) {
             const ctx = maskCanvasRef.current.getContext('2d')!;
             ctx.drawImage(res.maskCanvas, 0, 0);
+            setShowMaskHighlight(true); // Flash selection
+            setTimeout(() => setShowMaskHighlight(false), 600);
             renderCanvas();
         }
     };
@@ -309,6 +334,8 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             const ctx = maskCanvasRef.current.getContext('2d')!;
             ctx.globalCompositeOperation = 'source-over';
             ctx.drawImage(res.maskCanvas, 0, 0);
+            setShowMaskHighlight(true);
+            setTimeout(() => setShowMaskHighlight(false), 400);
             renderCanvas();
         }
     };
@@ -329,10 +356,11 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             ctx.arc(x, y, brushSize/2, 0, Math.PI*2);
             ctx.fill();
         }
+        setShowMaskHighlight(true); // Keep highlighted while drawing
         renderCanvas();
     };
 
-    // --- POINTER & ZOOM LOGIC (ROBUST HYBRID) ---
+    // --- INTERACTION ---
     const getCanvasCoords = (clientX: number, clientY: number) => {
         if (!canvasRef.current || !containerRef.current) return { x: 0, y: 0 };
         const rect = containerRef.current.getBoundingClientRect();
@@ -348,20 +376,17 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
         lastPointerPos.current = { x: clientX, y: clientY };
 
-        // 1. PINCH START (Mobile)
         if ('touches' in e && e.touches.length === 2) {
             isPinching.current = true;
             lastPinchDist.current = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
             return;
         }
 
-        // 2. PAN START
         if (activeTool === 'HAND' || ('button' in e && e.button === 1)) {
             isPanning.current = true;
             return;
         }
 
-        // 3. TOOL ACTION (Paint/Erase/Wand)
         const { x, y } = getCanvasCoords(clientX, clientY);
         if (activeTool === 'WAND') {
             handleFloodFill(x, y);
@@ -378,7 +403,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
         setCursorPos({ x: clientX, y: clientY });
 
-        // 1. PINCH MOVE (Mobile Zoom)
         if (isPinching.current && 'touches' in e && e.touches.length === 2) {
             e.preventDefault();
             const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
@@ -389,7 +413,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             return;
         }
 
-        // 2. PAN MOVE
         if (isPanning.current && lastPointerPos.current) {
             const dx = clientX - lastPointerPos.current.x;
             const dy = clientY - lastPointerPos.current.y;
@@ -398,7 +421,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             return;
         }
 
-        // 3. DRAW MOVE
         if (isDrawingRef.current) {
             const { x, y } = getCanvasCoords(clientX, clientY);
             handleStroke(x, y, true);
@@ -412,16 +434,20 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         isPinching.current = false;
         lastPointerPos.current = null;
         lastDrawPos.current = null;
+        setShowMaskHighlight(false); // Stop highlight on release
+        renderCanvas();
     };
 
     const handleWheel = (e: React.WheelEvent) => {
-        if (!isPanning.current && !isDrawingRef.current) {
+        if (e.ctrlKey || activeTool === 'HAND') {
+            e.preventDefault();
             const s = Math.exp(-e.deltaY * 0.001);
-            setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * s), 8) }));
+            const newK = Math.min(Math.max(0.1, view.k * s), 8);
+            setView(v => ({ ...v, k: newK }));
         }
     };
 
-    // --- ENGINE DE BUSCA CONTEXTUAL ---
+    // --- SEARCH ENGINE ---
     const handleSearchImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -431,7 +457,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                 if (raw) {
                     const compressed = await compressImage(raw);
                     setSearchImage(compressed);
-                    setSearchQuery(''); // Limpa texto se usar imagem
+                    setSearchQuery('');
                 }
             };
             reader.readAsDataURL(file);
@@ -442,24 +468,20 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         if (!searchQuery.trim() && !searchImage) return;
         
         setIsSearching(true);
-        setSearchStatus('Iniciando Inteligência Visual...');
+        setSearchStatus('Ativando Rede Neural...');
         setWhiteBases([]);
         setDetectedStructure(null);
+        setVisibleResults(10);
         
         try {
-            // STEP 1: GERAR QUERIES (Inteligência Híbrida: Texto ou Imagem)
-            setSearchStatus('Analisando silhueta da roupa...');
+            setSearchStatus('Decodificando DNA da peça...');
             
             let payload: any = { action: 'FIND_WHITE_MODELS' };
-            
             if (searchImage) {
-                // Se tem imagem, manda pro backend analisar a estrutura e gerar query
-                // O backend vai ignorar a estampa e focar no shape
                 const base64 = searchImage.split(',')[1];
                 payload.mainImageBase64 = base64;
                 payload.mainMimeType = 'image/jpeg';
             } else {
-                // Se é texto, usa direto
                 payload.prompt = searchQuery;
             }
 
@@ -473,36 +495,28 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             if (data.success && data.queries) {
                 setDetectedStructure(data.detectedStructure || searchQuery);
                 const totalQueries = data.queries.length;
-                setSearchStatus(`Raspando bancos de imagem (${totalQueries} variações)...`);
+                setSearchStatus(`Renderizando variações (${totalQueries} modelos)...`);
                 
-                // STEP 2: BUSCAR IMAGENS (Scraping em Lotes)
-                // Disparamos 30+ requests de proxy para cobrir todas as variações visuais
-                
+                // Fetch in Batches (up to 50 results)
                 const fetchBatch = async (batchQueries: string[]) => {
                     const promises = batchQueries.map(q => 
                         fetch('/api/analyze', { 
                             method: 'POST', 
                             headers: {'Content-Type': 'application/json'}, 
-                            body: JSON.stringify({ 
-                                action: 'GET_LINK_PREVIEW', 
-                                targetUrl: '', 
-                                backupSearchTerm: q, 
-                                linkType: 'SEARCH_QUERY' 
-                            }) 
+                            body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: '', backupSearchTerm: q, linkType: 'SEARCH_QUERY' }) 
                         }).then(r=>r.json()).then(d=>d.success ? d.image : null)
                     );
                     return (await Promise.all(promises)).filter(u => u);
                 };
 
-                // Lote 1 (Imediato)
-                const batch1 = await fetchBatch(data.queries.slice(0, 12));
-                setWhiteBases(prev => [...prev, ...batch1]);
-
-                // Lote 2 (Background)
-                setTimeout(async () => {
-                    const batch2 = await fetchBatch(data.queries.slice(12, 30));
-                    setWhiteBases(prev => [...prev, ...batch2]);
-                }, 800);
+                // Rapid Sequence Loading (Batch 1, 2, 3...)
+                const batchSize = 15;
+                for (let i = 0; i < data.queries.length; i += batchSize) {
+                    const batch = data.queries.slice(i, i + batchSize);
+                    const results = await fetchBatch(batch);
+                    setWhiteBases(prev => [...prev, ...results]);
+                    if (i === 0) setIsSearching(false); // Show results asap
+                }
             }
         } catch(e) {
             console.error(e);
@@ -512,14 +526,27 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     };
 
-    const selectModel = (url: string) => {
+    const handleModelClick = (url: string) => {
         setReferenceImage(url);
-        // Preserva a estampa selecionada, só muda o modelo
-        setStep('STUDIO');
+        setShowPatternModal(true); // Open modal immediately
+    };
+
+    const confirmPatternUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setSelectedPattern(ev.target?.result as string);
+                setShowPatternModal(false);
+                setStep('STUDIO');
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     return (
         <div className="flex flex-col h-full bg-[#000000] text-white overflow-hidden">
+            {/* STUDIO HEADER */}
             {step !== 'SEARCH_BASE' && (
                 <div className="bg-[#111111] px-4 py-2 flex items-center justify-between border-b border-gray-900 shrink-0 z-50 h-14">
                     <div className="flex items-center gap-2">
@@ -535,116 +562,140 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                 </div>
             )}
 
+            {/* MODAL: MANDATORY PATTERN UPLOAD */}
+            {showPatternModal && (
+                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+                    <div className="bg-[#1a1a1a] border border-gray-800 rounded-3xl p-8 max-w-md w-full text-center relative overflow-hidden shadow-2xl">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-vingi-500 to-purple-600"></div>
+                        <button onClick={() => setShowPatternModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20}/></button>
+                        
+                        <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-6 border border-gray-800 shadow-inner">
+                            <Layers size={32} className="text-vingi-400 animate-pulse"/>
+                        </div>
+                        
+                        <h3 className="text-2xl font-bold text-white mb-2">Qual é a Estampa?</h3>
+                        <p className="text-gray-400 text-sm mb-8 leading-relaxed">
+                            A modelo está pronta. Agora envie o arquivo da estampa ou tecido para iniciarmos a simulação neural.
+                        </p>
+                        
+                        <button onClick={() => patternInputRef.current?.click()} className="w-full py-4 bg-gradient-to-r from-vingi-600 to-purple-600 text-white rounded-2xl font-bold text-lg hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-purple-900/30 flex items-center justify-center gap-3">
+                            <UploadCloud size={24}/> CARREGAR ARQUIVO
+                        </button>
+                        <input type="file" ref={patternInputRef} onChange={confirmPatternUpload} accept="image/*" className="hidden" />
+                        
+                        <div className="mt-6 flex items-center justify-center gap-2 text-[10px] text-gray-600 uppercase tracking-widest font-bold">
+                            <ShieldCheck size={12}/> Ambiente Seguro Vingi AI
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SEARCH VIEW */}
             {step === 'SEARCH_BASE' && (
                 <div className="flex-1 bg-[#f0f2f5] overflow-y-auto text-gray-800 custom-scrollbar">
                     <ModuleHeader 
-                        icon={Camera} title="Provador Mágico" subtitle="Base Model Finder" 
+                        icon={Camera} title="Provador Mágico" subtitle="Visual AI Adaptation" 
                         onAction={() => selectedPattern ? setStep('STUDIO') : onNavigateToCreator()} 
                         actionLabel={selectedPattern ? "Voltar ao Provador" : "Voltar"} 
                     />
                     
-                    <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
-                        {/* SEARCH CARD */}
-                        <div className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4 opacity-10"><BrainCircuit size={64} className="text-vingi-500"/></div>
+                    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
+                        {/* SEARCH CARD - MARKETING COPY */}
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-8 opacity-5 transform rotate-12 pointer-events-none"><Sparkles size={120} className="text-vingi-600"/></div>
                             
-                            <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2 text-lg"><Sparkles size={20} className="text-purple-500"/> Encontrar Modelo (Base Branca)</h3>
-                            <p className="text-gray-500 text-sm mb-6 max-w-2xl">A IA pode encontrar modelos base ideais para o provador. Descreva o que busca ou envie uma foto de referência para encontrarmos a mesma silhueta em branco.</p>
+                            <h3 className="font-black text-3xl text-gray-900 mb-3 flex items-center gap-3">
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-vingi-600 to-purple-600">Desfile Virtual</span>
+                                <span className="text-sm bg-black text-white px-3 py-1 rounded-full font-bold uppercase tracking-widest align-middle">Beta</span>
+                            </h3>
+                            <p className="text-gray-500 text-base mb-8 max-w-2xl leading-relaxed">
+                                Transforme qualquer ideia em realidade. Envie uma referência e nossa <strong className="text-vingi-700">IA Generativa</strong> adaptará a modelagem matematicamente para um desfile virtual hiper-realista. O resultado é indistinguível da realidade.
+                            </p>
 
                             <div className="flex flex-col md:flex-row gap-4 items-start">
-                                {/* TEXT INPUT */}
                                 <div className="flex-1 w-full">
-                                    <div className="relative">
+                                    <div className="relative group">
                                         <input 
                                             type="text" 
                                             value={searchQuery} 
                                             onChange={e => { setSearchQuery(e.target.value); setSearchImage(null); }} 
                                             onKeyDown={e => e.key === 'Enter' && performSearch()} 
-                                            placeholder="Ex: Vestido Longo Alça Fina, Camiseta Básica..." 
-                                            className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-vingi-500 transition-all text-base shadow-inner focus:bg-white"
+                                            placeholder="Descreva o look: Ex: Vestido de seda longo, decote costas..." 
+                                            className="w-full pl-14 pr-4 py-5 bg-gray-50 border-2 border-gray-100 group-hover:border-vingi-200 rounded-2xl outline-none focus:border-vingi-500 transition-all text-lg shadow-inner focus:bg-white text-gray-700 font-medium placeholder-gray-400"
                                         />
-                                        <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                        <Search size={24} className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-vingi-500 transition-colors"/>
                                     </div>
                                 </div>
 
-                                {/* IMAGE INPUT (NEW FEATURE) */}
                                 <div className="shrink-0">
                                     <input type="file" ref={searchImageInputRef} onChange={handleSearchImageUpload} className="hidden" accept="image/*" />
                                     <button 
                                         onClick={() => searchImageInputRef.current?.click()}
-                                        className={`h-[58px] px-6 rounded-2xl border-2 border-dashed flex items-center gap-2 transition-all ${searchImage ? 'border-vingi-500 bg-vingi-50 text-vingi-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-gray-50'}`}
+                                        className={`h-[72px] px-6 rounded-2xl border-2 border-dashed flex items-center gap-3 transition-all ${searchImage ? 'border-vingi-500 bg-vingi-50 text-vingi-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white'}`}
                                     >
                                         {searchImage ? (
                                             <>
-                                                <div className="w-8 h-8 rounded bg-gray-200 overflow-hidden"><img src={searchImage} className="w-full h-full object-cover"/></div>
-                                                <span className="text-xs font-bold">Imagem Carregada</span>
-                                                <X size={14} className="ml-2 hover:text-red-500" onClick={(e) => { e.stopPropagation(); setSearchImage(null); }}/>
+                                                <div className="w-10 h-10 rounded-lg bg-gray-200 overflow-hidden shadow-sm"><img src={searchImage} className="w-full h-full object-cover"/></div>
+                                                <span className="text-xs font-bold">Imagem Pronta</span>
+                                                <X size={16} className="ml-1 hover:text-red-500" onClick={(e) => { e.stopPropagation(); setSearchImage(null); }}/>
                                             </>
                                         ) : (
                                             <>
-                                                <Camera size={20}/>
-                                                <span className="text-xs font-bold">Usar Foto Ref.</span>
+                                                <Camera size={24}/>
+                                                <span className="text-xs font-bold text-left leading-tight">Usar Foto<br/>Referência</span>
                                             </>
                                         )}
                                     </button>
                                 </div>
 
-                                <button onClick={performSearch} disabled={isSearching || (!searchQuery && !searchImage)} className="bg-vingi-900 text-white h-[58px] px-8 rounded-2xl font-bold hover:bg-vingi-800 disabled:opacity-50 transition-all shadow-lg hover:scale-105 active:scale-95 shrink-0 flex items-center gap-2">
-                                    {isSearching ? <Loader2 className="animate-spin"/> : <ArrowLeft className="rotate-180" size={20}/>}
-                                    <span className="hidden md:inline">Buscar</span>
+                                <button onClick={performSearch} disabled={isSearching || (!searchQuery && !searchImage)} className="bg-vingi-900 text-white h-[72px] px-10 rounded-2xl font-bold text-lg hover:bg-vingi-800 disabled:opacity-50 transition-all shadow-xl hover:scale-105 active:scale-95 shrink-0 flex items-center gap-3">
+                                    {isSearching ? <Loader2 className="animate-spin" size={24}/> : <Wand2 size={24}/>}
+                                    <span className="hidden md:inline">Gerar Modelos</span>
                                 </button>
                             </div>
 
-                            {searchStatus && <p className="text-xs text-vingi-600 font-mono mt-3 animate-pulse flex items-center gap-2"><Loader2 size={10} className="animate-spin"/> {searchStatus}</p>}
-                            {detectedStructure && !isSearching && <p className="text-xs text-green-600 font-bold mt-3 flex items-center gap-1"><CheckCircle2 size={12}/> Estrutura Detectada: "{detectedStructure}"</p>}
+                            {searchStatus && (
+                                <div className="mt-6 flex items-center gap-3 bg-vingi-50 p-3 rounded-xl border border-vingi-100 inline-flex animate-fade-in">
+                                    <Loader2 size={16} className="animate-spin text-vingi-600"/> 
+                                    <span className="text-xs font-bold text-vingi-700">{searchStatus}</span>
+                                </div>
+                            )}
                         </div>
 
-                        {/* RESULTS GRID */}
-                        {whiteBases.length > 0 ? (
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 pb-20 animate-fade-in">
-                                {whiteBases.map((url, i) => (
-                                    <div key={i} onClick={() => selectModel(url)} className="aspect-[3/4] bg-white rounded-xl overflow-hidden cursor-pointer hover:ring-4 ring-vingi-500/50 transition-all relative group shadow-md hover:-translate-y-1 border border-gray-100">
-                                        <img src={url} className="w-full h-full object-cover" loading="lazy" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 flex flex-col justify-end items-center pb-4 transition-opacity duration-300">
-                                            <span className="bg-white text-vingi-900 text-xs font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 transform scale-90 group-hover:scale-100 transition-transform">
-                                                <Check size={14}/> Provar
-                                            </span>
+                        {/* RESULTS GRID (INFINITE SCROLL FEEL) */}
+                        {whiteBases.length > 0 && (
+                            <div className="animate-fade-in pb-20">
+                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 ml-2">Bases Sugeridas pela IA</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {whiteBases.slice(0, visibleResults).map((url, i) => (
+                                        <div key={i} onClick={() => handleModelClick(url)} className="aspect-[3/4] bg-white rounded-2xl overflow-hidden cursor-pointer hover:ring-4 ring-vingi-500 transition-all relative group shadow-md hover:-translate-y-2 border border-gray-100 duration-300">
+                                            <img src={url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 flex flex-col justify-end items-center pb-6 transition-opacity duration-300">
+                                                <span className="bg-white text-black text-xs font-bold px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                                                    <Check size={14}/> ESCOLHER
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            !isSearching && (
-                                <div className="text-center opacity-50 py-10">
-                                    <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4"><ScanLine size={32} className="text-gray-400"/></div>
-                                    <p className="text-sm font-bold text-gray-400">Nenhum modelo encontrado. Tente buscar algo como "Vestido Midi Branco".</p>
-                                    
-                                    <div className="mt-8">
-                                        <p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">OU CARREGUE SEU ARQUIVO</p>
-                                        <button onClick={() => refInputRef.current?.click()} className="px-6 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:bg-white hover:border-vingi-400 hover:text-vingi-600 transition-all font-bold text-xs flex items-center gap-2 mx-auto bg-white">
-                                            <UploadCloud size={16}/> Upload Manual
-                                            <input type="file" ref={refInputRef} onChange={e => { const f=e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=ev=>selectModel(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden"/>
+                                    ))}
+                                </div>
+                                
+                                {visibleResults < whiteBases.length && (
+                                    <div className="mt-12 flex justify-center">
+                                        <button onClick={() => setVisibleResults(p => p + 10)} className="bg-white border border-gray-300 text-gray-600 px-8 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 flex items-center gap-2 transition-all hover:scale-105">
+                                            <Plus size={16}/> Carregar Mais Opções
                                         </button>
                                     </div>
-                                </div>
-                            )
+                                )}
+                            </div>
                         )}
-                    </div>
-                </div>
-            )}
-
-            {step === 'SELECT_PATTERN' && (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#f0f2f5] text-gray-800">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-sm w-full border border-gray-100">
-                        <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4"><Layers size={32}/></div>
-                        <h2 className="text-xl font-bold mb-2">Selecione a Estampa</h2>
-                        <div className="space-y-3 mt-6">
-                            <label className="block w-full py-3 bg-vingi-900 text-white rounded-xl font-bold cursor-pointer hover:bg-vingi-800 transition-colors">
-                                Carregar Arquivo
-                                <input type="file" onChange={e => { const f=e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=ev=>{ setSelectedPattern(ev.target?.result as string); setStep('STUDIO'); }; r.readAsDataURL(f); } }} className="hidden" accept="image/*"/>
-                            </label>
-                            <button onClick={onNavigateToCreator} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200">Buscar no Radar</button>
-                        </div>
+                        
+                        {!isSearching && whiteBases.length === 0 && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 opacity-30 pointer-events-none grayscale">
+                                {[1,2,3,4].map(i => (
+                                    <div key={i} className="aspect-[3/4] bg-gray-200 rounded-2xl"></div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -652,6 +703,14 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             {step === 'STUDIO' && baseImgObj && (
                 <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
                     
+                    {/* STARTUP TOAST */}
+                    {showStudioToast && (
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-vingi-900/90 text-white px-6 py-3 rounded-full shadow-2xl border border-vingi-500/30 flex items-center gap-3 animate-slide-down-fade backdrop-blur-md">
+                            <div className="bg-green-500 rounded-full p-1"><Check size={12} className="text-black"/></div>
+                            <span className="text-xs font-bold">Estampa Carregada no Núcleo Neural</span>
+                        </div>
+                    )}
+
                     {/* CANVAS VIEWPORT */}
                     <div 
                         ref={containerRef}
@@ -698,7 +757,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                     </div>
 
                     {/* CONTEXTUAL SLIDERS */}
-                    <div className="absolute bottom-20 left-0 right-0 px-4 flex justify-center z-40 pointer-events-none">
+                    <div className="absolute bottom-24 left-0 right-0 px-4 flex justify-center z-40 pointer-events-none">
                         <div className="bg-black/90 backdrop-blur border border-white/10 rounded-2xl p-4 shadow-2xl w-full max-w-md pointer-events-auto animate-slide-up flex flex-col gap-3">
                             {(activeTool === 'BRUSH' || activeTool === 'ERASER') ? (
                                 <div className="space-y-1">
@@ -728,10 +787,10 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                         </div>
                     </div>
 
-                    {/* BOTTOM TOOLBAR */}
+                    {/* BOTTOM TOOLBAR (HIGH CONTRAST ACTIVE STATES) */}
                     <div className="bg-[#111] border-t border-white/10 shrink-0 z-50 pb-[env(safe-area-inset-bottom)]">
                         <div className="flex items-center justify-between px-2 py-2 overflow-x-auto no-scrollbar gap-2">
-                            <button onClick={handleAutoFit} className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-lg gap-1 transition-all active:scale-95 ${activeTool==='AUTO' ? 'bg-gradient-to-br from-vingi-600 to-purple-600 text-white shadow-lg shadow-purple-900/20' : 'text-gray-400 hover:text-white'}`}>
+                            <button onClick={handleAutoFit} className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-lg gap-1 transition-all active:scale-95 ${activeTool==='AUTO' ? 'bg-gradient-to-br from-vingi-500 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.5)] border border-white/20' : 'text-gray-400 hover:text-white'}`}>
                                 <Sparkles size={18}/> <span className="text-[9px] font-bold">Auto</span>
                             </button>
                             <div className="w-px h-8 bg-white/10 mx-1"></div>
@@ -741,7 +800,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                             <ToolBtn icon={Hand} label="Mover" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
                             <div className="w-px h-8 bg-white/10 mx-1"></div>
                             <ToolBtn icon={Undo2} label="Desfazer" onClick={undoMask} disabled={history.length === 0} />
-                            <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => setStep('SELECT_PATTERN')} />
+                            <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => setShowPatternModal(true)} />
                         </div>
                     </div>
                 </div>
@@ -751,7 +810,12 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
 };
 
 const ToolBtn = ({ icon: Icon, label, active, onClick, disabled }: any) => (
-    <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-lg gap-1 transition-all active:scale-95 ${disabled ? 'opacity-30' : ''} ${active ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white'}`}>
-        <Icon size={18} strokeWidth={active ? 2.5 : 1.5} /> <span className="text-[9px] font-medium">{label}</span>
+    <button 
+        onClick={onClick} 
+        disabled={disabled} 
+        className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-lg gap-1 transition-all active:scale-95 ${disabled ? 'opacity-30' : ''} ${active ? 'text-white bg-white/10 border border-white/20 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'text-gray-500 hover:text-white'}`}
+    >
+        <Icon size={18} strokeWidth={active ? 2.5 : 1.5} className={active ? 'drop-shadow-lg' : ''} /> 
+        <span className="text-[9px] font-medium">{label}</span>
     </button>
 );
