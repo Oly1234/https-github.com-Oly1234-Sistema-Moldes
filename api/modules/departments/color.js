@@ -1,6 +1,6 @@
 
 // DEPARTAMENTO: COLORIMETRIA & TENDÊNCIAS
-// Responsabilidade: Extração de Pantone TCX com Variações Contextuais
+// Responsabilidade: Extração de Pantone TCX com Variações Contextuais e Análise Sênior
 
 export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson, variation = 'NATURAL') => {
     
@@ -14,16 +14,23 @@ export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson
     else if (variation === 'WINTER') VARIATION_INSTRUCTION = "Extract a WINTER PALETTE (Cool, Icy, Jewel Tones) inspired by the image.";
 
     const COLORIST_PROMPT = `
-    ACT AS: Textile Colorist.
+    ACT AS: Senior Textile Colorist & Trend Forecaster (WGSN Style).
     TASK: ${VARIATION_INSTRUCTION}
     
+    1. Identify the 5-6 key colors that define the "Mood" of this print.
+    2. Assign a commercial/poetic name (e.g., "Midnight Navy", "Sunset Coral").
+    3. Provide the closest Pantone TCX code.
+    4. Suggest the role of the color (Base, Accent, Shadow).
+
     OUTPUT JSON ONLY:
     {
         "colors": [
             { 
-                "name": "Technical Name (English)", 
+                "name": "Commercial Name", 
                 "hex": "#RRGGBB", 
-                "code": "19-XXXX TCX"
+                "code": "19-XXXX TCX",
+                "role": "Base/Accent/Highlight",
+                "usage": "Best for background or details"
             }
         ]
     }
@@ -45,7 +52,7 @@ export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson
         return JSON.parse(cleanJson(text));
     } catch (e) {
         console.error("Color Dept Error:", e);
-        // Fallback silencioso para não quebrar a UI
+        // Fallback silencioso
         return { colors: [] };
     }
 };

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap } from 'lucide-react';
+import { Layers, Move, Trash2, Eye, EyeOff, Lock, Wand2, UploadCloud, RotateCw, Hand, Maximize, Minus, Plus, Shirt, Scan, Copy, MousePointer2, ChevronRight, FlipHorizontal, FlipVertical, ArrowUp, ArrowDown, Scissors, Eraser, Sparkles, Undo2, Redo2, Keyboard, Zap, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { DesignLayer } from '../types';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
@@ -19,7 +19,7 @@ const rgbToLab = (r: number, g: number, b: number) => {
     return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
 };
 
-// --- HELPER: SMART OBJECT EXTRACTION (Additive Support) ---
+// --- HELPER: SMART OBJECT EXTRACTION ---
 const getSmartObjectMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, existingMask?: Uint8Array) => {
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
@@ -118,7 +118,6 @@ const healBackground = (ctx: CanvasRenderingContext2D, width: number, height: nu
     ctx.putImageData(imgData, 0, 0);
 };
 
-// Helper to create texture pattern canvas
 const createTextureLayerImage = async (url: string, width: number, height: number, opacity: number): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
@@ -137,7 +136,7 @@ const createTextureLayerImage = async (url: string, width: number, height: numbe
             }
             resolve(canvas.toDataURL());
         };
-        img.onerror = () => resolve(''); // Fail gracefully
+        img.onerror = () => resolve(''); 
     });
 };
 
@@ -147,7 +146,6 @@ interface LayerStudioProps {
 }
 
 export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavigateToMockup }) => {
-    // History State
     const [history, setHistory] = useState<DesignLayer[][]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
     
@@ -155,30 +153,29 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
     const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 1000 });
     const [tool, setTool] = useState<'MOVE' | 'SMART_EXTRACT' | 'HAND'>('MOVE');
+    
+    // VIEWPORT STATE (Zoom/Pan)
     const [view, setView] = useState({ x: 0, y: 0, k: 0.8 }); 
+    
     const containerRef = useRef<HTMLDivElement>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processStatus, setProcessStatus] = useState('');
     const [incomingPayload, setIncomingPayload] = useState<any | null>(null);
-    const [showShortcuts, setShowShortcuts] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Multi-select Mask State
     const [activeMask, setActiveMask] = useState<Uint8Array | null>(null);
     const [maskPreviewSrc, setMaskPreviewSrc] = useState<string | null>(null);
 
     // Transformation Logic
     const [isTransforming, setIsTransforming] = useState<'NONE' | 'DRAG' | 'RESIZE' | 'ROTATE'>('NONE');
     const [transformMode, setTransformMode] = useState<'IDLE' | 'PAN'>('IDLE');
-    const transformStartRef = useRef<{x: number, y: number, w: number, h: number, r: number, scale: number, angle: number}>({x:0, y:0, w:0, h:0, r:0, scale:1, angle:0});
-    
+    const lastPointerPos = useRef<{x: number, y: number} | null>(null);
+
     // --- TRANSFER LISTENER ---
     useEffect(() => {
         const checkStorage = () => {
             const stored = localStorage.getItem('vingi_layer_studio_data');
-            // Legacy check
             const legacy = localStorage.getItem('vingi_layer_studio_source');
-            
             if (stored) {
                 setIncomingPayload(JSON.parse(stored));
                 localStorage.removeItem('vingi_layer_studio_data');
@@ -230,7 +227,6 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         }
     };
 
-    // --- TRANSFORM SELECTED HELPER ---
     const transformSelected = (action: string) => {
         if (!selectedLayerId) return;
         const layer = layers.find(l => l.id === selectedLayerId);
@@ -272,107 +268,39 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         if (!selectedLayerId) return;
         const layer = layers.find(l => l.id === selectedLayerId);
         if (!layer) return;
-        
-        setIsProcessing(true);
-        setProcessStatus('Analizando & Reconstruindo (IA)...');
-
+        setIsProcessing(true); setProcessStatus('Analizando & Reconstruindo (IA)...');
         try {
-            // Need to get base64 of the image without prefix
-            let base64 = layer.src;
-            if (base64.includes(',')) base64 = base64.split(',')[1];
-
-            const res = await fetch('/api/analyze', {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({
-                     action: 'RECONSTRUCT_ELEMENT',
-                     cropBase64: base64
-                 })
-            });
+            let base64 = layer.src; if (base64.includes(',')) base64 = base64.split(',')[1];
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'RECONSTRUCT_ELEMENT', cropBase64: base64 }) });
             const data = await res.json();
-            
             if (data.success && data.src) {
-                const newLayer: DesignLayer = {
-                    ...layer,
-                    id: `reconst-${Date.now()}`,
-                    name: `${data.name} (IA)`,
-                    src: data.src,
-                    x: layer.x + 20,
-                    y: layer.y + 20
-                };
+                const newLayer: DesignLayer = { ...layer, id: `reconst-${Date.now()}`, name: `${data.name} (IA)`, src: data.src, x: layer.x + 20, y: layer.y + 20 };
                 const newLayers = [...layers, newLayer];
-                setLayers(newLayers);
-                addToHistory(newLayers);
-                setSelectedLayerId(newLayer.id);
-            } else {
-                alert("Não foi possível reconstruir o elemento.");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Erro na conexão com a IA.");
-        }
+                setLayers(newLayers); addToHistory(newLayers); setSelectedLayerId(newLayer.id);
+            } else { alert("Não foi possível reconstruir o elemento."); }
+        } catch (e) { alert("Erro na conexão com a IA."); }
         setIsProcessing(false);
     };
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
-            if (e.key.toLowerCase() === 'v') setTool('MOVE');
-            if (e.key.toLowerCase() === 'w') setTool('SMART_EXTRACT');
-            if (e.key.toLowerCase() === 'h') setTool('HAND');
-            if (e.key === 'Delete' || e.key === 'Backspace') if (selectedLayerId) transformSelected('DEL');
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [layers, selectedLayerId, history, historyIndex, undo, redo]);
 
     const startSession = async (payload: { mainImage: string, texture?: any }) => {
         const image = new Image(); image.src = payload.mainImage;
         image.onload = async () => {
             const maxDim = 1500;
             let finalW = image.width, finalH = image.height;
-            
-            // CORRECTION: Ensure precise aspect ratio preservation and integer rounding
             if (image.width > maxDim || image.height > maxDim) {
                 const ratio = image.width/image.height;
-                if (image.width > image.height) { 
-                    finalW = maxDim; 
-                    finalH = Math.round(maxDim / ratio); 
-                } else { 
-                    finalH = maxDim; 
-                    finalW = Math.round(maxDim * ratio); 
-                }
+                if (image.width > image.height) { finalW = maxDim; finalH = Math.round(maxDim / ratio); } 
+                else { finalH = maxDim; finalW = Math.round(maxDim * ratio); }
             }
-            
             setCanvasSize({ w: finalW, h: finalH });
-            
-            const initialLayers: DesignLayer[] = [
-                { id: 'layer-base', type: 'BACKGROUND', name: 'Arte Original', src: payload.mainImage, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: false, zIndex: 0 }
-            ];
-
-            // If texture exists, create a separate layer for it
+            const initialLayers: DesignLayer[] = [{ id: 'layer-base', type: 'BACKGROUND', name: 'Arte Original', src: payload.mainImage, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: false, zIndex: 0 }];
             if (payload.texture && payload.texture.url) {
                 const texImg = await createTextureLayerImage(payload.texture.url, finalW, finalH, payload.texture.opacity || 0.5);
-                if (texImg) {
-                    initialLayers.push({
-                        id: 'layer-texture',
-                        type: 'ELEMENT', // Treat as element but covers full screen
-                        name: `Textura (${payload.texture.type})`,
-                        src: texImg,
-                        x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false,
-                        visible: true, 
-                        locked: true, // Lock by default so user doesn't drag it accidentally
-                        zIndex: 999 // Top most
-                    });
-                }
+                if (texImg) { initialLayers.push({ id: 'layer-texture', type: 'ELEMENT', name: `Textura (${payload.texture.type})`, src: texImg, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: true, zIndex: 999 }); }
             }
-
-            setLayers(initialLayers);
-            setHistory([initialLayers]);
-            setHistoryIndex(0);
-            setIncomingPayload(null); setTool('SMART_EXTRACT');
-            setView({ x: 0, y: 0, k: 500 / finalW });
+            setLayers(initialLayers); setHistory([initialLayers]); setHistoryIndex(0); setIncomingPayload(null); setTool('SMART_EXTRACT'); 
+            // Fit to view
+            setView({ x: 0, y: 0, k: 0.5 });
             setActiveMask(null); setMaskPreviewSrc(null);
         };
     };
@@ -388,26 +316,19 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
 
     const addToSelection = async (clickX: number, clickY: number) => {
         if (tool !== 'SMART_EXTRACT') return;
-        
-        // Find the artwork layer (ignore locked texture layer)
         const targetLayer = layers.find(l => !l.locked && l.visible && l.id !== 'layer-texture');
         if (!targetLayer) return;
-
         const img = new Image(); img.src = targetLayer.src; img.crossOrigin = "anonymous";
         await new Promise(r => img.onload = r);
         const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0);
-
         const { mask, hasPixels } = getSmartObjectMask(ctx, canvas.width, canvas.height, Math.floor(clickX), Math.floor(clickY), activeMask || undefined);
-        
         if (hasPixels) {
             setActiveMask(mask); 
             const prevC = document.createElement('canvas'); prevC.width = canvas.width; prevC.height = canvas.height;
             const pCtx = prevC.getContext('2d')!;
             const iData = pCtx.createImageData(canvas.width, canvas.height);
-            for(let i=0; i<mask.length; i++) {
-                if(mask[i]) { iData.data[i*4] = 59; iData.data[i*4+1] = 130; iData.data[i*4+2] = 246; iData.data[i*4+3] = 100; }
-            }
+            for(let i=0; i<mask.length; i++) { if(mask[i]) { iData.data[i*4] = 59; iData.data[i*4+1] = 130; iData.data[i*4+2] = 246; iData.data[i*4+3] = 100; } }
             pCtx.putImageData(iData, 0, 0);
             setMaskPreviewSrc(prevC.toDataURL());
         }
@@ -416,86 +337,37 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
     const finishExtraction = async () => {
         if (!activeMask) return;
         const targetLayer = layers.find(l => !l.locked && l.visible && l.id !== 'layer-texture')!;
-        
         setIsProcessing(true); setProcessStatus('Separando Objeto...');
-
         const img = new Image(); img.src = targetLayer.src; img.crossOrigin = "anonymous";
         await new Promise(r => img.onload = r);
         const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0);
-
         let minX = canvas.width, maxX=0, minY=canvas.height, maxY=0;
         let count = 0;
-        for(let i=0; i<activeMask.length; i++) {
-            if (activeMask[i]) {
-                const x = i % canvas.width; const y = Math.floor(i/canvas.width);
-                if(x<minX) minX=x; if(x>maxX) maxX=x;
-                if(y<minY) minY=y; if(y>maxY) maxY=y;
-                count++;
-            }
-        }
+        for(let i=0; i<activeMask.length; i++) { if (activeMask[i]) { const x = i % canvas.width; const y = Math.floor(i/canvas.width); if(x<minX) minX=x; if(x>maxX) maxX=x; if(y<minY) minY=y; if(y>maxY) maxY=y; count++; } }
         if (count === 0) { setIsProcessing(false); return; }
-
         const w = maxX - minX + 1; const h = maxY - minY + 1;
         const objCanvas = document.createElement('canvas'); objCanvas.width = w; objCanvas.height = h;
         const objCtx = objCanvas.getContext('2d')!;
         const srcData = ctx.getImageData(minX, minY, w, h);
-        for (let i=0; i < w * h; i++) {
-            const gIdx = (minY + Math.floor(i/w)) * canvas.width + (minX + (i%w));
-            if (activeMask[gIdx] === 0) srcData.data[i*4+3] = 0; 
-        }
+        for (let i=0; i < w * h; i++) { const gIdx = (minY + Math.floor(i/w)) * canvas.width + (minX + (i%w)); if (activeMask[gIdx] === 0) srcData.data[i*4+3] = 0; }
         objCtx.putImageData(srcData, 0, 0);
         const newObjSrc = objCanvas.toDataURL();
-
         healBackground(ctx, canvas.width, canvas.height, activeMask);
         const healedSrc = canvas.toDataURL();
-
         const newLayerId = `element-${Date.now()}`;
-        const centerX = minX + w / 2;
-        const centerY = minY + h / 2;
-        
-        // Insert below texture if exists
-        const zIndex = layers.length; 
-
-        const newLayer: DesignLayer = {
-            id: newLayerId,
-            type: 'ELEMENT',
-            name: 'Elemento Separado',
-            src: newObjSrc,
-            x: centerX - canvas.width / 2,
-            y: centerY - canvas.height / 2,
-            scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: false, zIndex
-        };
-
+        const newLayer: DesignLayer = { id: newLayerId, type: 'ELEMENT', name: 'Elemento Separado', src: newObjSrc, x: (minX+w/2) - canvas.width/2, y: (minY+h/2) - canvas.height/2, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: false, zIndex: layers.length };
         const updatedLayers = layers.map(l => l.id === targetLayer.id ? { ...l, src: healedSrc } : l);
         updatedLayers.push(newLayer);
-        
-        // Re-sort z-indices to keep Texture on top
-        updatedLayers.sort((a,b) => {
-            if (a.id === 'layer-texture') return 1;
-            if (b.id === 'layer-texture') return -1;
-            return a.zIndex - b.zIndex;
-        });
-
-        addToHistory(updatedLayers);
-        setSelectedLayerId(newLayerId);
-        setTool('MOVE');
-        setActiveMask(null); setMaskPreviewSrc(null);
-        setIsProcessing(false); setProcessStatus('');
+        updatedLayers.sort((a,b) => { if (a.id === 'layer-texture') return 1; if (b.id === 'layer-texture') return -1; return a.zIndex - b.zIndex; });
+        addToHistory(updatedLayers); setSelectedLayerId(newLayerId); setTool('MOVE'); setActiveMask(null); setMaskPreviewSrc(null); setIsProcessing(false); setProcessStatus('');
     };
 
-    // --- POINTER HANDLERS ---
-    const lastPointerPos = useRef<{x: number, y: number} | null>(null);
-
+    // --- POINTER & ZOOM HANDLERS ---
     const handlePointerDown = (e: React.PointerEvent) => {
         e.preventDefault();
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
-        
-        if (tool === 'HAND' || e.button === 1) {
-            setTransformMode('PAN');
-            return;
-        }
-
+        if (tool === 'HAND' || e.button === 1 || e.buttons === 4) { setTransformMode('PAN'); return; }
         if (tool === 'SMART_EXTRACT') {
              if (!containerRef.current) return;
              const rect = containerRef.current.getBoundingClientRect();
@@ -505,16 +377,10 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
              const relY = e.clientY - rect.top;
              const rawX = (relX - centerX) / view.k;
              const rawY = (relY - centerY) / view.k;
-             const finalX = rawX + canvasSize.w/2;
-             const finalY = rawY + canvasSize.h/2;
-             
-             addToSelection(finalX, finalY);
+             addToSelection(rawX + canvasSize.w/2, rawY + canvasSize.h/2);
              return;
         }
-
-        if (tool === 'MOVE' && selectedLayerId) {
-             setIsTransforming('DRAG');
-        }
+        if (tool === 'MOVE' && selectedLayerId) setIsTransforming('DRAG');
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
@@ -522,141 +388,63 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         const dx = e.clientX - lastPointerPos.current.x;
         const dy = e.clientY - lastPointerPos.current.y;
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
-
-        if (transformMode === 'PAN') {
-            setView(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
-            return;
-        }
-
+        if (transformMode === 'PAN') { setView(v => ({ ...v, x: v.x + dx, y: v.y + dy })); return; }
         if (isTransforming === 'DRAG' && selectedLayerId) {
              const layer = layers.find(l => l.id === selectedLayerId);
-             if (layer && !layer.locked) {
-                 const scaleK = view.k;
-                 updateLayer(selectedLayerId, { x: layer.x + dx/scaleK, y: layer.y + dy/scaleK });
-             }
+             if (layer && !layer.locked) { updateLayer(selectedLayerId, { x: layer.x + dx/view.k, y: layer.y + dy/view.k }); }
         }
     };
 
-    const handlePointerUp = () => {
-        lastPointerPos.current = null;
-        setTransformMode('IDLE');
-        setIsTransforming('NONE');
-    };
-
+    const handlePointerUp = () => { lastPointerPos.current = null; setTransformMode('IDLE'); setIsTransforming('NONE'); };
     const handleWheel = (e: React.WheelEvent) => {
-        if (e.ctrlKey) {
-            e.preventDefault();
-            const s = Math.exp(-e.deltaY * 0.001);
-            setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * s), 5) }));
-        } else {
-            if (tool === 'HAND') {
-                 setView(v => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
-            }
-        }
+        if (e.ctrlKey || tool === 'HAND') { e.preventDefault(); const s = Math.exp(-e.deltaY * 0.001); setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * s), 5) })); }
     };
 
     const sendToMockup = async () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvasSize.w;
-        canvas.height = canvasSize.h;
+        const canvas = document.createElement('canvas'); canvas.width = canvasSize.w; canvas.height = canvasSize.h;
         const ctx = canvas.getContext('2d')!;
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         const sorted = [...layers].sort((a,b) => a.zIndex - b.zIndex);
         for(const l of sorted) {
              if (!l.visible) continue;
-             const img = new Image();
-             img.src = l.src;
-             await new Promise(r => { 
-                 if(img.complete) r(true); 
-                 img.onload = () => r(true);
-                 img.onerror = () => r(false);
-             });
-             
-             ctx.save();
-             ctx.translate(canvas.width/2 + l.x, canvas.height/2 + l.y);
-             ctx.rotate(l.rotation * Math.PI/180);
-             ctx.scale(l.flipX ? -l.scale : l.scale, l.flipY ? -l.scale : l.scale);
-             ctx.drawImage(img, -img.width/2, -img.height/2);
-             ctx.restore();
+             const img = new Image(); img.src = l.src;
+             await new Promise(r => { if(img.complete) r(true); img.onload = () => r(true); img.onerror = () => r(false); });
+             ctx.save(); ctx.translate(canvas.width/2 + l.x, canvas.height/2 + l.y);
+             ctx.rotate(l.rotation * Math.PI/180); ctx.scale(l.flipX ? -l.scale : l.scale, l.flipY ? -l.scale : l.scale);
+             ctx.drawImage(img, -img.width/2, -img.height/2); ctx.restore();
         }
-        
-        const data = canvas.toDataURL();
-        localStorage.setItem('vingi_mockup_pattern', data);
+        localStorage.setItem('vingi_mockup_pattern', canvas.toDataURL());
         window.dispatchEvent(new CustomEvent('vingi_transfer', { detail: { module: 'MOCKUP' } }));
         if (onNavigateToMockup) onNavigateToMockup();
     };
 
     if (incomingPayload) {
-        return (
-            <div className="flex flex-col h-full items-center justify-center p-8 bg-gray-50 overflow-y-auto">
-                 <div className="bg-white p-8 rounded-2xl shadow-xl max-w-4xl w-full flex gap-8 items-center">
-                    <img src={incomingPayload.mainImage} className="w-1/2 h-80 object-contain bg-gray-100 rounded-lg border" />
-                    <div className="space-y-6">
-                        <h1 className="text-3xl font-bold text-gray-800">Layer Lab</h1>
-                        <p className="text-gray-500">Imagem recebida. {incomingPayload.texture ? 'Textura separada detectada.' : 'Pronto para edição.'}</p>
-                        <button onClick={() => startSession(incomingPayload)} className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:scale-105 transition-transform"><Wand2 size={20}/> INICIAR SESSÃO</button>
-                    </div>
-                </div>
-            </div>
-        );
+        return ( <div className="flex flex-col h-full items-center justify-center p-8 bg-gray-50 overflow-y-auto"> <div className="bg-white p-8 rounded-2xl shadow-xl max-w-4xl w-full flex gap-8 items-center"> <img src={incomingPayload.mainImage} className="w-1/2 h-80 object-contain bg-gray-100 rounded-lg border" /> <div className="space-y-6"> <h1 className="text-3xl font-bold text-gray-800">Layer Lab</h1> <p className="text-gray-500">Imagem recebida. {incomingPayload.texture ? 'Textura separada detectada.' : 'Pronto para edição.'}</p> <button onClick={() => startSession(incomingPayload)} className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:scale-105 transition-transform"><Wand2 size={20}/> INICIAR SESSÃO</button> </div> </div> </div> );
     }
 
-    // --- MAIN RENDER ---
     return (
-        <div className="flex flex-col h-full w-full bg-[#1e293b] text-white overflow-hidden" 
-             onPointerMove={handlePointerMove} 
-             onPointerUp={handlePointerUp}
-             onWheel={handleWheel}>
-            
+        <div className="flex flex-col h-full w-full bg-[#1e293b] text-white overflow-hidden" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
             <ModuleHeader icon={Layers} title="Layer Studio" subtitle="Composição & Edição" />
             
             {!layers.length && !incomingPayload ? (
-                // LANDING STATE
-                // ADDED overflow-y-auto to fix mobile scrolling
                 <div className="flex-1 bg-white overflow-y-auto">
                     <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
-                    <ModuleLandingPage 
-                        icon={Layers}
-                        title="Layer Lab Studio"
-                        description="Ferramenta profissional de separação de elementos. Remova fundos, isole motivos e use IA Generativa para reconstruir partes ocultas de uma estampa."
-                        primaryActionLabel="Iniciar Projeto"
-                        onPrimaryAction={() => fileInputRef.current?.click()}
-                        features={["Smart Mask", "Inpainting", "Compositing", "Alpha Channel"]}
-                        partners={["ADOBE PHOTOSHOP AI", "CANVA", "REMOVE.BG", "VECTORIZER"]}
-                        secondaryAction={
-                            <div className="h-full flex flex-col justify-center">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className="w-2 h-2 rounded-full bg-vingi-500"></span>
-                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dica Profissional</h3>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
-                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Smart Extract</h4>
-                                        <p className="text-xs text-gray-500">Clique em uma cor ou objeto para criar uma máscara de recorte instantânea.</p>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm text-left">
-                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Inpainting</h4>
-                                        <p className="text-xs text-gray-500">A IA pode redesenhar partes que foram cortadas ou estão faltando na imagem original.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    />
+                    <ModuleLandingPage icon={Layers} title="Layer Lab Studio" description="Ferramenta profissional de separação de elementos. Remova fundos, isole motivos e use IA Generativa para reconstruir partes ocultas de uma estampa." primaryActionLabel="Iniciar Projeto" onPrimaryAction={() => fileInputRef.current?.click()} features={["Smart Mask", "Inpainting", "Compositing", "Alpha Channel"]} partners={["ADOBE PHOTOSHOP AI", "CANVA", "REMOVE.BG", "VECTORIZER"]} />
                 </div>
             ) : (
-                // WORKSPACE STATE
                 <>
-                    {/* TOOLBAR - Top on desktop, maybe simplified on mobile */}
+                    {/* TOOLBAR */}
                     <div className="h-14 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-3 z-30 justify-between overflow-x-auto no-scrollbar shrink-0">
                         <div className="flex items-center gap-3">
                             <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
-                                <button onClick={() => setTool('MOVE')} className={`p-2 rounded-md ${tool==='MOVE' ? 'bg-vingi-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}><Move size={18}/></button>
-                                <button onClick={() => setTool('SMART_EXTRACT')} className={`p-2 rounded-md ${tool==='SMART_EXTRACT' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}><Scissors size={18}/></button>
-                                <button onClick={() => setTool('HAND')} className={`p-2 rounded-md ${tool==='HAND' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}><Hand size={18}/></button>
+                                <button onClick={() => setTool('MOVE')} className={`p-2 rounded-md ${tool==='MOVE' ? 'bg-vingi-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Mover"><Move size={18}/></button>
+                                <button onClick={() => setTool('SMART_EXTRACT')} className={`p-2 rounded-md ${tool==='SMART_EXTRACT' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Varinha Mágica (Recorte)"><Scissors size={18}/></button>
+                                <button onClick={() => setTool('HAND')} className={`p-2 rounded-md ${tool==='HAND' ? 'bg-gray-600 text-white shadow' : 'text-gray-400 hover:text-white'}`} title="Pan (Mover Tela)"><Hand size={18}/></button>
                             </div>
+                            <div className="w-px h-8 bg-gray-700"></div>
+                            <button onClick={() => setView(v => ({ ...v, k: v.k * 1.2 }))} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><ZoomIn size={18}/></button>
+                            <button onClick={() => setView(v => ({ ...v, k: v.k * 0.8 }))} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><ZoomOut size={18}/></button>
+                            <button onClick={() => setView({ x: 0, y: 0, k: 0.5 })} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><RotateCcw size={18}/></button>
                             <div className="w-px h-8 bg-gray-700"></div>
                             <div className="flex items-center gap-1">
                                 <button onClick={undo} disabled={historyIndex <= 0} className="p-2 hover:bg-gray-700 rounded-md text-gray-300 disabled:opacity-30"><Undo2 size={18}/></button>
@@ -672,7 +460,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                         </div>
                     </div>
 
-                    {/* CONFIRM SELECTION DIALOG */}
+                    {/* CONFIRM SELECTION */}
                     {activeMask && tool === 'SMART_EXTRACT' && (
                         <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-vingi-600 text-white px-4 py-2 rounded-full shadow-xl z-50 flex items-center gap-3 animate-fade-in">
                             <span className="text-xs font-bold">Seleção Ativa</span>
@@ -681,33 +469,16 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                         </div>
                     )}
 
-                    {/* SPLIT VIEW - MOBILE OPTIMIZED (COL) / DESKTOP (ROW) */}
+                    {/* CANVAS AREA */}
                     <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                        
-                        {/* CANVAS AREA - Order 1 */}
                         <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center bg-[#1e1e1e] ${tool==='HAND'?'cursor-grab': tool==='SMART_EXTRACT'?'cursor-crosshair':'cursor-default'} min-h-[50vh]`} onPointerDown={handlePointerDown} style={{ touchAction: 'none' }}>
                             <div className="absolute inset-0 opacity-10 bg-[linear-gradient(45deg,#808080_25%,transparent_25%,transparent_75%,#808080_75%,#808080),linear-gradient(45deg,#808080_25%,transparent_25%,transparent_75%,#808080_75%,#808080)]" style={{ backgroundSize: '20px 20px', backgroundPosition: '0 0, 10px 10px' }} />
-
-                            <div className="relative shadow-2xl" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center', transition: 'transform 0.05s linear' }}>
+                            <div className="relative shadow-2xl transition-transform duration-75 ease-out" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center' }}>
                                 <div className="absolute inset-0 bg-white" />
                                 {layers.map(l => l.visible && (
-                                    <div key={l.id} 
-                                        className={`absolute select-none pointer-events-none ${selectedLayerId===l.id ? 'z-[999]' : ''}`} 
-                                        style={{ 
-                                            left: '50%', top: '50%', width: (l.id.includes('base') || l.id.includes('texture')) ? '100%' : 'auto', height: (l.id.includes('base') || l.id.includes('texture')) ? '100%' : 'auto',
-                                            transform: `translate(calc(-50% + ${l.x}px), calc(-50% + ${l.y}px)) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, 
-                                            zIndex: l.zIndex,
-                                            mixBlendMode: l.id === 'layer-texture' ? 'multiply' : 'normal' 
-                                        }}>
-                                        <img src={l.src} className={`max-w-none ${l.id.includes('base') || l.id.includes('texture') ? 'w-full h-full object-contain' : ''} ${selectedLayerId===l.id ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''}`} draggable={false} />
-                                        {selectedLayerId === l.id && tool === 'MOVE' && (
-                                            <div className="absolute -inset-1 border border-blue-500 pointer-events-none">
-                                                <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
-                                                <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
-                                                <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
-                                                <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
-                                            </div>
-                                        )}
+                                    <div key={l.id} className={`absolute select-none pointer-events-none ${selectedLayerId===l.id ? 'z-[999]' : ''}`} style={{ left: '50%', top: '50%', width: (l.id.includes('base')||l.id.includes('texture'))?'100%':'auto', height:(l.id.includes('base')||l.id.includes('texture'))?'100%':'auto', transform: `translate(calc(-50% + ${l.x}px), calc(-50% + ${l.y}px)) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, zIndex: l.zIndex, mixBlendMode: l.id==='layer-texture'?'multiply':'normal' }}>
+                                        <img src={l.src} className={`max-w-none ${l.id.includes('base')||l.id.includes('texture')?'w-full h-full object-contain':''} ${selectedLayerId===l.id?'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]':''}`} draggable={false} />
+                                        {selectedLayerId === l.id && tool === 'MOVE' && ( <div className="absolute -inset-1 border border-blue-500 pointer-events-none"></div> )}
                                     </div>
                                 ))}
                                 {maskPreviewSrc && <div className="absolute inset-0 pointer-events-none z-[1000] opacity-50 mix-blend-screen"><img src={maskPreviewSrc} className="w-full h-full" /></div>}
@@ -718,7 +489,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                             </div>
                         </div>
 
-                        {/* SIDEBAR (LAYERS) - Order 2 (Bottom on Mobile, Right on Desktop) */}
+                        {/* LAYER SIDEBAR */}
                         <div className="w-full md:w-64 bg-[#1e293b] border-t md:border-t-0 md:border-l border-gray-700 flex flex-col shadow-2xl z-20 h-[40vh] md:h-full">
                             <div className="p-3 bg-[#0f172a] border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
                                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Camadas</h3>
@@ -730,16 +501,10 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                             </div>
                             <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                                 {layers.slice().reverse().map(l => (
-                                    <div key={l.id} 
-                                        onClick={() => !l.locked && setSelectedLayerId(l.id)} 
-                                        className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer border transition-all ${selectedLayerId===l.id ? 'bg-blue-900/30 border-blue-500/50' : 'bg-transparent border-transparent hover:bg-gray-800'} ${l.locked ? 'opacity-70' : ''}`}>
+                                    <div key={l.id} onClick={() => !l.locked && setSelectedLayerId(l.id)} className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer border transition-all ${selectedLayerId===l.id ? 'bg-blue-900/30 border-blue-500/50' : 'bg-transparent border-transparent hover:bg-gray-800'} ${l.locked ? 'opacity-70' : ''}`}>
                                         <button onClick={(e)=>{e.stopPropagation(); if(!l.locked || l.id==='layer-texture') updateLayer(l.id, {visible: !l.visible})}} className={`p-1 rounded ${l.visible?'text-gray-400':'text-gray-600'}`}>{l.visible?<Eye size={12}/>:<EyeOff size={12}/>}</button>
-                                        <div className="w-8 h-8 bg-gray-700 rounded border border-gray-600 overflow-hidden shrink-0">
-                                            <img src={l.src} className="w-full h-full object-contain" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className={`text-[11px] font-medium truncate ${selectedLayerId===l.id ? 'text-white' : 'text-gray-400'}`}>{l.name}</h4>
-                                        </div>
+                                        <div className="w-8 h-8 bg-gray-700 rounded border border-gray-600 overflow-hidden shrink-0"><img src={l.src} className="w-full h-full object-contain" /></div>
+                                        <div className="flex-1 min-w-0"><h4 className={`text-[11px] font-medium truncate ${selectedLayerId===l.id ? 'text-white' : 'text-gray-400'}`}>{l.name}</h4></div>
                                         {l.locked && <Lock size={10} className="text-gray-600"/>}
                                     </div>
                                 ))}

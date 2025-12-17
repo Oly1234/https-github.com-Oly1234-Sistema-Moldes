@@ -1,6 +1,93 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus, Globe, Cpu, Database, Network, Check } from 'lucide-react';
+
+// --- VISUALIZADOR INTELIGENTE (ZOOM/PAN) ---
+export const SmartImageViewer: React.FC<{ src: string, className?: string }> = ({ src, className = "" }) => {
+    const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
+    const [isPinching, setIsPinching] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const lastDist = useRef<number>(0);
+    const lastPos = useRef<{x: number, y: number}>({x: 0, y: 0});
+    const isDragging = useRef(false);
+
+    const getDist = (t1: React.Touch, t2: React.Touch) => Math.sqrt((t1.clientX-t2.clientX)**2 + (t1.clientY-t2.clientY)**2);
+
+    const handleWheel = (e: React.WheelEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const scaleChange = -e.deltaY * 0.001;
+        const newScale = Math.min(Math.max(0.5, transform.k + scaleChange), 8); // Max zoom 8x
+        setTransform(p => ({ ...p, k: newScale }));
+    };
+
+    const handlePointerDown = (e: React.TouchEvent | React.MouseEvent) => {
+        if ('touches' in e && e.touches.length === 2) {
+            setIsPinching(true);
+            lastDist.current = getDist(e.touches[0], e.touches[1]);
+        } else {
+            isDragging.current = true;
+            const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+            const cy = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+            lastPos.current = { x: cx, y: cy };
+        }
+    };
+
+    const handlePointerMove = (e: React.TouchEvent | React.MouseEvent) => {
+        if (isPinching && 'touches' in e && e.touches.length === 2) {
+            e.preventDefault();
+            e.stopPropagation();
+            const dist = getDist(e.touches[0], e.touches[1]);
+            const zoomFactor = dist / lastDist.current;
+            const newScale = Math.min(Math.max(transform.k * zoomFactor, 0.5), 8);
+            setTransform(p => ({ ...p, k: newScale }));
+            lastDist.current = dist;
+        } else if (isDragging.current) {
+            e.preventDefault(); 
+            e.stopPropagation();
+            const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+            const cy = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+            const dx = cx - lastPos.current.x;
+            const dy = cy - lastPos.current.y;
+            setTransform(p => ({ ...p, x: p.x + dx, y: p.y + dy }));
+            lastPos.current = { x: cx, y: cy };
+        }
+    };
+
+    const handlePointerUp = () => { isDragging.current = false; setIsPinching(false); };
+    const reset = () => setTransform({ k: 1, x: 0, y: 0 });
+
+    return (
+        <div 
+            ref={containerRef}
+            className={`overflow-hidden relative cursor-grab active:cursor-grabbing touch-none flex items-center justify-center bg-gray-50/50 ${className}`}
+            onWheel={handleWheel}
+            onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}
+            onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
+            onDoubleClick={reset}
+        >
+            <div 
+                style={{ 
+                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`, 
+                    transition: isDragging.current || isPinching ? 'none' : 'transform 0.1s linear',
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}
+            >
+                <img src={src} className="max-w-full max-h-full object-contain pointer-events-none select-none" draggable={false} />
+            </div>
+            
+            {/* Zoom Controls Overlay */}
+            <div className="absolute bottom-2 right-2 flex flex-col gap-1 z-10">
+                <button onClick={(e) => { e.stopPropagation(); setTransform(p => ({...p, k: Math.min(p.k * 1.2, 8)})); }} className="bg-white/90 p-1.5 rounded-full shadow-sm text-gray-700 hover:text-vingi-600 border border-gray-200"><Plus size={14}/></button>
+                <button onClick={(e) => { e.stopPropagation(); reset(); }} className="bg-white/90 p-1.5 rounded-full shadow-sm text-gray-700 hover:text-vingi-600 border border-gray-200"><RotateCcw size={14}/></button>
+            </div>
+        </div>
+    );
+};
 
 // --- TIPO DE PROPRIEDADES DO CABEÇALHO ---
 interface ModuleHeaderProps {

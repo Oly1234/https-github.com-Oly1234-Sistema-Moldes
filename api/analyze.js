@@ -93,20 +93,22 @@ export default async function handler(req, res) {
                 if (descText) finalPrompt = descText.trim();
             }
 
-            // 2. Geração de Queries via IA (MODO CONTRASTE EXTREMO)
-            // Instrução explícita para pele morena/negra e fundo escuro
+            // 2. Geração de Queries via IA (MODO CONTRASTE EXTREMO & VOLUME)
+            // Instrução explícita para pele morena/negra, fundo escuro e VOLUME ALTO (25 queries)
             const MOCKUP_PROMPT = `
             CONTEXT: We need base images for a virtual dressing room.
             TARGET GARMENT: "${finalPrompt}".
             
-            CRITICAL REQUIREMENT: **HIGH CONTRAST FOR AUTOMATIC MASKING**.
+            CRITICAL REQUIREMENT: **MAXIMUM CONTRAST FOR AUTOMATIC MASKING**.
             
             THE PERFECT IMAGE HAS:
-            1. **GARMENT:** Plain WHITE (Branco puro) or very light grey. No prints.
-            2. **MODEL:** Tanned, Bronze, Brown, or Black skin tone (Pele morena/negra). This creates essential contrast against the white dress.
+            1. **GARMENT:** Plain WHITE (Branco puro) or very light grey. ABSOLUTELY NO PRINTS.
+            2. **MODEL:** PREFER Tanned, Bronze, Brown, or Black skin tone (Pele morena/negra/bronzeada). 
+               - REASON: White garment on pale skin is hard to mask. White garment on dark skin is perfect.
             3. **BACKGROUND:** Dark, Black, Grey, or Deep Color (Fundo escuro). 
             
-            TASK: Generate 6 search queries optimized to find this specific combination.
+            TASK: Generate 25 DISTINCT search queries optimized to find this specific combination.
+            Vary the terms: "black background", "dark studio", "fashion photography", "tanned skin", "african model", "latina model", "high contrast".
             
             OUTPUT JSON: { "queries": ["string"] }
             `;
@@ -124,17 +126,31 @@ export default async function handler(req, res) {
             console.warn("AI Query Generation Failed, using Fallback:", e);
         }
 
-        // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico com Bias de Contraste)
-        // Se a IA falhar, injetamos as keywords manualmente.
-        if (queries.length === 0) {
+        // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico com Bias de Contraste e Volume)
+        // Se a IA falhar ou retornar pouco, injetamos uma lista massiva manualmente.
+        if (queries.length < 5) {
             const base = finalPrompt.replace(/[^\w\s]/gi, '');
             queries = [
-                `plain white ${base} on black model dark background`,
+                `white ${base} on black model dark background`,
                 `white ${base} tanned skin model studio lighting`,
                 `white ${base} dark skin fashion photography high contrast`,
                 `white ${base} bronze skin model black background`,
                 `white ${base} isolated on dark grey`,
-                `${base} white fabric mockup dark background`
+                `${base} white fabric mockup dark background`,
+                `plain white ${base} african model studio`,
+                `white ${base} fashion shoot dark mood`,
+                `white ${base} mannequin black background`,
+                `white ${base} high contrast photography`,
+                `white ${base} brunette model tanned skin`,
+                `white ${base} editorial dark background`,
+                `white ${base} studio shot dark skin`,
+                `pure white ${base} black background`,
+                `white ${base} mockup tanned model`,
+                `white ${base} fashion photography lighting`,
+                `white ${base} on grey background`,
+                `white ${base} model looking forward dark background`,
+                `white ${base} isolated black background`,
+                `white ${base} professional studio photo dark`
             ];
         }
         
