@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -126,7 +126,6 @@ export default async function handler(req, res) {
         }
 
         // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico com Bias de Contraste e Volume)
-        // Lista expandida para 40 queries manuais para garantir preenchimento do grid
         if (queries.length < 10) {
             const base = finalPrompt.replace(/[^\w\s]/gi, '');
             queries = [
@@ -150,7 +149,6 @@ export default async function handler(req, res) {
                 `white ${base} model looking forward dark background`,
                 `white ${base} isolated black background`,
                 `white ${base} professional studio photo dark`,
-                // Variações Adicionais
                 `white ${base} fashion model dark theme`,
                 `white ${base} studio lighting dark backdrop`,
                 `white ${base} contrast photography`,
@@ -186,7 +184,7 @@ export default async function handler(req, res) {
 
     if (action === 'GENERATE_PATTERN') {
         try {
-            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle);
+            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize);
             return res.status(200).json({ success: true, image });
         } catch (genError) {
             console.error("Generation Failed:", genError);

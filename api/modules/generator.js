@@ -3,7 +3,7 @@
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
 import { GoogleGenAI } from "@google/genai";
 
-export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL') => {
+export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO') => {
     const ai = new GoogleGenAI({ apiKey });
 
     // 1. Contexto de Cor (Se disponível)
@@ -42,6 +42,7 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
 
     // 3. Contexto de Layout (Aprimorado)
     let layoutInstruction = "Seamless repeat pattern (All-over/Corrida).";
+    let sizeInstruction = targetSize ? `TARGET DIMENSIONS: ${targetSize}. Compose the elements to fit this scale perfectly.` : "";
     
     if (layoutStyle && layoutStyle !== 'ORIGINAL') {
         switch (layoutStyle) {
@@ -115,6 +116,8 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     THEME/SUBJECT: ${prompt}.
     
     ${layoutInstruction}
+    
+    ${sizeInstruction}
     
     ${artStyleInstruction}
     

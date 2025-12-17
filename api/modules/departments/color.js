@@ -4,7 +4,7 @@
 
 export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson, variation = 'NATURAL') => {
     
-    let VARIATION_INSTRUCTION = "Extract the exact dominant colors from the image.";
+    let VARIATION_INSTRUCTION = "Extract a Comprehensive Palette (8-12 Colors).";
     
     // Lógica de Variação Contextual
     if (variation === 'VIVID') VARIATION_INSTRUCTION = "Ignore dull colors. Extract only the most VIBRANT, SATURATED, and NEON accents.";
@@ -14,13 +14,19 @@ export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson
     else if (variation === 'WINTER') VARIATION_INSTRUCTION = "Extract a WINTER PALETTE (Cool, Icy, Jewel Tones) inspired by the image.";
 
     const COLORIST_PROMPT = `
-    ACT AS: Senior Textile Colorist & Trend Forecaster (WGSN Style).
+    ACT AS: Senior Textile Colorist & Trend Forecaster.
+    
     TASK: ${VARIATION_INSTRUCTION}
     
-    1. Identify the 5-6 key colors that define the "Mood" of this print.
-    2. Assign a commercial/poetic name (e.g., "Midnight Navy", "Sunset Coral").
+    CRITICAL: Look for subtle details.
+    - If there is a yellow flower with orange details, EXTRACT BOTH the yellow and the orange.
+    - If there is a gradient, extract the start, middle, and end tones.
+    - Don't just pick the background. Pick the tiny details in the artwork.
+    
+    1. Identify 8 to 12 colors that define the full spectrum of this print.
+    2. Assign a commercial/poetic name.
     3. Provide the closest Pantone TCX code.
-    4. Suggest the role of the color (Base, Accent, Shadow).
+    4. Suggest the role of the color.
 
     OUTPUT JSON ONLY:
     {
@@ -29,8 +35,8 @@ export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson
                 "name": "Commercial Name", 
                 "hex": "#RRGGBB", 
                 "code": "19-XXXX TCX",
-                "role": "Base/Accent/Highlight",
-                "usage": "Best for background or details"
+                "role": "Base/Gradient-Mid/Accent/Shadow",
+                "usage": "Best for..."
             }
         ]
     }
