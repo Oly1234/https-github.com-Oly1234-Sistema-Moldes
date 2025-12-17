@@ -406,31 +406,35 @@ export const MockupStudio: React.FC = () => {
                       </div>
                   )}
 
-                  {/* BOTTOM ICONS SCROLL */}
-                  <div className="flex items-center justify-between px-4 py-2 overflow-x-auto no-scrollbar gap-2">
-                      {/* TOOL GROUP */}
-                      <div className="flex items-center gap-1">
-                          <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
-                          <ToolBtn icon={Sliders} label="Ajustar" active={activeTool==='ADJUST'} onClick={() => setActiveTool('ADJUST')} />
-                          <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
-                      </div>
-                      
-                      <div className="w-px h-8 bg-gray-700 mx-2 shrink-0"></div>
+                  {/* BOTTOM ICONS SCROLL - FIXED SCROLLBAR ISSUE */}
+                  <div className="w-full overflow-hidden">
+                      <div className="flex items-center gap-4 px-4 py-3 overflow-x-auto w-full no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                          <style>{`.no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+                          
+                          {/* TOOL GROUP */}
+                          <div className="flex items-center gap-1 shrink-0">
+                              <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
+                              <ToolBtn icon={Sliders} label="Ajustar" active={activeTool==='ADJUST'} onClick={() => setActiveTool('ADJUST')} />
+                              <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
+                          </div>
+                          
+                          <div className="w-px h-8 bg-gray-700 mx-1 shrink-0"></div>
 
-                      {/* ACTION GROUP */}
-                      <div className="flex items-center gap-1">
-                          <ToolBtn icon={FlipHorizontal} label="Espelhar H" onClick={handleFlipX} />
-                          <ToolBtn icon={FlipVertical} label="Espelhar V" onClick={handleFlipY} />
-                          <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => patternInputRef.current?.click()} highlight />
-                      </div>
+                          {/* ACTION GROUP */}
+                          <div className="flex items-center gap-1 shrink-0">
+                              <ToolBtn icon={FlipHorizontal} label="Espelhar H" onClick={handleFlipX} />
+                              <ToolBtn icon={FlipVertical} label="Espelhar V" onClick={handleFlipY} />
+                              <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => patternInputRef.current?.click()} highlight />
+                          </div>
 
-                      <div className="w-px h-8 bg-gray-700 mx-2 shrink-0"></div>
+                          <div className="w-px h-8 bg-gray-700 mx-1 shrink-0"></div>
 
-                      {/* HISTORY GROUP */}
-                      <div className="flex items-center gap-1">
-                          <ToolBtn icon={Undo2} onClick={undo} disabled={historyIndex <= -1} />
-                          <ToolBtn icon={Redo2} onClick={redo} disabled={historyIndex >= history.length - 1} />
-                          <ToolBtn icon={Eraser} onClick={() => { const newL = layers.filter(x => x.id !== activeLayerId); saveToHistory(newL); setActiveLayerId(null); }} disabled={!activeLayerId} danger />
+                          {/* HISTORY GROUP */}
+                          <div className="flex items-center gap-1 shrink-0">
+                              <ToolBtn icon={Undo2} onClick={undo} disabled={historyIndex <= -1} />
+                              <ToolBtn icon={Redo2} onClick={redo} disabled={historyIndex >= history.length - 1} />
+                              <ToolBtn icon={Eraser} onClick={() => { const newL = layers.filter(x => x.id !== activeLayerId); saveToHistory(newL); setActiveLayerId(null); }} disabled={!activeLayerId} danger />
+                          </div>
                       </div>
                   </div>
               </div>
@@ -444,7 +448,7 @@ const ToolBtn = ({ icon: Icon, label, active, onClick, disabled, highlight, dang
     <button 
         onClick={onClick} 
         disabled={disabled}
-        className={`flex flex-col items-center justify-center min-w-[60px] p-2 rounded-lg transition-all active:scale-95 gap-1 ${
+        className={`flex flex-col items-center justify-center min-w-[60px] p-2 rounded-lg transition-all active:scale-95 gap-1 shrink-0 ${
             disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'
         } ${active ? 'text-vingi-400 bg-white/5' : 'text-gray-400'} ${highlight ? 'text-white' : ''} ${danger ? 'text-red-400' : ''}`}
     >
