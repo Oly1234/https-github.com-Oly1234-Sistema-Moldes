@@ -506,27 +506,31 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
 
     // --- NEW FUNCTIONS ---
     
-    const searchModels = async () => {
-        if (!searchQuery) return;
+    // UNIFIED SEARCH LOGIC
+    const performSearch = async (overridePrompt?: string, overrideImage?: string) => {
         setIsSearching(true);
-        setLoadingMessage("Identificando estrutura...");
+        setLoadingMessage("Detectando estrutura...");
         setWhiteBases([]);
 
+        const promptToSend = overridePrompt || searchQuery;
+        const imageToSend = overrideImage || (referenceImage && !searchQuery ? referenceImage.split(',')[1] : null);
+
         try {
+            // 1. Get Queries (Contextual to High Contrast)
             const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'FIND_WHITE_MODELS',
-                    prompt: searchQuery
+                    prompt: promptToSend,
+                    mainImageBase64: imageToSend
                 })
             });
             const data = await response.json();
 
             if (data.success && data.queries) {
-                setLoadingMessage("Buscando imagens...");
-                // Garante que o array queries exista, senão cria um fallback no frontend também
-                const queries = data.queries.length > 0 ? data.queries.slice(0, 4) : [`${searchQuery} white dress studio`, `${searchQuery} plain white model`];
+                setLoadingMessage("Buscando modelos com contraste ideal...");
+                const queries = data.queries;
                 
                 const promises = queries.map(async (q: string) => {
                     try {
@@ -547,22 +551,30 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                 const validResults = results.filter((url: string | null) => url !== null) as string[];
                 setWhiteBases(validResults);
                 
-                // Se não achou nada, mostrar feedback
                 if (validResults.length === 0) {
                      setLoadingMessage("Nenhum modelo compatível encontrado.");
                 }
             }
         } catch (e) {
             console.error("Search failed", e);
-            setLoadingMessage("Erro na conexão. Tente novamente.");
+            setLoadingMessage("Erro na conexão.");
         } finally {
             setIsSearching(false);
         }
     };
 
+    const handleFindSimilarWhite = () => {
+        if (!referenceImage) return;
+        // Strip prefix for sending
+        const base64 = referenceImage.split(',')[1];
+        performSearch(undefined, base64);
+    };
+
     const handleBaseSelect = (url: string) => {
         setReferenceImage(url);
         setSelectedBase(url);
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handlePatternUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -600,15 +612,16 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                                             type="text" 
                                             value={searchQuery} 
                                             onChange={(e) => setSearchQuery(e.target.value)} 
-                                            onKeyDown={(e) => e.key === 'Enter' && searchModels()} 
+                                            onKeyDown={(e) => e.key === 'Enter' && performSearch()} 
                                             placeholder="Descreva o Modelo (Ex: Vestido Longo Branco)" 
-                                            disabled={!!referenceImage} 
+                                            // Disabled only if searching
+                                            disabled={isSearching} 
                                             className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200 shadow-inner focus:border-vingi-500 focus:ring-4 focus:ring-vingi-500/10 outline-none text-base pl-12 disabled:bg-gray-100 disabled:text-gray-400 transition-all bg-gray-50/50" 
                                         />
                                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-vingi-500 transition-colors" size={20}/>
                                     </div>
                                     <button 
-                                        onClick={searchModels} 
+                                        onClick={() => performSearch()} 
                                         disabled={!searchQuery || isSearching}
                                         className={`w-full py-4 text-white rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg ${isSearching ? 'bg-gray-400 cursor-wait' : 'bg-vingi-900 hover:bg-vingi-800 shadow-vingi-900/20'}`}
                                     >
@@ -620,7 +633,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                                 
                                 {whiteBases.length > 0 && (
                                     <div className="space-y-2 animate-fade-in">
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Selecione uma Base:</p>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Bases Sugeridas (Pele Morena + Fundo Escuro):</p>
                                         <div className="grid grid-cols-2 gap-3 pb-10">
                                             {whiteBases.map((url, i) => (
                                                 <div key={i} onClick={() => handleBaseSelect(url)} className="aspect-[3/4] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer active:scale-95 transition-all group relative hover:ring-4 ring-vingi-500/30">
@@ -640,20 +653,31 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                                     <div className="h-px bg-gray-300 w-full"></div>
                                 </div>
 
-                                <button 
-                                    onClick={() => refInputRef.current?.click()} 
-                                    className={`w-full py-5 border-2 border-dashed rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white active:bg-gray-50'}`}
-                                >
-                                    <input type="file" ref={refInputRef} onChange={handleRefImageUpload} className="hidden" accept="image/*"/>
-                                    {referenceImage ? <><Check size={18}/> Foto Pronta (Clique para Trocar)</> : <><ImageIcon size={20}/> Carregar Foto da Galeria</>}
-                                </button>
+                                <div className="flex flex-col gap-2">
+                                    <button 
+                                        onClick={() => refInputRef.current?.click()} 
+                                        className={`w-full py-5 border-2 border-dashed rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white active:bg-gray-50'}`}
+                                    >
+                                        <input type="file" ref={refInputRef} onChange={handleRefImageUpload} className="hidden" accept="image/*"/>
+                                        {referenceImage ? <><Check size={18}/> Imagem Carregada</> : <><ImageIcon size={20}/> Carregar Foto de Referência</>}
+                                    </button>
+
+                                    {referenceImage && !isSearching && (
+                                        <button 
+                                            onClick={handleFindSimilarWhite}
+                                            className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-purple-700 flex items-center justify-center gap-2 animate-fade-in"
+                                        >
+                                            <Sparkles size={14}/> ENCONTRAR VERSÃO BRANCA PARA MOCKUP
+                                        </button>
+                                    )}
+                                </div>
                                 
                                 {referenceImage && (
                                     <button 
                                         onClick={() => setStep('SELECT_PATTERN')}
                                         className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-sm shadow-lg hover:bg-green-700 transition-all animate-bounce-subtle flex items-center justify-center gap-2"
                                     >
-                                        CONTINUAR <ChevronRight size={18}/>
+                                        USAR ESTA BASE E CONTINUAR <ChevronRight size={18}/>
                                     </button>
                                 )}
                             </div>

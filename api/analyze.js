@@ -82,7 +82,7 @@ export default async function handler(req, res) {
         try {
             // 1. Visão Computacional para Estrutura (Se imagem for enviada)
             if (mainImageBase64) {
-                const DESCRIBE_PROMPT = `Describe ONLY the garment type, cut, length and specific details. Ignore colors.`;
+                const DESCRIBE_PROMPT = `Describe ONLY the garment structure (e.g., 'Long Sleeve Maxi Dress', 'V-Neck Blouse'). Ignore print/pattern. Focus on the shape.`;
                 const descEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
                 const descPayload = {
                     contents: [{ parts: [{ text: DESCRIBE_PROMPT }, { inline_data: { mime_type: mainMimeType || 'image/jpeg', data: mainImageBase64 } }] }]
@@ -90,15 +90,24 @@ export default async function handler(req, res) {
                 const descRes = await fetch(descEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(descPayload) });
                 const descData = await descRes.json();
                 const descText = descData.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (descText) finalPrompt = descText;
+                if (descText) finalPrompt = descText.trim();
             }
 
-            // 2. Geração de Queries via IA
+            // 2. Geração de Queries via IA (MODO CONTRASTE EXTREMO)
+            // Instrução explícita para pele morena/negra e fundo escuro
             const MOCKUP_PROMPT = `
-            CONTEXT: We need images of models wearing PLAIN WHITE versions of a specific garment: "${finalPrompt}".
-            GOAL: Find images with HIGH CONTRAST (White Garment vs Dark Background) for AI masking.
+            CONTEXT: We need base images for a virtual dressing room.
+            TARGET GARMENT: "${finalPrompt}".
             
-            TASK: Generate 6 search queries.
+            CRITICAL REQUIREMENT: **HIGH CONTRAST FOR AUTOMATIC MASKING**.
+            
+            THE PERFECT IMAGE HAS:
+            1. **GARMENT:** Plain WHITE (Branco puro) or very light grey. No prints.
+            2. **MODEL:** Tanned, Bronze, Brown, or Black skin tone (Pele morena/negra). This creates essential contrast against the white dress.
+            3. **BACKGROUND:** Dark, Black, Grey, or Deep Color (Fundo escuro). 
+            
+            TASK: Generate 6 search queries optimized to find this specific combination.
+            
             OUTPUT JSON: { "queries": ["string"] }
             `;
             
@@ -115,16 +124,17 @@ export default async function handler(req, res) {
             console.warn("AI Query Generation Failed, using Fallback:", e);
         }
 
-        // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico)
-        // Se a IA falhar ou retornar vazio, geramos queries manualmente para garantir que o usuário veja resultados.
+        // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico com Bias de Contraste)
+        // Se a IA falhar, injetamos as keywords manualmente.
         if (queries.length === 0) {
             const base = finalPrompt.replace(/[^\w\s]/gi, '');
             queries = [
-                `white ${base} on model black background studio`,
-                `plain white ${base} fashion photography high contrast`,
-                `white ${base} mannequin dark background`,
-                `white ${base} isolated on grey`,
-                `${base} white fabric texture mockup`
+                `plain white ${base} on black model dark background`,
+                `white ${base} tanned skin model studio lighting`,
+                `white ${base} dark skin fashion photography high contrast`,
+                `white ${base} bronze skin model black background`,
+                `white ${base} isolated on dark grey`,
+                `${base} white fabric mockup dark background`
             ];
         }
         

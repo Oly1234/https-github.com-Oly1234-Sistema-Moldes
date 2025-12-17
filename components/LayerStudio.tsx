@@ -332,10 +332,19 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
         image.onload = async () => {
             const maxDim = 1500;
             let finalW = image.width, finalH = image.height;
+            
+            // CORRECTION: Ensure precise aspect ratio preservation and integer rounding
             if (image.width > maxDim || image.height > maxDim) {
                 const ratio = image.width/image.height;
-                if (image.width > image.height) { finalW = maxDim; finalH = maxDim / ratio; } else { finalH = maxDim; finalW = maxDim * ratio; }
+                if (image.width > image.height) { 
+                    finalW = maxDim; 
+                    finalH = Math.round(maxDim / ratio); 
+                } else { 
+                    finalH = maxDim; 
+                    finalW = Math.round(maxDim * ratio); 
+                }
             }
+            
             setCanvasSize({ w: finalW, h: finalH });
             
             const initialLayers: DesignLayer[] = [
@@ -690,7 +699,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                                             zIndex: l.zIndex,
                                             mixBlendMode: l.id === 'layer-texture' ? 'multiply' : 'normal' 
                                         }}>
-                                        <img src={l.src} className={`max-w-none ${l.id.includes('base') || l.id.includes('texture') ? 'w-full h-full' : ''} ${selectedLayerId===l.id ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''}`} draggable={false} />
+                                        <img src={l.src} className={`max-w-none ${l.id.includes('base') || l.id.includes('texture') ? 'w-full h-full object-contain' : ''} ${selectedLayerId===l.id ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''}`} draggable={false} />
                                         {selectedLayerId === l.id && tool === 'MOVE' && (
                                             <div className="absolute -inset-1 border border-blue-500 pointer-events-none">
                                                 <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-blue-500 rounded-full"></div>
