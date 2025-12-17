@@ -382,7 +382,7 @@ export const MockupStudio: React.FC = () => {
               </div>
 
               {/* --- INSHOT STYLE TOOLBAR --- */}
-              <div className="bg-[#1f2937] border-t border-gray-800 flex flex-col shrink-0 pb-safe z-50 shadow-[0_-5px_30px_rgba(0,0,0,0.5)]">
+              <div className="bg-[#1f2937] border-t border-gray-800 flex flex-col shrink-0 z-50 shadow-[0_-5px_30px_rgba(0,0,0,0.5)]">
                   
                   {/* UPPER SLIDER PANEL (CONTEXTUAL) */}
                   {activeTool === 'ADJUST' && (
@@ -407,9 +407,27 @@ export const MockupStudio: React.FC = () => {
                   )}
 
                   {/* BOTTOM ICONS SCROLL - FIXED SCROLLBAR ISSUE */}
-                  <div className="w-full overflow-hidden">
-                      <div className="flex items-center gap-4 px-4 py-3 overflow-x-auto w-full no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                          <style>{`.no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+                  <div className="w-full overflow-hidden relative">
+                      <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-[#1f2937] to-transparent z-10 pointer-events-none"></div>
+                      <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-[#1f2937] to-transparent z-10 pointer-events-none"></div>
+
+                      <div className="flex items-center gap-3 px-4 py-3 overflow-x-auto w-full no-scrollbar pb-safe-offset" 
+                           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+                          <style>{`
+                            .no-scrollbar::-webkit-scrollbar { 
+                                display: none !important; 
+                                height: 0px !important;
+                                background: transparent !important;
+                            }
+                            .no-scrollbar {
+                                -ms-overflow-style: none;
+                                scrollbar-width: none;
+                                touch-action: pan-x;
+                            }
+                            .pb-safe-offset {
+                                padding-bottom: max(1rem, env(safe-area-inset-bottom));
+                            }
+                          `}</style>
                           
                           {/* TOOL GROUP */}
                           <div className="flex items-center gap-1 shrink-0">
@@ -435,6 +453,8 @@ export const MockupStudio: React.FC = () => {
                               <ToolBtn icon={Redo2} onClick={redo} disabled={historyIndex >= history.length - 1} />
                               <ToolBtn icon={Eraser} onClick={() => { const newL = layers.filter(x => x.id !== activeLayerId); saveToHistory(newL); setActiveLayerId(null); }} disabled={!activeLayerId} danger />
                           </div>
+                          
+                          <div className="w-4 shrink-0"></div>
                       </div>
                   </div>
               </div>
@@ -448,11 +468,11 @@ const ToolBtn = ({ icon: Icon, label, active, onClick, disabled, highlight, dang
     <button 
         onClick={onClick} 
         disabled={disabled}
-        className={`flex flex-col items-center justify-center min-w-[60px] p-2 rounded-lg transition-all active:scale-95 gap-1 shrink-0 ${
-            disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10'
-        } ${active ? 'text-vingi-400 bg-white/5' : 'text-gray-400'} ${highlight ? 'text-white' : ''} ${danger ? 'text-red-400' : ''}`}
+        className={`flex flex-col items-center justify-center min-w-[68px] h-[64px] p-1 rounded-xl transition-all active:scale-95 gap-1.5 shrink-0 ${
+            disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white/10 active:bg-white/20'
+        } ${active ? 'text-vingi-400 bg-white/10 ring-1 ring-white/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'text-gray-400'} ${highlight ? 'text-white' : ''} ${danger ? 'text-red-400' : ''}`}
     >
-        <Icon size={20} className={highlight ? 'drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]' : ''} />
-        {label && <span className="text-[9px] font-medium tracking-wide">{label}</span>}
+        <Icon size={22} className={highlight ? 'drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]' : ''} />
+        {label && <span className="text-[10px] font-medium tracking-wide">{label}</span>}
     </button>
 );
