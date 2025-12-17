@@ -581,47 +581,54 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                         features={["Simulação de Caimento", "Máscara Automática", "Luz & Sombra Realista", "Modelos Diversos"]}
                         partners={["CLO3D", "MARVELOUS DESIGNER", "BROWZWEAR", "OPTITEX"]}
                         customContent={
-                            <div className="mt-8 space-y-4 w-full max-w-xl">
-                                <div className="relative">
-                                    <input 
-                                        ref={searchInputRef}
-                                        type="text" 
-                                        value={searchQuery} 
-                                        onChange={(e) => setSearchQuery(e.target.value)} 
-                                        onKeyDown={(e) => e.key === 'Enter' && searchModels()} 
-                                        placeholder="Ex: Vestido de Festa, Camisa Social..." 
-                                        disabled={!!referenceImage} 
-                                        className="w-full px-6 py-4 rounded-full border border-gray-300 shadow-lg focus:ring-4 focus:ring-vingi-500/20 outline-none text-lg pl-14 disabled:bg-gray-100 disabled:text-gray-400 transition-all" 
-                                    />
-                                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={24}/>
+                            <div className="mt-8 space-y-6 w-full max-w-xl">
+                                {/* Search Section Enhanced for Mobile */}
+                                <div className="space-y-3">
+                                    <div className="relative">
+                                        <input 
+                                            ref={searchInputRef}
+                                            type="text" 
+                                            value={searchQuery} 
+                                            onChange={(e) => setSearchQuery(e.target.value)} 
+                                            onKeyDown={(e) => e.key === 'Enter' && searchModels()} 
+                                            placeholder="Ex: Vestido Longo, Camiseta Masculina..." 
+                                            disabled={!!referenceImage} 
+                                            className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200 shadow-sm focus:border-vingi-500 focus:ring-4 focus:ring-vingi-500/10 outline-none text-base pl-12 disabled:bg-gray-100 disabled:text-gray-400 transition-all bg-white" 
+                                        />
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
+                                    </div>
                                     <button 
                                         onClick={searchModels} 
-                                        className="absolute right-2 top-2 bottom-2 bg-vingi-900 text-white px-6 rounded-full font-bold text-sm hover:bg-vingi-800 transition-colors flex items-center gap-2"
+                                        disabled={!searchQuery || isSearching}
+                                        className="w-full py-4 bg-vingi-900 text-white rounded-2xl font-bold text-sm hover:bg-vingi-800 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg shadow-vingi-900/20"
                                     >
-                                        {isSearching ? <Loader2 className="animate-spin" size={16}/> : <><Sparkles size={16}/> BUSCAR</>}
+                                        {isSearching ? <Loader2 className="animate-spin" size={18}/> : <><Sparkles size={18}/> BUSCAR MODELOS</>}
                                     </button>
                                 </div>
                                 
                                 <div className="flex items-center gap-4 justify-center">
-                                    <div className="h-px bg-gray-300 w-full"></div>
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase whitespace-nowrap">OU CARREGUE O SEU</span>
-                                    <div className="h-px bg-gray-300 w-full"></div>
+                                    <div className="h-px bg-gray-200 w-full"></div>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase whitespace-nowrap">OU</span>
+                                    <div className="h-px bg-gray-200 w-full"></div>
                                 </div>
 
-                                <button onClick={() => refInputRef.current?.click()} className={`w-full py-4 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white'}`}>
+                                <button 
+                                    onClick={() => refInputRef.current?.click()} 
+                                    className={`w-full py-5 border-2 border-dashed rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white active:bg-gray-50'}`}
+                                >
                                     <input type="file" ref={refInputRef} onChange={handleRefImageUpload} className="hidden" accept="image/*"/>
-                                    {referenceImage ? <><Check size={16}/> Imagem Carregada</> : <><ImageIcon size={16}/> Usar Foto de Referência</>}
+                                    {referenceImage ? <><Check size={18}/> Foto Pronta</> : <><ImageIcon size={20}/> Carregar Foto Própria</>}
                                 </button>
 
-                                {isSearching && <div className="text-vingi-600 font-bold text-sm flex items-center justify-center gap-2 py-4"><Loader2 className="animate-spin" size={16}/> {loadingMessage}</div>}
+                                {isSearching && <div className="text-vingi-600 font-bold text-xs flex items-center justify-center gap-2 py-2 animate-pulse"><Loader2 className="animate-spin" size={14}/> {loadingMessage}</div>}
                                 
                                 {whiteBases.length > 0 && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-in mt-4 pb-10">
+                                    <div className="grid grid-cols-2 gap-3 animate-fade-in mt-2 pb-10">
                                         {whiteBases.map((url, i) => (
-                                            <div key={i} onClick={() => handleBaseSelect(url)} className="aspect-[3/4] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:ring-4 hover:ring-vingi-500 transition-all group relative">
-                                                <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                            <div key={i} onClick={() => handleBaseSelect(url)} className="aspect-[3/4] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer active:scale-95 transition-all group relative">
+                                                <img src={url} className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                    <span className="bg-white text-vingi-900 px-3 py-1 rounded-full text-xs font-bold shadow">ESCOLHER</span>
+                                                    <span className="bg-white text-vingi-900 px-3 py-1 rounded-full text-xs font-bold shadow">USAR</span>
                                                 </div>
                                             </div>
                                         ))}

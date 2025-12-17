@@ -640,7 +640,8 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
             ) : (
                 // WORKSPACE STATE
                 <>
-                    <div className="h-14 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-3 z-30 justify-between overflow-x-auto">
+                    {/* TOOLBAR - Top on desktop, maybe simplified on mobile */}
+                    <div className="h-14 bg-[#0f172a] border-b border-gray-700 flex items-center px-4 gap-3 z-30 justify-between overflow-x-auto no-scrollbar shrink-0">
                         <div className="flex items-center gap-3">
                             <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
                                 <button onClick={() => setTool('MOVE')} className={`p-2 rounded-md ${tool==='MOVE' ? 'bg-vingi-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}><Move size={18}/></button>
@@ -653,21 +654,12 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                                 <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 hover:bg-gray-700 rounded-md text-gray-300 disabled:opacity-30"><Redo2 size={18}/></button>
                             </div>
                             {selectedLayerId && (
-                                <div className="flex items-center gap-1 animate-fade-in">
-                                    <button onClick={handleSmartReconstruct} className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md text-[10px] font-bold flex items-center gap-1 shadow-md hover:brightness-110 mr-2"><Zap size={12}/> RECONSTRUIR</button>
-                                    <div className="w-px h-6 bg-gray-700 mr-2"></div>
-                                    <button onClick={() => transformSelected('FLIP_H')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><FlipHorizontal size={18}/></button>
-                                    <button onClick={() => transformSelected('FLIP_V')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><FlipVertical size={18}/></button>
-                                    <button onClick={() => transformSelected('ROT_90')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><RotateCw size={18}/></button>
-                                    <button onClick={() => transformSelected('FRONT')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><ArrowUp size={18}/></button>
-                                    <button onClick={() => transformSelected('BACK')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><ArrowDown size={18}/></button>
+                                <div className="flex items-center gap-1 animate-fade-in pl-2 border-l border-gray-700">
+                                    <button onClick={handleSmartReconstruct} className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-md text-[10px] font-bold flex items-center gap-1 shadow-md hover:brightness-110 mr-2 whitespace-nowrap"><Zap size={12}/> AI FIX</button>
                                     <button onClick={() => transformSelected('DUP')} className="p-2 hover:bg-gray-700 rounded-md text-gray-300"><Copy size={18}/></button>
                                     <button onClick={() => transformSelected('DEL')} className="p-2 hover:bg-red-900/50 text-red-400 rounded-md"><Trash2 size={18}/></button>
                                 </div>
                             )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => { setView({x:0, y:0, k: 500/canvasSize.w}); }} className="p-2 text-gray-400 hover:text-white"><Maximize size={18}/></button>
                         </div>
                     </div>
 
@@ -680,9 +672,11 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                         </div>
                     )}
 
-                    <div className="flex flex-1 overflow-hidden">
-                        {/* CANVAS */}
-                        <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center bg-[#1e1e1e] ${tool==='HAND'?'cursor-grab': tool==='SMART_EXTRACT'?'cursor-crosshair':'cursor-default'}`} onPointerDown={handlePointerDown} style={{ touchAction: 'none' }}>
+                    {/* SPLIT VIEW - MOBILE OPTIMIZED (COL) / DESKTOP (ROW) */}
+                    <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                        
+                        {/* CANVAS AREA - Order 1 */}
+                        <div ref={containerRef} className={`flex-1 relative overflow-hidden flex items-center justify-center bg-[#1e1e1e] ${tool==='HAND'?'cursor-grab': tool==='SMART_EXTRACT'?'cursor-crosshair':'cursor-default'} min-h-[50vh]`} onPointerDown={handlePointerDown} style={{ touchAction: 'none' }}>
                             <div className="absolute inset-0 opacity-10 bg-[linear-gradient(45deg,#808080_25%,transparent_25%,transparent_75%,#808080_75%,#808080),linear-gradient(45deg,#808080_25%,transparent_25%,transparent_75%,#808080_75%,#808080)]" style={{ backgroundSize: '20px 20px', backgroundPosition: '0 0, 10px 10px' }} />
 
                             <div className="relative shadow-2xl" style={{ width: canvasSize.w, height: canvasSize.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center', transition: 'transform 0.05s linear' }}>
@@ -694,7 +688,7 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                                             left: '50%', top: '50%', width: (l.id.includes('base') || l.id.includes('texture')) ? '100%' : 'auto', height: (l.id.includes('base') || l.id.includes('texture')) ? '100%' : 'auto',
                                             transform: `translate(calc(-50% + ${l.x}px), calc(-50% + ${l.y}px)) rotate(${l.rotation}deg) scale(${l.flipX?-l.scale:l.scale}, ${l.flipY?-l.scale:l.scale})`, 
                                             zIndex: l.zIndex,
-                                            mixBlendMode: l.id === 'layer-texture' ? 'multiply' : 'normal' // Simple blend for texture
+                                            mixBlendMode: l.id === 'layer-texture' ? 'multiply' : 'normal' 
                                         }}>
                                         <img src={l.src} className={`max-w-none ${l.id.includes('base') || l.id.includes('texture') ? 'w-full h-full' : ''} ${selectedLayerId===l.id ? 'drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]' : ''}`} draggable={false} />
                                         {selectedLayerId === l.id && tool === 'MOVE' && (
@@ -715,14 +709,14 @@ export const LayerStudio: React.FC<LayerStudioProps> = ({ onNavigateBack, onNavi
                             </div>
                         </div>
 
-                        {/* SIDEBAR (LAYERS) */}
-                        <div className="w-64 bg-[#1e293b] border-l border-gray-700 flex flex-col shadow-2xl z-20">
-                            <div className="p-3 bg-[#0f172a] border-b border-gray-700">
-                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Camadas</h3>
+                        {/* SIDEBAR (LAYERS) - Order 2 (Bottom on Mobile, Right on Desktop) */}
+                        <div className="w-full md:w-64 bg-[#1e293b] border-t md:border-t-0 md:border-l border-gray-700 flex flex-col shadow-2xl z-20 h-[40vh] md:h-full">
+                            <div className="p-3 bg-[#0f172a] border-b border-gray-700 flex items-center justify-between sticky top-0 z-10">
+                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Camadas</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2 bg-gray-800 border border-gray-600 rounded text-[10px] font-bold hover:bg-gray-700">IMPORTAR</button>
+                                    <button onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-[10px] font-bold hover:bg-gray-700 flex items-center gap-1"><Plus size={10}/> ADD</button>
                                     <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
-                                    <button onClick={sendToMockup} className="flex-1 py-2 bg-vingi-600 text-white rounded text-[10px] font-bold shadow hover:bg-vingi-500">FINALIZAR</button>
+                                    <button onClick={sendToMockup} className="px-3 py-1.5 bg-vingi-600 text-white rounded text-[10px] font-bold shadow hover:bg-vingi-500 flex items-center gap-1"><Shirt size={10}/> PROVAR</button>
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
