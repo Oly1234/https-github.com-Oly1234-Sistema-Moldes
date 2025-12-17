@@ -121,7 +121,8 @@ export interface DesignLayer {
   visible: boolean;
   locked: boolean;
   zIndex: number;
-  originalPrompt?: string; 
+  originalPrompt?: string;
+  opacity?: number; 
 }
 
 export enum AppState {

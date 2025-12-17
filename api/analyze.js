@@ -5,7 +5,7 @@ import { analyzeVisualDNA } from './modules/departments/forensics.js';
 import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern, generateTextureLayer } from './modules/generator.js'; 
-import { reconstructElement } from './modules/departments/layerLab.js'; 
+import { reconstructElement, transformElement } from './modules/departments/layerLab.js'; 
 import { generateHighResProductionFile } from './modules/departments/qualityControl.js';
 
 export default async function handler(req, res) {
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle, textureType, texturePrompt } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle, textureType, texturePrompt, userPrompt } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -74,6 +74,11 @@ export default async function handler(req, res) {
         const result = await reconstructElement(apiKey, cropBase64);
         return res.status(200).json({ success: true, ...result });
     }
+
+    if (action === 'TRANSFORM_ELEMENT') {
+        const result = await transformElement(apiKey, cropBase64, userPrompt);
+        return res.status(200).json({ success: true, ...result });
+    }
     
     // --- MÓDULO: REALISM STUDIO ---
     if (action === 'FIND_WHITE_MODELS') {
@@ -92,12 +97,19 @@ export default async function handler(req, res) {
             const MOCKUP_PROMPT = `
             CONTEXT: We need base images for a virtual dressing room.
             TARGET GARMENT: "${finalPrompt}".
-            CRITICAL REQUIREMENT: **MAXIMUM CONTRAST FOR AUTOMATIC MASKING**.
+            
+            CRITICAL REQUIREMENT: **WHITE or LIGHT SOLID COLOR ONLY**.
+            The images MUST feature a WHITE or VERY LIGHT GREY version of the garment to allow digital recoloring.
+            ABSOLUTELY NO PRINTS, NO PATTERNS, NO BLACK GARMENTS.
+            
             THE PERFECT IMAGE HAS:
-            1. **GARMENT:** Plain WHITE (Branco puro) or very light grey. ABSOLUTELY NO PRINTS.
-            2. **MODEL:** PREFER Tanned, Bronze, Brown, or Black skin tone. 
-            3. **BACKGROUND:** Dark, Black, Grey, or Deep Color. 
-            TASK: Generate 30 DISTINCT search queries.
+            1. **GARMENT:** Plain WHITE (Branco puro) or Off-White. 
+            2. **MODEL:** PREFER Tanned, Bronze, Brown, or Black skin tone for contrast.
+            3. **BACKGROUND:** Contrasting (Dark, Grey, or Colorful).
+            
+            TASK: Generate 30 DISTINCT search queries optimized to find "white [garment]" or "blank [garment]".
+            Ensure EVERY query includes words like "white", "ivory", "cream", or "blank".
+            
             OUTPUT JSON: { "queries": ["string"] }
             `;
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -109,7 +121,7 @@ export default async function handler(req, res) {
         } catch (e) {}
         if (queries.length < 10) {
             const base = finalPrompt.replace(/[^\w\s]/gi, '');
-            queries = [`white ${base} on black model dark background`];
+            queries = [`white ${base} on model`, `blank ${base} template`, `white ${base} fashion photography`];
         }
         return res.status(200).json({ success: true, queries: queries, detectedStructure: finalPrompt });
     }

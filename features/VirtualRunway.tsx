@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus, MinusCircle, PlusCircle } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 
 // --- HELPERS MATEMÁTICOS & VISÃO ---
@@ -128,9 +128,10 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
     const lastPinchDist = useRef<number>(0);
 
     // Tools
-    const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'AUTO'>('AUTO');
+    const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'AUTO'>('HAND');
     const [brushSize, setBrushSize] = useState(40);
     const [wandTolerance, setWandTolerance] = useState(30);
+    const [wandMode, setWandMode] = useState<'ADD' | 'SUB'>('ADD');
     const [showMaskHighlight, setShowMaskHighlight] = useState(false); // New visual feedback
     
     // Render Params
@@ -196,14 +197,6 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     }, [selectedPattern]);
 
-    // --- AUTO DETECT ON ENTER ---
-    useEffect(() => {
-        if (step === 'STUDIO' && baseImgObj && activeTool === 'AUTO') {
-            const timer = setTimeout(() => handleAutoFit(), 500); 
-            return () => clearTimeout(timer);
-        }
-    }, [step, baseImgObj]);
-
     // --- RENDER LOOP ---
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
@@ -227,7 +220,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             const tmCtx = tempM.getContext('2d')!;
             tmCtx.drawImage(maskCanvas, 0, 0);
             tmCtx.globalCompositeOperation = 'source-in';
-            tmCtx.fillStyle = 'rgba(0, 255, 255, 0.5)'; // Neon Cyan Highlight
+            tmCtx.fillStyle = wandMode === 'SUB' ? 'rgba(255, 0, 0, 0.5)' : 'rgba(0, 255, 255, 0.5)'; // Red for subtract, Cyan for add
             tmCtx.fillRect(0,0,w,h);
             
             ctx.save();
@@ -289,7 +282,7 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         ctx.drawImage(lightC, 0, 0);
         ctx.restore();
 
-    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, highlightIntensity, edgeFeather, showMaskHighlight]);
+    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, highlightIntensity, edgeFeather, showMaskHighlight, wandMode]);
 
     useEffect(() => { requestAnimationFrame(renderCanvas); }, [renderCanvas]);
 
@@ -332,7 +325,8 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         const res = createMockupMask(tempC.getContext('2d')!, tempC.width, tempC.height, x, y, wandTolerance);
         if (res) {
             const ctx = maskCanvasRef.current.getContext('2d')!;
-            ctx.globalCompositeOperation = 'source-over';
+            // Use Wand Mode: Add or Subtract
+            ctx.globalCompositeOperation = wandMode === 'SUB' ? 'destination-out' : 'source-over';
             ctx.drawImage(res.maskCanvas, 0, 0);
             setShowMaskHighlight(true);
             setTimeout(() => setShowMaskHighlight(false), 400);
@@ -759,12 +753,33 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                     {/* CONTEXTUAL SLIDERS */}
                     <div className="absolute bottom-24 left-0 right-0 px-4 flex justify-center z-40 pointer-events-none">
                         <div className="bg-black/90 backdrop-blur border border-white/10 rounded-2xl p-4 shadow-2xl w-full max-w-md pointer-events-auto animate-slide-up flex flex-col gap-3">
-                            {(activeTool === 'BRUSH' || activeTool === 'ERASER') ? (
+                            
+                            {/* WAND SETTINGS */}
+                            {activeTool === 'WAND' && (
+                                <div className="space-y-4">
+                                    <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+                                        <button onClick={() => setWandMode('ADD')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-colors ${wandMode === 'ADD' ? 'bg-vingi-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                                            <PlusCircle size={14} /> Adicionar
+                                        </button>
+                                        <button onClick={() => setWandMode('SUB')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase transition-colors ${wandMode === 'SUB' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                                            <MinusCircle size={14} /> Subtrair
+                                        </button>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Sensibilidade</span><span>{wandTolerance}%</span></div>
+                                        <input type="range" min="1" max="100" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(activeTool === 'BRUSH' || activeTool === 'ERASER') && (
                                 <div className="space-y-1">
                                     <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Tamanho do Pincel</span><span>{brushSize}px</span></div>
                                     <input type="range" min="5" max="200" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
                                 </div>
-                            ) : (
+                            )}
+                            
+                            {activeTool !== 'WAND' && activeTool !== 'BRUSH' && activeTool !== 'ERASER' && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Escala</span><span>{Math.round(patternScale*100)}%</span></div>
@@ -794,10 +809,10 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
                                 <Sparkles size={18}/> <span className="text-[9px] font-bold">Auto</span>
                             </button>
                             <div className="w-px h-8 bg-white/10 mx-1"></div>
+                            <ToolBtn icon={Hand} label="Mover" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
                             <ToolBtn icon={Wand2} label="Varinha" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
                             <ToolBtn icon={Brush} label="Pincel" active={activeTool==='BRUSH'} onClick={() => setActiveTool('BRUSH')} />
                             <ToolBtn icon={Eraser} label="Borracha" active={activeTool==='ERASER'} onClick={() => setActiveTool('ERASER')} />
-                            <ToolBtn icon={Hand} label="Mover" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
                             <div className="w-px h-8 bg-white/10 mx-1"></div>
                             <ToolBtn icon={Undo2} label="Desfazer" onClick={undoMask} disabled={history.length === 0} />
                             <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => setShowPatternModal(true)} />
