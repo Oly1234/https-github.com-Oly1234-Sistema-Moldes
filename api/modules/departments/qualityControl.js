@@ -29,39 +29,66 @@ export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) 
                 { text: POLISHER_PROMPT },
                 { inline_data: { mime_type: "image/png", data: imageBase64 } }
             ] 
-        }],
-        safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-        ]
+        }]
     };
 
     try {
-        const response = await fetch(endpoint, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payload) 
-        });
-
-        if (!response.ok) throw new Error("Falha no refinamento.");
-
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await response.json();
-        const candidate = data.candidates?.[0]?.content?.parts;
-        
-        if (data.promptFeedback?.blockReason) throw new Error("SAFETY_BLOCK_QC");
-
-        const imagePart = candidate?.find(p => p.inline_data);
-
-        if (imagePart) {
-            return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
-        }
-        
+        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+        if (imagePart) return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
         throw new Error("Refinamento falhou.");
-
     } catch (e) {
         console.error("QC Department Error:", e);
+        throw e;
+    }
+};
+
+// NOVO: MOTOR DE PRODUÇÃO DEDICADO
+export const generateHighResProductionFile = async (apiKey, imageBase64, targetSize, technique) => {
+    const MODEL_NAME = 'gemini-2.5-flash-image'; 
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+
+    // Instruções específicas baseadas na técnica (Cilindro vs Digital)
+    const TECH_SPEC = technique === 'CYLINDER' 
+        ? "STRICTLY SEPARATED COLORS. No gradients. No anti-aliasing. Clean solid edges for rotary screen engraving." 
+        : "HIGH FIDELITY DIGITAL PRINT. Micro-details, smooth gradients, photo-realistic texture.";
+
+    const PRODUCTION_PROMPT = `
+    ACT AS: Industrial Print Production Engine.
+    INPUT: A generated pattern draft.
+    TASK: UPSCALING & FINALIZATION for Large Format Printing.
+    
+    TARGET OUTPUT SIZE: ${targetSize || "Standard 140cm width"}.
+    
+    EXECUTION RULES:
+    1. SUPER RESOLUTION: Hallucinate missing details to make the image sharp at large scale.
+    2. DE-NOISE & SHARPEN: Remove any JPG artifacts or blur from the draft.
+    3. SEAMLESS CHECK: Ensure the edges look ready for repeating (even if generating a single tile).
+    4. COLOR CORRECTION: Boost saturation slightly for fabric absorption compensation.
+    
+    TECHNICAL REQUIREMENT: ${TECH_SPEC}
+    
+    OUTPUT: The highest resolution possible image file, visually perfect.
+    `;
+
+    const payload = {
+        contents: [{ 
+            parts: [
+                { text: PRODUCTION_PROMPT },
+                { inline_data: { mime_type: "image/png", data: imageBase64 } }
+            ] 
+        }]
+    };
+
+    try {
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await response.json();
+        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
+        if (imagePart) return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
+        throw new Error("Motor de Produção falhou.");
+    } catch (e) {
+        console.error("Production Engine Error:", e);
         throw e;
     }
 };

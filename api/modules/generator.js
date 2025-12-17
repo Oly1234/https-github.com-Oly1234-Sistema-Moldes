@@ -3,7 +3,7 @@
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
 import { GoogleGenAI } from "@google/genai";
 
-export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO') => {
+export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
     const ai = new GoogleGenAI({ apiKey });
 
     // 1. Contexto de Cor (Se disponível)
@@ -11,33 +11,21 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
         ? `STRICT PALETTE: ${colors.map(c => c.name).join(', ')}. Dominant tones: ${colors.slice(0,2).map(c => c.hex).join(', ')}.` 
         : "Use colors that match the requested theme.";
 
-    // 2. Contexto de Estilo Artístico (NOVO)
+    // 2. Contexto de Estilo Artístico
     let artStyleInstruction = "";
-    switch (artStyle) {
-        case 'WATERCOLOR': 
-            artStyleInstruction = "ART STYLE: WET WATERCOLOR PAINTING. Translucent washes, bleeding edges, soft gradients, paper texture visible. No hard outlines."; 
-            break;
-        case 'GIZ': 
-            artStyleInstruction = "ART STYLE: DRY PASTEL / CHALK. Textured strokes, dusty appearance, soft blending, rough paper grain."; 
-            break;
-        case 'ACRILICA': 
-            artStyleInstruction = "ART STYLE: ACRYLIC IMPASTO. Thick visible brushstrokes, vibrant opaque colors, slight texture relief, expressive painterly look."; 
-            break;
-        case 'VETOR': 
-            artStyleInstruction = "ART STYLE: FLAT VECTOR ILLUSTRATION. Clean sharp lines, solid fills, no gradients, no texture. Minimalist and modern."; 
-            break;
-        case 'BORDADO': 
-            artStyleInstruction = "ART STYLE: EMBROIDERY / NEEDLEWORK. Render the design as stitched threads on fabric. Satin stitch, cross-stitch details. Tactile texture."; 
-            break;
-        case 'LINHA': 
-            artStyleInstruction = "ART STYLE: LINE ART / INK SKETCH. Black outline only (or monochrome), etching style, detailed hatching. No fills."; 
-            break;
-        case 'ORNAMENTAL': 
-            artStyleInstruction = "ART STYLE: BAROQUE ORNAMENTAL. Highly intricate filigree, flourishes, luxury detailing, damask complexity."; 
-            break;
-        default: 
-            artStyleInstruction = "ART STYLE: Maintain the aesthetic style of the original reference.";
-            break;
+    if (artStyle === 'CUSTOM' && customStyle) {
+        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Follow this aesthetic strictly.`;
+    } else {
+        switch (artStyle) {
+            case 'WATERCOLOR': artStyleInstruction = "ART STYLE: WET WATERCOLOR PAINTING. Translucent washes, bleeding edges, soft gradients, paper texture visible. No hard outlines."; break;
+            case 'GIZ': artStyleInstruction = "ART STYLE: DRY PASTEL / CHALK. Textured strokes, dusty appearance, soft blending, rough paper grain."; break;
+            case 'ACRILICA': artStyleInstruction = "ART STYLE: ACRYLIC IMPASTO. Thick visible brushstrokes, vibrant opaque colors, slight texture relief, expressive painterly look."; break;
+            case 'VETOR': artStyleInstruction = "ART STYLE: FLAT VECTOR ILLUSTRATION. Clean sharp lines, solid fills, no gradients, no texture. Minimalist and modern."; break;
+            case 'BORDADO': artStyleInstruction = "ART STYLE: EMBROIDERY / NEEDLEWORK. Render the design as stitched threads on fabric. Satin stitch, cross-stitch details. Tactile texture."; break;
+            case 'LINHA': artStyleInstruction = "ART STYLE: LINE ART / INK SKETCH. Black outline only (or monochrome), etching style, detailed hatching. No fills."; break;
+            case 'ORNAMENTAL': artStyleInstruction = "ART STYLE: BAROQUE ORNAMENTAL. Highly intricate filigree, flourishes, luxury detailing, damask complexity."; break;
+            default: artStyleInstruction = "ART STYLE: Maintain the aesthetic style of the original reference."; break;
+        }
     }
 
     // 3. Contexto de Layout (Aprimorado)
@@ -49,43 +37,30 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
             case 'BARRADO':
                 layoutInstruction = `
                 LAYOUT: HORIZONTAL BORDER PRINT (Barrado). 
-                STRUCTURE:
-                - VISUAL GRAVITY: Heavy, intricate motifs at the BOTTOM edge.
-                - Flowing upwards into negative space or lighter motifs.
+                STRUCTURE: Heavy, intricate motifs at the BOTTOM edge, flowing upwards into negative space.
                 ${subLayoutStyle === 'DUPLO' ? 'SUB-STYLE: MIRRORED BORDER. Identical heavy borders on BOTH Top and Bottom edges.' : ''}
                 ${subLayoutStyle === 'DEGRADE' ? 'SUB-STYLE: GRADIENT FADE. Motifs visually dissolve from bottom to top.' : ''}
-                ${subLayoutStyle === 'SIMPLES' ? 'SUB-STYLE: SINGLE HEM BORDER. Clear definition at the hem.' : ''}
                 `;
                 break;
             case 'LENCO':
                 layoutInstruction = `
                 LAYOUT: ENGINEERED SQUARE SCARF (Foulard/Carré).
-                GEOMETRY: Perfectly SYMMETRICAL Square Composition.
-                MANDATORY: A distinct outer border frame enclosing the design.
-                ${subLayoutStyle === 'MEDALHAO' ? 'SUB-STYLE: MEDALLION. Massive, intricate central circular motif radiating outwards.' : ''}
-                ${subLayoutStyle === 'BANDANA' ? 'SUB-STYLE: BANDANA/PAISLEY. Concentric frames with paisley teardrops in corners.' : ''}
-                ${subLayoutStyle === 'LISTRADO' ? 'SUB-STYLE: STRIPED/GEOMETRIC BORDERS. Bold concentric square stripes forming the frame.' : ''}
-                ${subLayoutStyle === 'FLORAL' ? 'SUB-STYLE: FLORAL FRAME. Vines and flowers forming the border, lighter center.' : ''}
+                GEOMETRY: Perfectly SYMMETRICAL Square Composition with border frame.
+                ${subLayoutStyle === 'MEDALHAO' ? 'SUB-STYLE: MEDALLION. Central circular motif radiating outwards.' : ''}
+                ${subLayoutStyle === 'BANDANA' ? 'SUB-STYLE: BANDANA/PAISLEY. Concentric frames with paisley.' : ''}
                 `;
                 break;
             case 'LOCALIZADA':
-                layoutInstruction = `
-                LAYOUT: PLACED PRINT (T-Shirt Graphic).
-                STRUCTURE: Single isolated artwork centered on a solid background. Clear negative space. NOT A PATTERN.
-                `;
+                layoutInstruction = `LAYOUT: PLACED PRINT (T-Shirt Graphic). Single isolated artwork centered on a solid background.`;
                 break;
             case 'PAREO':
-                layoutInstruction = `
-                LAYOUT: BEACH PAREO (Sarong) PANEL (Vertical Rectangle).
-                STRUCTURE: Large scale tropical/ornamental design framed for a vertical fabric panel.
-                `;
+                layoutInstruction = `LAYOUT: BEACH PAREO PANEL (Vertical Rectangle). Large scale tropical/ornamental design framed for a vertical panel.`;
                 break;
             case 'CORRIDA':
                 layoutInstruction = `
                 LAYOUT: ALL-OVER SEAMLESS REPEAT.
-                ${subLayoutStyle === 'TOSS' ? 'SUB-STYLE: TOSSED. Elements scattered randomly, various rotations.' : ''}
+                ${subLayoutStyle === 'TOSS' ? 'SUB-STYLE: TOSSED. Elements scattered randomly.' : ''}
                 ${subLayoutStyle === 'GRID' ? 'SUB-STYLE: GRID. Elements aligned in strict rows/columns.' : ''}
-                ${subLayoutStyle === 'ORGANIC' ? 'SUB-STYLE: ORGANIC FLOW. Continuous connecting vines/waves.' : ''}
                 `;
                 break;
         }
@@ -99,14 +74,15 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
         FEATURES: High fidelity, millions of colors, gradients allowed, photo-realistic details allowed.
         `;
     } else {
-        const colorLimitInstruction = (colorCount > 0 && colorCount <= 12) 
-            ? `RESTRICTION: Reduce artwork to EXACTLY ${colorCount} SPOT COLORS.` 
-            : "Use a limited spot color palette.";
-
+        // CILINDRO STRICT RULES
         TECHNIQUE_RULES = `
         PRINT TECH: ROTARY SCREEN (Cilindro/Silk).
-        FEATURES: Flat solid colors, no gradients, no blending, clear separation between colors.
-        ${colorLimitInstruction}
+        CRITICAL RULES:
+        1. SOLID SPOT COLORS ONLY.
+        2. NO GRADIENTS, NO FADING, NO TRANSPARENCY.
+        3. DISTINCT SEPARATION between colors.
+        4. SIMPLIFIED SHAPES suitable for engraving.
+        ${colorCount > 0 ? `RESTRICTION: Use EXACTLY ${colorCount} distinct colors.` : "Use a limited palette (Max 8 colors)."}
         `;
     }
 

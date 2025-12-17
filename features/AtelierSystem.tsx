@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
@@ -101,6 +101,7 @@ const ART_STYLES = [
     { id: 'BORDADO', label: 'Bordado', icon: Scissors },
     { id: 'LINHA', label: 'Line Art', icon: PenTool },
     { id: 'ORNAMENTAL', label: 'Barroco', icon: Feather },
+    { id: 'CUSTOM', label: 'Outro', icon: Edit3 }, // Opção Personalizada
 ];
 
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
@@ -120,6 +121,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
     const [subLayout, setSubLayout] = useState<string>(''); 
     const [artStyle, setArtStyle] = useState<string>('ORIGINAL');
+    const [customStyleText, setCustomStyleText] = useState<string>(''); // Novo estado para estilo custom
     
     // SIZE STATE
     const [targetSize, setTargetSize] = useState<string>('');
@@ -131,6 +133,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
+    
+    // PRODUCTION / DOWNLOAD STATE
+    const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const [isUpscaling, setIsUpscaling] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Initial Load Transfer Check
@@ -160,6 +167,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const resetSession = () => {
         setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setCustomInstruction(''); setColors([]); setError(null); setCreationMode('IMAGE');
         setTargetLayout('ORIGINAL'); setSubLayout(''); setTargetSize(''); setArtStyle('ORIGINAL'); setColorCount(0); setIsCustomSize(false);
+        setCustomStyleText(''); setShowDownloadMenu(false); setIsUpscaling(false);
     };
 
     const analyzePrompt = async (cleanBase64: string) => {
@@ -189,13 +197,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const handleGenerate = async () => {
         if (!userPrompt.trim()) { setError("Aguarde a análise da referência ou digite um prompt."); return; }
         
-        // CONCATENATE USER INSTRUCTION TO PROMPT
         const finalPrompt = customInstruction 
             ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` 
             : userPrompt;
 
         setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Detalhes 4K..." : "Gerando Vetores Chapados...");
-        setGeneratedPattern(null); setError(null);
+        setGeneratedPattern(null); setError(null); setShowDownloadMenu(false);
         setTimeout(() => setStatusMessage("Aplicando Layout & Estilo..."), 1200);
         
         try {
@@ -208,7 +215,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 layoutStyle: targetLayout, 
                 subLayoutStyle: subLayout, 
                 artStyle: artStyle,
-                targetSize: targetSize, // Pass size to backend
+                customStyle: customStyleText,
+                targetSize: targetSize, 
                 colorCount: colorCount, 
                 technique: printTechnique 
             }) });
@@ -217,6 +225,38 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 setGeneratedPattern(data.image);
             } else { throw new Error(data.error || "A IA não conseguiu gerar."); }
         } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
+    };
+
+    // --- PRODUCTION ENGINE DOWNLOAD ---
+    const handleProductionDownload = async () => {
+        if (!generatedPattern) return;
+        setIsUpscaling(true);
+        setShowDownloadMenu(false);
+        try {
+            const res = await fetch('/api/analyze', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    action: 'PREPARE_PRODUCTION', 
+                    mainImageBase64: generatedPattern,
+                    targetSize: targetSize || "140cm Standard",
+                    technique: printTechnique
+                }) 
+            });
+            const data = await res.json();
+            if (data.success && data.image) {
+                const l = document.createElement('a'); 
+                l.download = `VINGI_PRO_PRODUCTION_${targetSize || 'RAW'}.png`; 
+                l.href = data.image; 
+                l.click();
+            } else {
+                throw new Error("Falha no motor de produção.");
+            }
+        } catch (e) {
+            alert("Erro ao gerar arquivo de produção. Tente novamente.");
+        } finally {
+            setIsUpscaling(false);
+        }
     };
 
     const handleTransfer = (target: string) => {
@@ -239,14 +279,31 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             {/* HEADER COMPACTO DARK */}
             <div className="bg-[#111111] px-4 py-2 flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-14">
                 <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative">
                     {hasActiveSession && (
                         <button onClick={resetSession} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium border border-gray-700">Novo</button>
                     )}
                     {generatedPattern && (
                         <div className="flex gap-1">
                             <button onClick={() => handleTransfer('MOCKUP')} className="text-[10px] bg-vingi-900 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-800 flex items-center gap-1 border border-vingi-700"><Settings2 size={12}/> Provar</button>
-                            <button onClick={() => { const l=document.createElement('a'); l.download='vingi-pattern.png'; l.href=generatedPattern; l.click(); }} className="text-[10px] bg-green-900 text-white px-3 py-1.5 rounded font-bold hover:bg-green-800 flex items-center gap-1 border border-green-700"><Download size={12}/> Baixar</button>
+                            <button onClick={() => setShowDownloadMenu(!showDownloadMenu)} className="text-[10px] bg-green-900 text-white px-3 py-1.5 rounded font-bold hover:bg-green-800 flex items-center gap-1 border border-green-700 relative"><Download size={12}/> Baixar</button>
+                            
+                            {/* DOWNLOAD MENU */}
+                            {showDownloadMenu && (
+                                <div className="absolute top-full right-0 mt-2 w-56 bg-[#1a1a1a] border border-gray-700 rounded-xl shadow-2xl z-[60] overflow-hidden animate-slide-down">
+                                    <div className="p-2 space-y-1">
+                                        <button onClick={() => { const l=document.createElement('a'); l.download='vingi-draft.png'; l.href=generatedPattern; l.click(); setShowDownloadMenu(false); }} className="w-full text-left px-3 py-2 hover:bg-gray-800 rounded-lg flex items-center gap-3 group">
+                                            <div className="p-1.5 bg-gray-700 rounded-md group-hover:bg-gray-600"><FileCheck size={14} className="text-gray-300"/></div>
+                                            <div><span className="block text-xs font-bold text-white">Rascunho (Rápido)</span><span className="block text-[9px] text-gray-500">Preview JPG</span></div>
+                                        </button>
+                                        <div className="h-px bg-gray-800 my-1"></div>
+                                        <button onClick={handleProductionDownload} className="w-full text-left px-3 py-2 hover:bg-vingi-900/50 rounded-lg flex items-center gap-3 group">
+                                            <div className="p-1.5 bg-blue-900/50 rounded-md group-hover:bg-blue-800"><HardDrive size={14} className="text-blue-400"/></div>
+                                            <div><span className="block text-xs font-bold text-white">Produção (Final)</span><span className="block text-[9px] text-blue-300">Upscale, Nitidez & Dimensões</span></div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -286,14 +343,14 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         {/* Background Grid */}
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
                         
-                        {isProcessing ? (
+                        {isProcessing || isUpscaling ? (
                             <div className="text-center relative z-10 animate-fade-in flex flex-col items-center">
                                 <div className="relative">
                                     <div className="absolute inset-0 bg-vingi-500 blur-xl opacity-20 animate-pulse rounded-full"></div>
                                     <Loader2 size={48} className="text-vingi-400 animate-spin relative z-10 mb-6"/>
                                 </div>
-                                <h2 className="text-white font-bold text-xl tracking-tight">{statusMessage}</h2>
-                                <p className="text-gray-500 text-xs mt-2 font-mono uppercase tracking-widest">Processando IA...</p>
+                                <h2 className="text-white font-bold text-xl tracking-tight">{isUpscaling ? "Motor de Produção" : statusMessage}</h2>
+                                <p className="text-gray-500 text-xs mt-2 font-mono uppercase tracking-widest">{isUpscaling ? "Upscaling & Finalização..." : "Processando IA..."}</p>
                             </div>
                         ) : generatedPattern ? (
                             <div className="relative shadow-2xl bg-white w-full h-full max-h-[80vh] max-w-[80vh] flex items-center justify-center border border-gray-800 animate-fade-in group overflow-hidden rounded-sm">
@@ -313,13 +370,13 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20"><img src={referenceImage} className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" /></div>}
                     </div>
 
-                    {/* CONTROL DECK (INSHOT STYLE - NO TOP BORDER, FLOATING FEEL) */}
+                    {/* CONTROL DECK (FLEX LAYOUT) */}
                     <div className="w-full md:w-[380px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-[55vh] md:h-full shrink-0 relative">
                         
-                        {/* SCROLLABLE SETTINGS */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-24">
+                        {/* 1. SCROLLABLE CONTENT - INCREASED BOTTOM PADDING FOR MOBILE */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-40">
                             
-                            {/* 1. MAGIC INPUT (DIREÇÃO CRIATIVA) */}
+                            {/* MAGIC INPUT (DIREÇÃO CRIATIVA) */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa (Opcional)</h3>
@@ -334,7 +391,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 </div>
                             </div>
 
-                            {/* 2. CORES (EXTRAÍDAS - INCREASED DISPLAY) */}
+                            {/* CORES (EXTRAÍDAS) */}
                             {(colors.length > 0) && (
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center">
@@ -347,7 +404,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 </div>
                             )}
 
-                            {/* 3. LAYOUT & TAMANHO */}
+                            {/* LAYOUT & TAMANHO */}
                             <div className="space-y-3">
                                 <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3>
                                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -380,7 +437,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     </div>
                                 )}
 
-                                {/* SIZE SELECTOR (NOVO: COM OPÇÃO MANUAL) */}
+                                {/* SIZE SELECTOR */}
                                 <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
                                     <p className="text-[9px] font-bold text-gray-500 mb-2 uppercase flex items-center gap-1"><Ruler size={10}/> Dimensões</p>
                                     <div className="grid grid-cols-2 gap-2">
@@ -402,7 +459,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         </button>
                                     </div>
                                     
-                                    {/* INPUTS MANUAIS (SÓ APARECEM SE CUSTOM) */}
+                                    {/* INPUTS MANUAIS */}
                                     {isCustomSize && (
                                         <div className="flex gap-2 mt-2 animate-fade-in">
                                             <div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2">
@@ -418,8 +475,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 </div>
                             </div>
 
-                            {/* 4. ESTILO ARTÍSTICO */}
-                            <div className="space-y-3">
+                            {/* ESTILO ARTÍSTICO */}
+                            <div className="space-y-3 pb-4">
                                 <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Brush size={12}/> Estilo Artístico</h3>
                                 <div className="grid grid-cols-4 gap-2">
                                     {ART_STYLES.map(style => (
@@ -433,14 +490,31 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         </button>
                                     ))}
                                 </div>
+                                {/* INPUT PARA ESTILO PERSONALIZADO */}
+                                {artStyle === 'CUSTOM' && (
+                                    <div className="animate-fade-in mt-2">
+                                        <input 
+                                            type="text" 
+                                            value={customStyleText}
+                                            onChange={(e) => setCustomStyleText(e.target.value)}
+                                            placeholder="Descreva o estilo (Ex: Pontilhismo, Art Deco...)"
+                                            className="w-full bg-black border border-gray-700 rounded-lg p-3 text-xs text-white outline-none focus:border-vingi-500 transition-colors"
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* FIXED FOOTER (GENERATE BUTTON) - NO BORDER, FLOATING STYLE */}
-                        <div className="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black via-black/90 to-transparent pb-[env(safe-area-inset-bottom)] z-30 pointer-events-none">
-                            {!isProcessing && (
-                                <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-2 text-white transition-transform active:scale-95 text-sm pointer-events-auto border border-white/10 ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110'}`}>
-                                    <Wand2 size={18}/> {generatedPattern ? "Regerar Variação" : "Gerar Estampa"}
+                        {/* 2. STATIC FOOTER (GENERATE BUTTON) */}
+                        <div className="shrink-0 p-4 bg-gradient-to-t from-black via-[#111] to-transparent z-30 pb-[env(safe-area-inset-bottom)]">
+                            {!isProcessing && !isUpscaling && (
+                                <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-2 text-white transition-all active:scale-95 text-sm border border-white/10 relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110'}`}>
+                                    {/* Pulse Animation if ready */}
+                                    {colors.length > 0 && <span className="absolute inset-0 bg-white/20 animate-pulse rounded-xl"></span>}
+                                    <span className="relative flex items-center gap-2">
+                                        <Wand2 size={18} className={generatedPattern ? '' : 'animate-bounce'}/> 
+                                        {generatedPattern ? "Regerar Variação" : "Gerar Estampa"}
+                                    </span>
                                 </button>
                             )}
                         </div>

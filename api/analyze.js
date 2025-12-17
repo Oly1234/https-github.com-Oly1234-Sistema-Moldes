@@ -6,6 +6,7 @@ import { generateMarketLinks } from './modules/departments/market.js';
 import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern } from './modules/generator.js'; 
 import { reconstructElement } from './modules/departments/layerLab.js'; 
+import { generateHighResProductionFile } from './modules/departments/qualityControl.js';
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize } = req.body;
+    const { action, prompt, colors, mainImageBase64, mainMimeType, targetUrl, backupSearchTerm, linkType, userReferenceImage, cropBase64, commandText, selvedge, variation, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle } = req.body;
     
     let rawKey = process.env.MOLDESOK || process.env.MOLDESKEY || process.env.API_KEY || process.env.VITE_API_KEY;
     const apiKey = rawKey ? rawKey.trim() : null;
@@ -74,99 +75,42 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // --- MÓDULO: REALISM STUDIO (CONTRAST HUNTER ENGINE) ---
+    // --- MÓDULO: REALISM STUDIO ---
     if (action === 'FIND_WHITE_MODELS') {
         let finalPrompt = prompt || "Vestido";
         let queries = [];
-        
         try {
-            // 1. Visão Computacional para Estrutura (Se imagem for enviada)
             if (mainImageBase64) {
                 const DESCRIBE_PROMPT = `Describe ONLY the garment structure (e.g., 'Long Sleeve Maxi Dress', 'V-Neck Blouse'). Ignore print/pattern. Focus on the shape.`;
                 const descEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-                const descPayload = {
-                    contents: [{ parts: [{ text: DESCRIBE_PROMPT }, { inline_data: { mime_type: mainMimeType || 'image/jpeg', data: mainImageBase64 } }] }]
-                };
+                const descPayload = { contents: [{ parts: [{ text: DESCRIBE_PROMPT }, { inline_data: { mime_type: mainMimeType || 'image/jpeg', data: mainImageBase64 } }] }] };
                 const descRes = await fetch(descEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(descPayload) });
                 const descData = await descRes.json();
                 const descText = descData.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (descText) finalPrompt = descText.trim();
             }
-
-            // 2. Geração de Queries via IA
             const MOCKUP_PROMPT = `
             CONTEXT: We need base images for a virtual dressing room.
             TARGET GARMENT: "${finalPrompt}".
-            
             CRITICAL REQUIREMENT: **MAXIMUM CONTRAST FOR AUTOMATIC MASKING**.
-            
             THE PERFECT IMAGE HAS:
             1. **GARMENT:** Plain WHITE (Branco puro) or very light grey. ABSOLUTELY NO PRINTS.
-            2. **MODEL:** PREFER Tanned, Bronze, Brown, or Black skin tone (Pele morena/negra/bronzeada). 
-               - REASON: White garment on pale skin is hard to mask. White garment on dark skin is perfect.
-            3. **BACKGROUND:** Dark, Black, Grey, or Deep Color (Fundo escuro). 
-            
-            TASK: Generate 30 DISTINCT search queries optimized to find this specific combination.
-            Vary the terms: "black background", "dark studio", "fashion photography", "tanned skin", "african model", "latina model", "high contrast".
-            
+            2. **MODEL:** PREFER Tanned, Bronze, Brown, or Black skin tone. 
+            3. **BACKGROUND:** Dark, Black, Grey, or Deep Color. 
+            TASK: Generate 30 DISTINCT search queries.
             OUTPUT JSON: { "queries": ["string"] }
             `;
-            
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
             const data = await response.json();
             const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
             const result = JSON.parse(cleanJson(text));
-            
-            if (result.queries && Array.isArray(result.queries)) {
-                queries = result.queries;
-            }
-        } catch (e) {
-            console.warn("AI Query Generation Failed, using Fallback:", e);
-        }
-
-        // 3. FALLBACK DE SEGURANÇA (Algoritmo Determinístico com Bias de Contraste e Volume)
+            if (result.queries && Array.isArray(result.queries)) { queries = result.queries; }
+        } catch (e) {}
         if (queries.length < 10) {
             const base = finalPrompt.replace(/[^\w\s]/gi, '');
-            queries = [
-                `white ${base} on black model dark background`,
-                `white ${base} tanned skin model studio lighting`,
-                `white ${base} dark skin fashion photography high contrast`,
-                `white ${base} bronze skin model black background`,
-                `white ${base} isolated on dark grey`,
-                `${base} white fabric mockup dark background`,
-                `plain white ${base} african model studio`,
-                `white ${base} fashion shoot dark mood`,
-                `white ${base} mannequin black background`,
-                `white ${base} high contrast photography`,
-                `white ${base} brunette model tanned skin`,
-                `white ${base} editorial dark background`,
-                `white ${base} studio shot dark skin`,
-                `pure white ${base} black background`,
-                `white ${base} mockup tanned model`,
-                `white ${base} fashion photography lighting`,
-                `white ${base} on grey background`,
-                `white ${base} model looking forward dark background`,
-                `white ${base} isolated black background`,
-                `white ${base} professional studio photo dark`,
-                `white ${base} fashion model dark theme`,
-                `white ${base} studio lighting dark backdrop`,
-                `white ${base} contrast photography`,
-                `white ${base} elegant black background`,
-                `white ${base} deep skin tone model`,
-                `white ${base} fashion editorial dark`,
-                `white ${base} catalog photo black background`,
-                `white ${base} clothing mockup high contrast`,
-                `white ${base} female model dark studio`,
-                `white ${base} minimalist dark photography`,
-                `white ${base} luxury fashion dark background`,
-                `white ${base} dramatic lighting model`,
-                `white ${base} portrait dark background`,
-                `white ${base} full body black background`,
-                `white ${base} posing dark studio`
-            ];
+            queries = [`white ${base} on black model dark background`];
         }
-        
         return res.status(200).json({ success: true, queries: queries, detectedStructure: finalPrompt });
     }
 
@@ -184,11 +128,24 @@ export default async function handler(req, res) {
 
     if (action === 'GENERATE_PATTERN') {
         try {
-            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize);
+            const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle);
             return res.status(200).json({ success: true, image });
         } catch (genError) {
             console.error("Generation Failed:", genError);
             return res.status(200).json({ success: false, error: genError.message || "Erro na geração." });
+        }
+    }
+
+    // NOVO: AÇÃO DE PRODUÇÃO (UPSCALING)
+    if (action === 'PREPARE_PRODUCTION') {
+        try {
+            let base64 = mainImageBase64;
+            if (base64.includes(',')) base64 = base64.split(',')[1];
+            
+            const enhancedImage = await generateHighResProductionFile(apiKey, base64, targetSize, technique);
+            return res.status(200).json({ success: true, image: enhancedImage });
+        } catch (error) {
+            return res.status(200).json({ success: false, error: "Falha no motor de produção." });
         }
     }
 
