@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
@@ -282,6 +282,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     };
 
     const hasActiveSession = referenceImage || generatedPattern;
+    const isAnalysisComplete = colors.length > 0 && !isProcessing;
 
     return (
         <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
@@ -347,8 +348,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 bg-black">
-                    {/* CANVAS AREA (LEFT) */}
-                    <div className="flex-1 bg-[#050505] relative flex items-center justify-center p-4 min-h-[40vh] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0">
+                    {/* CANVAS AREA (LEFT) - EXPANDED */}
+                    <div className="flex-1 bg-[#050505] relative flex items-center justify-center p-0 md:p-4 min-h-[40vh] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0">
                         {/* Background Grid */}
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
                         
@@ -362,15 +363,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <p className="text-gray-500 text-xs mt-2 font-mono uppercase tracking-widest">{isUpscaling ? "Upscaling & Finalização..." : "Processando IA..."}</p>
                             </div>
                         ) : generatedPattern ? (
-                            <div className="relative shadow-2xl bg-white w-full h-full max-h-[80vh] max-w-[80vh] flex items-center justify-center border border-gray-800 animate-fade-in group overflow-hidden rounded-sm">
+                            <div className="relative w-full h-full flex items-center justify-center animate-fade-in group overflow-hidden">
                                 <SmartImageViewer src={generatedPattern} />
                             </div>
                         ) : (
-                            <div className="relative shadow-xl w-full h-full max-h-[60vh] max-w-[60vh] flex flex-col items-center justify-center border-2 border-dashed border-gray-800 rounded-xl opacity-70 p-8 text-center gap-6">
-                                <Grid3X3 size={48} className="text-gray-700"/>
+                            <div className="relative w-full h-full flex flex-col items-center justify-center p-8 text-center gap-6">
+                                <div className="border-2 border-dashed border-gray-800 rounded-xl p-12 opacity-50">
+                                    <Grid3X3 size={48} className="text-gray-700"/>
+                                </div>
                                 <div>
                                     <h3 className="text-gray-300 font-bold text-lg mb-1">Área de Visualização</h3>
-                                    <p className="text-gray-500 text-sm max-w-xs mx-auto">Sua estampa aparecerá aqui após a geração. Configure os parâmetros ao lado.</p>
+                                    <p className="text-gray-500 text-sm max-w-xs mx-auto">Sua estampa aparecerá aqui.</p>
                                 </div>
                                 {/* STATUS GUIDE INSIDE CANVAS */}
                                 {colors.length > 0 && (
@@ -378,7 +381,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <div className="flex items-center gap-2 mb-2 text-vingi-400 font-bold text-xs uppercase tracking-widest">
                                             <Check size={12} className="bg-vingi-500 text-black rounded-full p-0.5"/> Análise Concluída
                                         </div>
-                                        <p className="text-xs text-gray-300">Pantones e DNA identificados. Ajuste o layout no painel e clique em <strong>Gerar Estampa</strong>.</p>
+                                        <p className="text-xs text-gray-300">Pantones identificados. Configure o layout no painel lateral.</p>
                                     </div>
                                 )}
                             </div>
@@ -390,162 +393,164 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     </div>
 
                     {/* CONTROL DECK (FLEX LAYOUT) */}
-                    <div className="w-full md:w-[380px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-[55vh] md:h-full shrink-0 relative">
+                    <div className="w-full md:w-[400px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-[55vh] md:h-full shrink-0 relative transition-all duration-500">
                         
-                        {/* ALERT BANNER - NEXT STEP */}
-                        {!generatedPattern && colors.length > 0 && !isProcessing && (
-                            <div className="bg-gradient-to-r from-vingi-900 to-black px-4 py-2 border-b border-vingi-500/30 flex items-center gap-3 animate-fade-in shrink-0">
-                                <div className="bg-vingi-500 text-black p-1 rounded-full animate-pulse"><Info size={12}/></div>
-                                <p className="text-[10px] font-medium text-vingi-200 leading-tight">
-                                    <span className="font-bold text-white">Próximo Passo:</span> Configure abaixo e clique no botão Gerar.
-                                </p>
-                            </div>
-                        )}
-
                         {/* 1. SCROLLABLE CONTENT */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-40">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-24">
                             
-                            {/* MAGIC INPUT (DIREÇÃO CRIATIVA) */}
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa (Opcional)</h3>
-                                </div>
-                                <div className="relative group">
-                                    <textarea 
-                                        value={customInstruction} 
-                                        onChange={(e) => setCustomInstruction(e.target.value)} 
-                                        className="w-full h-20 p-3 bg-[#1a1a1a] border border-gray-800 rounded-xl text-xs resize-none focus:border-vingi-500 outline-none text-white placeholder-gray-600 transition-all focus:bg-black" 
-                                        placeholder="IA analisa automaticamente a imagem. Digite aqui apenas se quiser alterar algo (ex: 'Mudar fundo para preto', 'Estilo vintage')..."
-                                    />
-                                </div>
-                            </div>
-
-                            {/* CORES (EXTRAÍDAS) */}
-                            {(colors.length > 0) && (
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12}/> Paleta Detectada</h3>
-                                        <span className="text-[9px] text-gray-600">{colors.length} Cores</span>
-                                    </div>
-                                    <div className="grid grid-cols-6 gap-1.5">
-                                        {colors.map((c, i) => ( <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> ))}
-                                    </div>
+                            {/* PLACEHOLDER: AGUARDANDO ANÁLISE */}
+                            {!isAnalysisComplete && !generatedPattern && (
+                                <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-10 gap-4">
+                                    <Lock size={32} className="text-gray-600"/>
+                                    <p className="text-gray-500 text-xs uppercase tracking-widest font-bold">Ferramentas Bloqueadas</p>
+                                    <p className="text-gray-600 text-xs max-w-[200px]">Aguarde a IA analisar a referência e extrair as cores.</p>
                                 </div>
                             )}
 
-                            {/* LAYOUT & TAMANHO */}
-                            <div className="space-y-3">
-                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3>
-                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                                    {LAYOUT_OPTIONS.map(opt => (
-                                        <button 
-                                            key={opt.id} 
-                                            onClick={() => setTargetLayout(opt.id)}
-                                            className={`flex flex-col items-center justify-center min-w-[64px] h-[64px] p-1 rounded-lg border transition-all ${targetLayout === opt.id ? 'bg-vingi-900 border-vingi-500 text-white shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}
-                                        >
-                                            <opt.icon size={20} strokeWidth={1.5} className="mb-1.5"/>
-                                            <span className="text-[9px] font-bold">{opt.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                
-                                {/* SUB-LAYOUT CONTEXTUAL */}
-                                {SUB_LAYOUT_CONFIG[targetLayout] && (
-                                    <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {SUB_LAYOUT_CONFIG[targetLayout].map(sub => (
+                            {/* TOOLS (SHOW ONLY AFTER ANALYSIS) */}
+                            {(isAnalysisComplete || generatedPattern) && (
+                                <>
+                                    {/* MAGIC INPUT (DIREÇÃO CRIATIVA) */}
+                                    <div className="space-y-2 animate-slide-up">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa</h3>
+                                        </div>
+                                        <div className="relative group">
+                                            <textarea 
+                                                value={customInstruction} 
+                                                onChange={(e) => setCustomInstruction(e.target.value)} 
+                                                className="w-full h-20 p-3 bg-[#1a1a1a] border border-gray-800 rounded-xl text-xs resize-none focus:border-vingi-500 outline-none text-white placeholder-gray-600 transition-all focus:bg-black" 
+                                                placeholder="IA analisa automaticamente. Digite aqui para forçar mudanças (ex: 'Fundo preto', 'Estilo vintage')..."
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* CORES (EXTRAÍDAS) */}
+                                    <div className="space-y-2 animate-slide-up" style={{animationDelay: '0.1s'}}>
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12}/> Paleta Detectada</h3>
+                                            <span className="text-[9px] text-gray-600">{colors.length} Cores</span>
+                                        </div>
+                                        <div className="grid grid-cols-6 gap-1.5">
+                                            {colors.map((c, i) => ( <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> ))}
+                                        </div>
+                                    </div>
+
+                                    {/* LAYOUT & TAMANHO */}
+                                    <div className="space-y-3 animate-slide-up" style={{animationDelay: '0.2s'}}>
+                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3>
+                                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                            {LAYOUT_OPTIONS.map(opt => (
                                                 <button 
-                                                    key={sub.id} 
-                                                    onClick={() => setSubLayout(sub.id)}
-                                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold transition-all ${subLayout === sub.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                    key={opt.id} 
+                                                    onClick={() => setTargetLayout(opt.id)}
+                                                    className={`flex flex-col items-center justify-center min-w-[64px] h-[64px] p-1 rounded-lg border transition-all ${targetLayout === opt.id ? 'bg-vingi-900 border-vingi-500 text-white shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}
                                                 >
-                                                    <sub.icon size={12} /> {sub.label}
+                                                    <opt.icon size={20} strokeWidth={1.5} className="mb-1.5"/>
+                                                    <span className="text-[9px] font-bold">{opt.label}</span>
                                                 </button>
                                             ))}
                                         </div>
-                                    </div>
-                                )}
+                                        
+                                        {/* SUB-LAYOUT CONTEXTUAL */}
+                                        {SUB_LAYOUT_CONFIG[targetLayout] && (
+                                            <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {SUB_LAYOUT_CONFIG[targetLayout].map(sub => (
+                                                        <button 
+                                                            key={sub.id} 
+                                                            onClick={() => setSubLayout(sub.id)}
+                                                            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold transition-all ${subLayout === sub.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                        >
+                                                            <sub.icon size={12} /> {sub.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
 
-                                {/* SIZE SELECTOR */}
-                                <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
-                                    <p className="text-[9px] font-bold text-gray-500 mb-2 uppercase flex items-center gap-1"><Ruler size={10}/> Dimensões</p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {SIZE_OPTIONS[targetLayout]?.map((sizeStr, idx) => (
-                                            <button 
-                                                key={idx} 
-                                                onClick={() => { setTargetSize(sizeStr); setIsCustomSize(false); }}
-                                                className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[9px] font-bold transition-all ${targetSize === sizeStr && !isCustomSize ? 'bg-blue-900 border-blue-500 text-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
-                                            >
-                                                {sizeStr}
-                                            </button>
-                                        ))}
-                                        {/* MANUAL CUSTOM BUTTON */}
-                                        <button 
-                                            onClick={() => setIsCustomSize(true)}
-                                            className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[9px] font-bold transition-all ${isCustomSize ? 'bg-vingi-900 border-vingi-500 text-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
-                                        >
-                                            <SlidersHorizontal size={12} className="mr-1"/> Personalizado
-                                        </button>
-                                    </div>
-                                    
-                                    {/* INPUTS MANUAIS */}
-                                    {isCustomSize && (
-                                        <div className="flex gap-2 mt-2 animate-fade-in">
-                                            <div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2">
-                                                <span className="text-[9px] text-gray-500 font-bold mr-1">L:</span>
-                                                <input type="text" placeholder="Largura" value={customW} onChange={e => setCustomW(e.target.value)} className="w-full bg-transparent text-white text-[10px] py-2 outline-none"/>
+                                        {/* SIZE SELECTOR */}
+                                        <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
+                                            <p className="text-[9px] font-bold text-gray-500 mb-2 uppercase flex items-center gap-1"><Ruler size={10}/> Dimensões</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {SIZE_OPTIONS[targetLayout]?.map((sizeStr, idx) => (
+                                                    <button 
+                                                        key={idx} 
+                                                        onClick={() => { setTargetSize(sizeStr); setIsCustomSize(false); }}
+                                                        className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[9px] font-bold transition-all ${targetSize === sizeStr && !isCustomSize ? 'bg-blue-900 border-blue-500 text-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                    >
+                                                        {sizeStr}
+                                                    </button>
+                                                ))}
+                                                {/* MANUAL CUSTOM BUTTON */}
+                                                <button 
+                                                    onClick={() => setIsCustomSize(true)}
+                                                    className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[9px] font-bold transition-all ${isCustomSize ? 'bg-vingi-900 border-vingi-500 text-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+                                                >
+                                                    <SlidersHorizontal size={12} className="mr-1"/> Personalizado
+                                                </button>
                                             </div>
-                                            <div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2">
-                                                <span className="text-[9px] text-gray-500 font-bold mr-1">A:</span>
-                                                <input type="text" placeholder="Altura" value={customH} onChange={e => setCustomH(e.target.value)} className="w-full bg-transparent text-white text-[10px] py-2 outline-none"/>
-                                            </div>
+                                            
+                                            {/* INPUTS MANUAIS */}
+                                            {isCustomSize && (
+                                                <div className="flex gap-2 mt-2 animate-fade-in">
+                                                    <div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2">
+                                                        <span className="text-[9px] text-gray-500 font-bold mr-1">L:</span>
+                                                        <input type="text" placeholder="Largura" value={customW} onChange={e => setCustomW(e.target.value)} className="w-full bg-transparent text-white text-[10px] py-2 outline-none"/>
+                                                    </div>
+                                                    <div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2">
+                                                        <span className="text-[9px] text-gray-500 font-bold mr-1">A:</span>
+                                                        <input type="text" placeholder="Altura" value={customH} onChange={e => setCustomH(e.target.value)} className="w-full bg-transparent text-white text-[10px] py-2 outline-none"/>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* ESTILO ARTÍSTICO */}
-                            <div className="space-y-3 pb-4">
-                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Brush size={12}/> Estilo Artístico</h3>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {ART_STYLES.map(style => (
-                                        <button 
-                                            key={style.id} 
-                                            onClick={() => setArtStyle(style.id)}
-                                            className={`flex flex-col items-center justify-center h-16 p-1 rounded-lg border transition-all ${artStyle === style.id ? 'bg-purple-900/50 border-purple-500 text-purple-200 shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}
-                                        >
-                                            <style.icon size={18} strokeWidth={1.5} className="mb-1"/>
-                                            <span className="text-[9px] font-bold text-center leading-none">{style.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                {/* INPUT PARA ESTILO PERSONALIZADO */}
-                                {artStyle === 'CUSTOM' && (
-                                    <div className="animate-fade-in mt-2">
-                                        <input 
-                                            type="text" 
-                                            value={customStyleText}
-                                            onChange={(e) => setCustomStyleText(e.target.value)}
-                                            placeholder="Descreva o estilo (Ex: Pontilhismo, Art Deco...)"
-                                            className="w-full bg-black border border-gray-700 rounded-lg p-3 text-xs text-white outline-none focus:border-vingi-500 transition-colors"
-                                        />
                                     </div>
-                                )}
-                            </div>
-                        </div>
 
-                        {/* 2. STATIC FOOTER (GENERATE BUTTON) - HERO BUTTON DESIGN */}
-                        <div className="shrink-0 p-4 bg-[#111] z-30 pb-[env(safe-area-inset-bottom)] border-t border-white/5">
-                            {!isProcessing && !isUpscaling && (
-                                <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-3 text-white transition-all active:scale-95 text-base relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110 shadow-purple-900/20' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110 shadow-vingi-900/20'}`}>
-                                    {/* Pulse Animation Only if Ready (No pattern yet) */}
-                                    {colors.length > 0 && !generatedPattern && <span className="absolute inset-0 bg-white/20 animate-pulse rounded-xl"></span>}
-                                    
-                                    <div className="relative flex items-center gap-2">
-                                        {generatedPattern ? <RefreshCw size={20}/> : <Play size={20} fill="currentColor" className="animate-pulse"/>}
-                                        {generatedPattern ? "Regerar Variação" : "GERAR ESTAMPA"}
+                                    {/* ESTILO ARTÍSTICO */}
+                                    <div className="space-y-3 pb-4 animate-slide-up" style={{animationDelay: '0.3s'}}>
+                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Brush size={12}/> Estilo Artístico</h3>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {ART_STYLES.map(style => (
+                                                <button 
+                                                    key={style.id} 
+                                                    onClick={() => setArtStyle(style.id)}
+                                                    className={`flex flex-col items-center justify-center h-16 p-1 rounded-lg border transition-all ${artStyle === style.id ? 'bg-purple-900/50 border-purple-500 text-purple-200 shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}
+                                                >
+                                                    <style.icon size={18} strokeWidth={1.5} className="mb-1"/>
+                                                    <span className="text-[9px] font-bold text-center leading-none">{style.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {/* INPUT PARA ESTILO PERSONALIZADO */}
+                                        {artStyle === 'CUSTOM' && (
+                                            <div className="animate-fade-in mt-2">
+                                                <input 
+                                                    type="text" 
+                                                    value={customStyleText}
+                                                    onChange={(e) => setCustomStyleText(e.target.value)}
+                                                    placeholder="Descreva o estilo (Ex: Pontilhismo, Art Deco...)"
+                                                    className="w-full bg-black border border-gray-700 rounded-lg p-3 text-xs text-white outline-none focus:border-vingi-500 transition-colors"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-                                </button>
+
+                                    {/* GENERATE BUTTON MOVED HERE - LOGICAL FLOW */}
+                                    <div className="pt-4 border-t border-white/5 animate-slide-up" style={{animationDelay: '0.4s'}}>
+                                        {!isProcessing && !isUpscaling && (
+                                            <button onClick={handleGenerate} className={`w-full py-5 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-3 text-white transition-all active:scale-95 text-base relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110 shadow-purple-900/20' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110 shadow-vingi-900/20'}`}>
+                                                {/* Pulse Animation Only if Ready (No pattern yet) */}
+                                                {!generatedPattern && <span className="absolute inset-0 bg-white/20 animate-pulse rounded-xl"></span>}
+                                                
+                                                <div className="relative flex items-center gap-2">
+                                                    {generatedPattern ? <RefreshCw size={20}/> : <Play size={20} fill="currentColor" className="animate-pulse"/>}
+                                                    {generatedPattern ? "Regerar Variação" : "CRIAR ESTAMPA"}
+                                                </div>
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
