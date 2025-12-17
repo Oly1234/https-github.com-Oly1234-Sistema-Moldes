@@ -1,40 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 
-// ... (MANTER HELPERS EXISTENTES: rgbToLab, compressImage, createMockupMask SEM ALTERAÇÕES) ...
-// --- RE-INSERINDO HELPERS PARA GARANTIR INTEGRIDADE DO ARQUIVO ---
-const rgbToLab = (r: number, g: number, b: number) => {
-    let r1 = r / 255, g1 = g / 255, b1 = b / 255;
-    r1 = (r1 > 0.04045) ? Math.pow((r1 + 0.055) / 1.055, 2.4) : r1 / 12.92;
-    g1 = (g1 > 0.04045) ? Math.pow((g1 + 0.055) / 1.055, 2.4) : g1 / 12.92;
-    b1 = (b1 > 0.04045) ? Math.pow((b1 + 0.055) / 1.055, 2.4) : b1 / 12.92;
-    let x = (r1 * 0.4124 + g1 * 0.3576 + b1 * 0.1805) / 0.95047;
-    let y = (r1 * 0.2126 + g1 * 0.7152 + b1 * 0.0722) / 1.00000;
-    let z = (r1 * 0.0193 + g1 * 0.1192 + b1 * 0.9505) / 1.08883;
-    x = (x > 0.008856) ? Math.pow(x, 1/3) : (7.787 * x) + 16/116;
-    y = (y > 0.008856) ? Math.pow(y, 1/3) : (7.787 * y) + 16/116;
-    z = (z > 0.008856) ? Math.pow(z, 1/3) : (7.787 * z) + 16/116;
-    return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
-};
-
-const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        if (!base64Str) { reject(new Error("Imagem vazia")); return; }
-        const img = new Image(); img.src = base64Str;
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let w = img.width, h = img.height;
-            if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
-            canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.8)); }
-            else reject(new Error("Canvas error"));
-        };
-        img.onerror = () => reject(new Error("Load error"));
-    });
-};
+// --- HELPERS MATEMÁTICOS ---
 
 const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tolerance: number) => {
     const imgData = ctx.getImageData(0, 0, width, height);
@@ -47,12 +16,18 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
     const maskData = maskImgData.data;
 
     const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
+    // Proteção contra clique fora
+    if (startPos < 0 || startPos >= data.length) return null;
+
     const r0 = data[startPos];
     const g0 = data[startPos+1];
     const b0 = data[startPos+2];
 
     const visited = new Uint8Array(width * height);
     const stack = [[Math.floor(startX), Math.floor(startY)]];
+
+    let minX = width, maxX = 0, minY = height, maxY = 0;
+    let pixelCount = 0;
 
     while (stack.length) {
         const [x, y] = stack.pop()!;
@@ -68,10 +43,13 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
         const diff = Math.abs(r - r0) + Math.abs(g - g0) + Math.abs(b - b0);
 
         if (diff <= tolerance * 3) {
-            maskData[pos] = 255;
-            maskData[pos+1] = 255;
-            maskData[pos+2] = 255;
-            maskData[pos+3] = 255;
+            maskData[pos] = 255;     // R
+            maskData[pos+1] = 255;   // G
+            maskData[pos+2] = 255;   // B
+            maskData[pos+3] = 255;   // Alpha
+
+            pixelCount++;
+            if(x<minX) minX=x; if(x>maxX) maxX=x; if(y<minY) minY=y; if(y>maxY) maxY=y;
 
             if (x > 0) stack.push([x-1, y]);
             if (x < width - 1) stack.push([x+1, y]);
@@ -80,8 +58,47 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
         }
     }
 
+    if (pixelCount < 50) return null; // Ruído
+
     maskCtx.putImageData(maskImgData, 0, 0);
-    return { maskCanvas, referenceColor: {r: r0, g: g0, b: b0} };
+    return { maskCanvas, referenceColor: {r: r0, g: g0, b: b0}, bounds: { minX, minY, maxX, maxY } };
+};
+
+// Algoritmo Auto-Fit (Simulação de IA de Segmentação)
+const performAutoSegmentation = (baseImg: HTMLImageElement) => {
+    const w = baseImg.width;
+    const h = baseImg.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(baseImg, 0, 0);
+    
+    // Heurística: Roupas para mockup geralmente estão no centro e são claras (para contraste)
+    // Escaneia uma grade central para encontrar o ponto mais "branco/claro"
+    const imgData = ctx.getImageData(0, 0, w, h).data;
+    let bestX = w/2, bestY = h/2;
+    let maxLum = 0;
+
+    const centerX = Math.floor(w/2);
+    const centerY = Math.floor(h/2);
+    const rangeX = Math.floor(w * 0.2); // 20% do centro
+    const rangeY = Math.floor(h * 0.4); // 40% da altura central
+
+    for(let y = centerY - rangeY; y < centerY + rangeY; y+=10) {
+        for(let x = centerX - rangeX; x < centerX + rangeX; x+=10) {
+            const idx = (y * w + x) * 4;
+            const lum = (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
+            // Procura alta luminosidade (branco) mas não estourada (255 puro as vezes é fundo)
+            if (lum > maxLum && lum < 250) {
+                maxLum = lum;
+                bestX = x;
+                bestY = y;
+            }
+        }
+    }
+
+    // Executa o Flood Fill a partir desse "melhor ponto"
+    return createMockupMask(ctx, w, h, bestX, bestY, 40); // Tolerância média
 };
 
 interface VirtualRunwayProps {
@@ -90,215 +107,265 @@ interface VirtualRunwayProps {
 
 export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreator }) => {
     const [step, setStep] = useState<'SEARCH_BASE' | 'SELECT_PATTERN' | 'STUDIO'>('SEARCH_BASE');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [referenceImage, setReferenceImage] = useState<string | null>(null);
-    const [whiteBases, setWhiteBases] = useState<string[]>([]);
-    const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
-    const [isSearching, setIsSearching] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
-    const [isMaskReady, setIsMaskReady] = useState(false);
     
-    // --- STATE: STUDIO ENGINE ---
+    // Assets
+    const [referenceImage, setReferenceImage] = useState<string | null>(null); // Base Model
+    const [selectedPattern, setSelectedPattern] = useState<string | null>(null); // Texture
+    const [whiteBases, setWhiteBases] = useState<string[]>([]);
+    
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    
+    // Studio State
     const canvasRef = useRef<HTMLCanvasElement>(null); 
     const containerRef = useRef<HTMLDivElement>(null);
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null); 
     const [baseImgObj, setBaseImgObj] = useState<HTMLImageElement | null>(null);
     const [patternImgObj, setPatternImgObj] = useState<HTMLImageElement | null>(null);
-    
-    // VIEWPORT STATE (Zoom/Pan)
+    const [history, setHistory] = useState<ImageData[]>([]); // UndoMask history
+
+    // Viewport (Zoom/Pan)
     const [view, setView] = useState({ x: 0, y: 0, k: 1 });
     const isPanning = useRef(false);
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
     const lastDistRef = useRef<number>(0);
 
-    // Controls
-    const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND'>('WAND');
-    const [smartBrush, setSmartBrush] = useState(true); 
-    const [brushSize, setBrushSize] = useState(20);
+    // Tools & Params
+    const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'AUTO'>('AUTO');
+    const [brushSize, setBrushSize] = useState(30);
+    const [wandTolerance, setWandTolerance] = useState(30);
+    const [smartBrush, setSmartBrush] = useState(true);
+    
+    // Rendering Params
     const [patternScale, setPatternScale] = useState(0.5);
     const [patternRotation, setPatternRotation] = useState(0);
-    const [patternOpacity, setPatternOpacity] = useState(1); 
-    const [shadowIntensity, setShadowIntensity] = useState(0.8);
-    const [wandTolerance, setWandTolerance] = useState(30);
-    const [edgeFeather, setEdgeFeather] = useState(2);
-    
-    // Smart Brush Ref
-    const targetColorRef = useRef<{r:number, g:number, b:number} | null>(null);
-    const isDrawingRef = useRef(false);
-    const lastPosRef = useRef<{x: number, y: number} | null>(null);
-    const [cursorPos, setCursorPos] = useState<{x: number, y: number} | null>(null);
-    
-    const refInputRef = useRef<HTMLInputElement>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
+    const [shadowIntensity, setShadowIntensity] = useState(0.7); // Multiply
+    const [highlightIntensity, setHighlightIntensity] = useState(0.3); // Soft Light
+    const [patternOpacity, setPatternOpacity] = useState(0.95);
+    const [edgeFeather, setEdgeFeather] = useState(1);
 
-    // Image Loaders
+    // Interaction Refs
+    const isDrawingRef = useRef(false);
+    const lastDrawPos = useRef<{x: number, y: number} | null>(null);
+    const [cursorPos, setCursorPos] = useState<{x: number, y: number} | null>(null); // Screen coords for div cursor
+    const refInputRef = useRef<HTMLInputElement>(null);
+
+    // --- INITIALIZATION ---
     useEffect(() => {
         if (referenceImage) {
-            const img = new Image();
-            img.src = referenceImage;
-            img.crossOrigin = "anonymous";
+            const img = new Image(); img.src = referenceImage; img.crossOrigin = "anonymous";
             img.onload = () => {
                 setBaseImgObj(img);
-                // Auto Fit View
+                // Reset Mask
+                const mCanvas = document.createElement('canvas');
+                mCanvas.width = img.width; mCanvas.height = img.height;
+                maskCanvasRef.current = mCanvas;
+                setHistory([]);
+                
+                // Auto Zoom Fit
                 if (containerRef.current) {
                     const rect = containerRef.current.getBoundingClientRect();
-                    const k = Math.min(rect.width / img.width, rect.height / img.height) * 0.9;
+                    const k = Math.min(rect.width / img.width, rect.height / img.height) * 0.85;
                     setView({ x: 0, y: 0, k });
                 }
             };
         }
-    }, [referenceImage, step]);
+    }, [referenceImage]);
 
     useEffect(() => {
         if (selectedPattern) {
-            const img = new Image();
-            img.src = selectedPattern;
-            img.crossOrigin = "anonymous";
+            const img = new Image(); img.src = selectedPattern; img.crossOrigin = "anonymous";
             img.onload = () => setPatternImgObj(img);
         }
     }, [selectedPattern]);
 
-    // Masking Init
+    // --- AUTO FIT ON ENTER STUDIO ---
     useEffect(() => {
-        if (step === 'STUDIO' && baseImgObj && patternImgObj && !maskCanvasRef.current) {
-            const mCanvas = document.createElement('canvas');
-            mCanvas.width = baseImgObj.width;
-            mCanvas.height = baseImgObj.height;
-            maskCanvasRef.current = mCanvas;
-
-            setTimeout(() => {
-                const tempC = document.createElement('canvas');
-                tempC.width = baseImgObj.width; tempC.height = baseImgObj.height;
-                const tCtx = tempC.getContext('2d')!;
-                tCtx.drawImage(baseImgObj, 0, 0);
-                
-                const cx = baseImgObj.width / 2;
-                const cy = baseImgObj.height / 2;
-                const points = [ { x: cx, y: cy }, { x: cx, y: cy * 0.8 }, { x: cx, y: cy * 1.2 } ];
-
-                for (const p of points) {
-                    const pixel = tCtx.getImageData(p.x, p.y, 1, 1).data;
-                    const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
-                    if (brightness > 180) {
-                        targetColorRef.current = { r: pixel[0], g: pixel[1], b: pixel[2] };
-                        break;
-                    }
-                }
-                setIsMaskReady(true);
-                if (canvasRef.current) renderCanvas();
-            }, 500);
+        if (step === 'STUDIO' && baseImgObj && !history.length && activeTool === 'AUTO') {
+            handleAutoFit();
         }
-    }, [step, baseImgObj, patternImgObj]);
+    }, [step, baseImgObj, activeTool]);
 
-    // Render Engine
-    useEffect(() => {
-        if (step === 'STUDIO' && canvasRef.current && baseImgObj) {
-            if (canvasRef.current.width !== baseImgObj.width) {
-                canvasRef.current.width = baseImgObj.width;
-                canvasRef.current.height = baseImgObj.height;
-            }
-            renderCanvas();
-        }
-    }, [step, baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, edgeFeather]);
-
+    // --- RENDER ENGINE ---
     const renderCanvas = () => {
         const canvas = canvasRef.current;
         const maskCanvas = maskCanvasRef.current;
         if (!canvas || !baseImgObj || !maskCanvas) return;
         
+        // Sync Dimensions
+        if (canvas.width !== baseImgObj.width) {
+            canvas.width = baseImgObj.width; canvas.height = baseImgObj.height;
+        }
+
         const ctx = canvas.getContext('2d')!;
-        const w = canvas.width;
-        const h = canvas.height;
+        const w = canvas.width; const h = canvas.height;
         
+        // 1. Draw Base
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(baseImgObj, 0, 0, w, h);
 
-        if (patternImgObj) {
-            const patternLayer = document.createElement('canvas');
-            patternLayer.width = w; patternLayer.height = h;
-            const pCtx = patternLayer.getContext('2d')!;
-            
-            if (edgeFeather > 0) pCtx.filter = `blur(${edgeFeather}px)`;
-            pCtx.drawImage(maskCanvas, 0, 0);
-            pCtx.filter = 'none';
-            
-            pCtx.globalCompositeOperation = 'source-in';
-            pCtx.save();
-            pCtx.translate(w/2, h/2);
-            pCtx.rotate((patternRotation * Math.PI) / 180); 
-            pCtx.scale(patternScale, patternScale);         
-            const pat = pCtx.createPattern(patternImgObj, 'repeat');
-            if (pat) {
-                pCtx.fillStyle = pat;
-                pCtx.fillRect(-4000, -4000, 8000, 8000); 
-            }
-            pCtx.restore();
+        if (!patternImgObj) return;
 
-            ctx.save();
-            ctx.globalAlpha = patternOpacity; 
-            ctx.drawImage(patternLayer, 0, 0);
-            ctx.restore();
+        // 2. Prepare Pattern Layer (Clipped by Mask)
+        const patCanvas = document.createElement('canvas'); patCanvas.width = w; patCanvas.height = h;
+        const pCtx = patCanvas.getContext('2d')!;
+        
+        // Draw Mask with Feather
+        if (edgeFeather > 0) pCtx.filter = `blur(${edgeFeather}px)`;
+        pCtx.drawImage(maskCanvas, 0, 0);
+        pCtx.filter = 'none';
+        
+        // Composite Pattern Source-In
+        pCtx.globalCompositeOperation = 'source-in';
+        pCtx.save();
+        pCtx.translate(w/2, h/2);
+        pCtx.rotate((patternRotation * Math.PI) / 180);
+        pCtx.scale(patternScale, patternScale);
+        const pat = pCtx.createPattern(patternImgObj, 'repeat');
+        if (pat) { pCtx.fillStyle = pat; pCtx.fillRect(-w*2, -h*2, w*4, h*4); }
+        pCtx.restore();
 
-            const shadowLayer = document.createElement('canvas');
-            shadowLayer.width = w; shadowLayer.height = h;
-            const sCtx = shadowLayer.getContext('2d')!;
-            if (edgeFeather > 0) sCtx.filter = `blur(${edgeFeather}px)`;
-            sCtx.drawImage(maskCanvas, 0, 0);
-            sCtx.filter = 'none';
-            sCtx.globalCompositeOperation = 'source-in';
-            sCtx.filter = 'grayscale(100%) contrast(150%) brightness(110%)'; 
-            sCtx.drawImage(baseImgObj, 0, 0, w, h);
-            
-            ctx.save();
-            ctx.globalCompositeOperation = 'multiply';
-            ctx.globalAlpha = shadowIntensity; 
-            ctx.drawImage(shadowLayer, 0, 0);
-            ctx.restore();
+        // 3. Draw Pattern Layer to Main
+        ctx.save();
+        ctx.globalAlpha = patternOpacity;
+        ctx.drawImage(patCanvas, 0, 0);
+        ctx.restore();
 
-            const highlightLayer = document.createElement('canvas');
-            highlightLayer.width = w; highlightLayer.height = h;
-            const hCtx = highlightLayer.getContext('2d')!;
-            if (edgeFeather > 0) hCtx.filter = `blur(${edgeFeather}px)`;
-            hCtx.drawImage(maskCanvas, 0, 0);
-            hCtx.filter = 'none';
-            hCtx.globalCompositeOperation = 'source-in';
-            hCtx.drawImage(baseImgObj, 0, 0, w, h);
-            
-            ctx.save();
-            ctx.globalCompositeOperation = 'soft-light'; 
-            ctx.globalAlpha = 0.4; 
-            ctx.drawImage(highlightLayer, 0, 0);
-            ctx.restore();
+        // 4. Realism: Shadows (Multiply)
+        const shadowCanvas = document.createElement('canvas'); shadowCanvas.width = w; shadowCanvas.height = h;
+        const sCtx = shadowCanvas.getContext('2d')!;
+        if (edgeFeather > 0) sCtx.filter = `blur(${edgeFeather}px)`;
+        sCtx.drawImage(maskCanvas, 0, 0);
+        sCtx.filter = 'none';
+        sCtx.globalCompositeOperation = 'source-in';
+        // Enhance shadows contrast
+        sCtx.filter = 'grayscale(100%) contrast(150%) brightness(120%)';
+        sCtx.drawImage(baseImgObj, 0, 0);
+        
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = shadowIntensity;
+        ctx.drawImage(shadowCanvas, 0, 0);
+        ctx.restore();
+
+        // 5. Realism: Highlights/Folds (Soft Light or Screen)
+        // Helps preserve the fabric sheen
+        const lightCanvas = document.createElement('canvas'); lightCanvas.width = w; lightCanvas.height = h;
+        const lCtx = lightCanvas.getContext('2d')!;
+        if (edgeFeather > 0) lCtx.filter = `blur(${edgeFeather}px)`;
+        lCtx.drawImage(maskCanvas, 0, 0);
+        lCtx.filter = 'none';
+        lCtx.globalCompositeOperation = 'source-in';
+        lCtx.filter = 'grayscale(100%) contrast(120%)';
+        lCtx.drawImage(baseImgObj, 0, 0);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'soft-light'; // Soft light is better for folds than screen
+        ctx.globalAlpha = highlightIntensity;
+        ctx.drawImage(lightCanvas, 0, 0);
+        ctx.restore();
+    };
+
+    useEffect(() => { requestAnimationFrame(renderCanvas); }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOpacity, shadowIntensity, highlightIntensity, edgeFeather]);
+
+    // --- ACTIONS ---
+    const saveHistory = () => {
+        if (!maskCanvasRef.current) return;
+        const ctx = maskCanvasRef.current.getContext('2d')!;
+        const data = ctx.getImageData(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
+        setHistory(prev => [...prev.slice(-10), data]);
+    };
+
+    const undoMask = () => {
+        if (history.length > 0 && maskCanvasRef.current) {
+            const prev = history[history.length - 1];
+            const ctx = maskCanvasRef.current.getContext('2d')!;
+            ctx.putImageData(prev, 0, 0);
+            setHistory(h => h.slice(0, -1));
+            renderCanvas();
         }
     };
 
-    // --- INTERACTION HELPERS (UPDATED FOR ZOOM) ---
-    const getPointerPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
-        if (!canvasRef.current || !containerRef.current) return { x: 0, y: 0 };
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        
-        let clientX, clientY;
-        if ('touches' in e) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else {
-            clientX = (e as React.MouseEvent).clientX;
-            clientY = (e as React.MouseEvent).clientY;
+    const handleAutoFit = () => {
+        if (!baseImgObj || !maskCanvasRef.current) return;
+        saveHistory();
+        const res = performAutoSegmentation(baseImgObj);
+        if (res) {
+            const ctx = maskCanvasRef.current.getContext('2d')!;
+            ctx.drawImage(res.maskCanvas, 0, 0);
+            renderCanvas();
+            
+            // Auto Adjust View to Bounds
+            if (containerRef.current && res.bounds) {
+                const rect = containerRef.current.getBoundingClientRect();
+                const contentW = res.bounds.maxX - res.bounds.minX;
+                const contentH = res.bounds.maxY - res.bounds.minY;
+                const k = Math.min(rect.width / contentW, rect.height / contentH) * 0.6;
+                // Center on the garment
+                const cx = (res.bounds.minX + res.bounds.maxX) / 2;
+                const cy = (res.bounds.minY + res.bounds.maxY) / 2;
+                // This view logic is simplified, full implementation needs viewport math
+            }
         }
+    };
 
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+    const handleFloodFill = (x: number, y: number) => {
+        if (!baseImgObj || !maskCanvasRef.current) return;
+        saveHistory();
+        const tempC = document.createElement('canvas'); tempC.width = baseImgObj.width; tempC.height = baseImgObj.height;
+        tempC.getContext('2d')!.drawImage(baseImgObj, 0, 0);
+        const res = createMockupMask(tempC.getContext('2d')!, tempC.width, tempC.height, x, y, wandTolerance);
+        if (res) {
+            const ctx = maskCanvasRef.current.getContext('2d')!;
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(res.maskCanvas, 0, 0);
+            renderCanvas();
+        }
+    };
+
+    const handleStroke = (x: number, y: number, isDrag: boolean) => {
+        if (!maskCanvasRef.current) return;
+        const ctx = maskCanvasRef.current.getContext('2d')!;
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = brushSize;
         
-        const x = (clientX - rect.left) * scaleX;
-        const y = (clientY - rect.top) * scaleY;
+        ctx.globalCompositeOperation = activeTool === 'BRUSH' ? 'source-over' : 'destination-out';
+        ctx.strokeStyle = 'white'; ctx.fillStyle = 'white';
+
+        ctx.beginPath();
+        if (isDrag && lastDrawPos.current) {
+            ctx.moveTo(lastDrawPos.current.x, lastDrawPos.current.y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        } else {
+            ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        renderCanvas();
+    };
+
+    // --- INTERACTION ---
+    const getCanvasCoords = (clientX: number, clientY: number) => {
+        if (!canvasRef.current || !containerRef.current) return { x: 0, y: 0 };
+        const rect = containerRef.current.getBoundingClientRect();
+        // Mouse relative to Container Center
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        const mx = clientX - rect.left - cx;
+        const my = clientY - rect.top - cy;
         
-        return { x, y, clientX, clientY };
+        // Apply Inverse View Transform
+        // View: translate(view.x, view.y) scale(view.k)
+        // Canvas Center is (W/2, H/2)
+        const px = (mx - view.x) / view.k + canvasRef.current.width / 2;
+        const py = (my - view.y) / view.k + canvasRef.current.height / 2;
+        
+        return { x: px, y: py };
     };
 
     const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
-        e.preventDefault();
-        const { x, y, clientX, clientY } = getPointerPos(e);
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
         lastPointerPos.current = { x: clientX, y: clientY };
 
         if (activeTool === 'HAND' || ('buttons' in e && e.buttons === 4)) {
@@ -306,21 +373,23 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             return;
         }
 
+        const { x, y } = getCanvasCoords(clientX, clientY);
+
         if (activeTool === 'WAND') {
-            performFloodFill(x, y);
-        } else {
+            handleFloodFill(x, y);
+        } else if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
+            saveHistory();
             isDrawingRef.current = true;
-            // lastPosRef for drawing needs canvas coords
-            lastPosRef.current = { x, y };
-            drawStroke(x, y); 
+            lastDrawPos.current = { x, y };
+            handleStroke(x, y, false);
         }
     };
 
     const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
-        const { x, y, clientX, clientY } = getPointerPos(e);
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
         setCursorPos({ x: clientX, y: clientY });
 
-        // Pan Logic
         if (isPanning.current && lastPointerPos.current) {
             const dx = clientX - lastPointerPos.current.x;
             const dy = clientY - lastPointerPos.current.y;
@@ -329,43 +398,18 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
             return;
         }
 
-        // Draw Logic
-        if (!isDrawingRef.current) return;
-        if (e.cancelable) e.preventDefault();
-        drawStroke(x, y);
-        lastPosRef.current = { x, y };
-        // Update lastPointerPos for drag continuity (though not used for drawing math)
-        lastPointerPos.current = { x: clientX, y: clientY };
-    };
-
-    // --- PINCH TO ZOOM HANDLERS ---
-    const handleTouchStart = (e: React.TouchEvent) => {
-        if (e.touches.length === 2) {
-            e.preventDefault();
-            const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
-            lastDistRef.current = dist;
-        } else {
-            handlePointerDown(e);
+        if (isDrawingRef.current) {
+            const { x, y } = getCanvasCoords(clientX, clientY);
+            handleStroke(x, y, true);
+            lastDrawPos.current = { x, y };
         }
     };
 
-    const handleTouchMove = (e: React.TouchEvent) => {
-        if (e.touches.length === 2) {
-            e.preventDefault();
-            const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
-            const scale = dist / lastDistRef.current;
-            setView(v => ({ ...v, k: Math.min(Math.max(0.1, v.k * scale), 5) }));
-            lastDistRef.current = dist;
-        } else {
-            handlePointerMove(e);
-        }
-    };
-
-    const handlePointerUp = () => { 
-        isDrawingRef.current = false; 
+    const handlePointerUp = () => {
         isPanning.current = false;
-        lastPosRef.current = null; 
+        isDrawingRef.current = false;
         lastPointerPos.current = null;
+        lastDrawPos.current = null;
     };
 
     const handleWheel = (e: React.WheelEvent) => {
@@ -376,278 +420,192 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         }
     };
 
-    const drawStroke = (x: number, y: number) => {
-        const maskCanvas = maskCanvasRef.current;
-        if (!maskCanvas || !baseImgObj) return;
-        const ctx = maskCanvas.getContext('2d')!;
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = brushSize * 2;
-        
-        if (smartBrush && targetColorRef.current) {
-            const r = brushSize;
-            const startX = Math.floor(x - r);
-            const startY = Math.floor(y - r);
-            const diam = Math.ceil(r * 2);
-            
-            const tempC = document.createElement('canvas');
-            tempC.width = diam; tempC.height = diam;
-            const tCtx = tempC.getContext('2d')!;
-            tCtx.drawImage(baseImgObj, startX, startY, diam, diam, 0, 0, diam, diam);
-            const baseData = tCtx.getImageData(0, 0, diam, diam).data;
-            const maskDataImg = ctx.getImageData(startX, startY, diam, diam);
-            const maskData = maskDataImg.data;
-            const target = targetColorRef.current;
-            const tol = wandTolerance * 2; 
-            
-            for (let i = 0; i < diam; i++) {
-                for (let j = 0; j < diam; j++) {
-                    const dx = j - r; const dy = i - r;
-                    if (dx*dx + dy*dy <= r*r) {
-                        const pIdx = (i * diam + j) * 4;
-                        const br = baseData[pIdx]; const bg = baseData[pIdx+1]; const bb = baseData[pIdx+2];
-                        const diff = Math.abs(br - target.r) + Math.abs(bg - target.g) + Math.abs(bb - target.b);
-                        if (diff <= tol) {
-                            if (activeTool === 'BRUSH') { maskData[pIdx] = 255; maskData[pIdx+1] = 255; maskData[pIdx+2] = 255; maskData[pIdx+3] = 255; } 
-                            else { maskData[pIdx+3] = 0; }
-                        }
-                    }
-                }
-            }
-            ctx.putImageData(maskDataImg, startX, startY);
-        } else {
-            if (activeTool === 'BRUSH') { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = 'white'; ctx.fillStyle = 'white'; } 
-            else { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'black'; ctx.fillStyle = 'black'; }
-            ctx.beginPath();
-            if (lastPosRef.current) ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y); else ctx.moveTo(x, y); 
-            ctx.lineTo(x, y); ctx.stroke();
-            if (!lastPosRef.current || (lastPosRef.current.x === x && lastPosRef.current.y === y)) { ctx.beginPath(); ctx.arc(x, y, brushSize, 0, Math.PI * 2); ctx.fill(); }
-        }
-        renderCanvas(); 
-    };
-
-    const performFloodFill = (startX: number, startY: number) => {
-        const maskCanvas = maskCanvasRef.current;
-        if (!baseImgObj || !maskCanvas) return;
-        const tempC = document.createElement('canvas');
-        tempC.width = baseImgObj.width; tempC.height = baseImgObj.height;
-        const tCtx = tempC.getContext('2d')!;
-        tCtx.drawImage(baseImgObj, 0, 0);
-        const res = createMockupMask(tCtx, tempC.width, tempC.height, startX, startY, wandTolerance);
-        if (res) {
-            if (res.referenceColor) targetColorRef.current = res.referenceColor;
-            const mCtx = maskCanvas.getContext('2d')!;
-            mCtx.globalCompositeOperation = 'source-over';
-            mCtx.drawImage(res.maskCanvas, 0, 0);
-            renderCanvas();
-        }
-    };
-
-    const clearMasks = () => {
-        const maskCanvas = maskCanvasRef.current;
-        if (maskCanvas) {
-            const ctx = maskCanvas.getContext('2d')!;
-            ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-            targetColorRef.current = null;
-            renderCanvas();
-        }
-    };
-
-    // --- SEARCH LOGIC ---
-    const performSearch = async (overridePrompt?: string, overrideImage?: string) => {
-        setIsSearching(true);
-        setLoadingMessage("Detectando estrutura...");
-        setWhiteBases([]);
-
-        const promptToSend = overridePrompt || searchQuery;
-        const imageToSend = overrideImage || (referenceImage && !searchQuery ? referenceImage.split(',')[1] : null);
-
-        try {
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'FIND_WHITE_MODELS', prompt: promptToSend, mainImageBase64: imageToSend })
-            });
-            const data = await response.json();
-
-            if (data.success && data.queries) {
-                setLoadingMessage("Buscando modelos com contraste ideal...");
-                const queries = data.queries;
-                const promises = queries.map(async (q: string) => {
-                    try {
-                        const res = await fetch('/api/analyze', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: '', backupSearchTerm: q })
-                        });
-                        const d = await res.json();
-                        return d.success ? d.image : null;
-                    } catch { return null; }
-                });
-                const results = await Promise.all(promises);
-                const validResults = results.filter((url: string | null) => url !== null) as string[];
-                setWhiteBases(validResults);
-                if (validResults.length === 0) setLoadingMessage("Nenhum modelo compatível encontrado.");
-            }
-        } catch (e) {
-            console.error("Search failed", e);
-            setLoadingMessage("Erro na conexão.");
-        } finally {
-            setIsSearching(false);
-        }
-    };
-
-    // --- FIX: HANDLE BASE SELECT ACTION ---
-    const handleBaseSelect = (url: string) => {
+    // --- CHANGE MODEL WITHOUT RESETTING PATTERN ---
+    const changeModel = (url: string) => {
         setReferenceImage(url);
+        // Force reset mask but keep pattern
+        if (maskCanvasRef.current && baseImgObj) {
+            const ctx = maskCanvasRef.current.getContext('2d')!;
+            ctx.clearRect(0, 0, baseImgObj.width, baseImgObj.height);
+        }
+        setStep('STUDIO'); // Go back to studio immediately
+    };
+
+    // --- SEARCH ---
+    const performSearch = async () => {
+        if (!searchQuery) return;
+        setIsSearching(true);
         setWhiteBases([]);
-        setSearchQuery('');
-        setStep('SELECT_PATTERN');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        try {
+            // Find White Models via Backend
+            const response = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'FIND_WHITE_MODELS', prompt: searchQuery }) });
+            const data = await response.json();
+            if (data.success && data.queries) {
+                const promises = data.queries.map((q: string) => fetch('/api/analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'GET_LINK_PREVIEW', targetUrl: '', backupSearchTerm: q }) }).then(r=>r.json()).then(d=>d.success ? d.image : null));
+                const results = await Promise.all(promises);
+                setWhiteBases(results.filter(u => u));
+            }
+        } catch(e) {}
+        setIsSearching(false);
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#f0f2f5] overflow-hidden">
-            {step !== 'SEARCH_BASE' && <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Simulação Realista em Modelos" />}
-            
+        <div className="flex flex-col h-full bg-[#000000] text-white overflow-hidden">
+            {step !== 'SEARCH_BASE' && (
+                <div className="bg-[#111111] px-4 py-2 flex items-center justify-between border-b border-gray-900 shrink-0 z-50 h-14">
+                    <div className="flex items-center gap-2"><Camera size={18} className="text-vingi-400"/><span className="font-bold text-sm">Provador Mágico</span></div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setStep('SEARCH_BASE')} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium border border-gray-700">Trocar Modelo</button>
+                        <button onClick={() => { if(canvasRef.current){ const l=document.createElement('a'); l.download='vingi-look.jpg'; l.href=canvasRef.current.toDataURL('image/jpeg',0.9); l.click(); } }} className="text-[10px] bg-vingi-900 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-800 flex items-center gap-1 border border-vingi-700"><Download size={12}/> Salvar</button>
+                    </div>
+                </div>
+            )}
+
             {step === 'SEARCH_BASE' && (
-                <div className="flex-1 overflow-y-auto">
-                    <ModuleLandingPage 
-                        icon={Camera}
-                        title="Provador Mágico 3D"
-                        description="Visualize suas estampas em modelos reais instantaneamente. Use a tecnologia 'Contrast Hunter' para simular caimento, luz e sombra em roupas brancas."
-                        features={["Simulação de Caimento", "Máscara Automática", "Luz & Sombra Realista", "Modelos Diversos"]}
-                        partners={["CLO3D", "MARVELOUS DESIGNER", "BROWZWEAR", "OPTITEX"]}
-                        customContent={
-                            <div className="mt-8 space-y-6 w-full max-w-2xl pb-16 mx-auto">
-                                <div className="space-y-3 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-2 mb-1">Passo 1: Encontrar Base</h3>
-                                    <div className="relative group">
-                                        <input 
-                                            ref={searchInputRef} type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && performSearch()} 
-                                            placeholder="Descreva o Modelo (Ex: Vestido Longo Branco)" disabled={isSearching} 
-                                            className="w-full px-5 py-4 rounded-2xl border-2 border-gray-200 shadow-inner focus:border-vingi-500 focus:ring-4 focus:ring-vingi-500/10 outline-none text-base pl-12 disabled:bg-gray-100 disabled:text-gray-400 transition-all bg-gray-50/50" 
-                                        />
-                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-vingi-500 transition-colors" size={20}/>
-                                    </div>
-                                    <button onClick={() => performSearch()} disabled={!searchQuery || isSearching} className={`w-full py-4 text-white rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg ${isSearching ? 'bg-gray-400 cursor-wait' : 'bg-vingi-900 hover:bg-vingi-800 shadow-vingi-900/20'}`}>
-                                        {isSearching ? <Loader2 className="animate-spin" size={18}/> : <><Sparkles size={18}/> BUSCAR MODELOS</>}
-                                    </button>
+                <div className="flex-1 bg-[#f0f2f5] overflow-y-auto text-gray-800">
+                    <ModuleHeader icon={Camera} title="Provador Mágico" onAction={() => selectedPattern ? setStep('STUDIO') : onNavigateToCreator()} actionLabel="Voltar" />
+                    <div className="max-w-2xl mx-auto p-6 pb-20 space-y-6">
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Sparkles size={16} className="text-purple-500"/> Encontrar Modelo (Contrast Hunter)</h3>
+                            <div className="flex gap-2 mb-4">
+                                <div className="relative flex-1">
+                                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && performSearch()} placeholder="Ex: Vestido Longo Branco" className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-vingi-500 transition-all"/>
+                                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                                 </div>
-                                {isSearching && <div className="text-vingi-600 font-bold text-xs flex items-center justify-center gap-2 py-4 animate-pulse"><Loader2 className="animate-spin" size={16}/> {loadingMessage}</div>}
-                                
-                                {whiteBases.length > 0 && (
-                                    <div className="space-y-3 animate-fade-in">
-                                        <div className="flex justify-between items-center px-2">
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Opções Encontradas ({whiteBases.length})</p>
-                                            <span className="text-[10px] bg-green-50 text-green-700 px-2 py-1 rounded font-bold">Contrast Mode ON</span>
-                                        </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-10">
-                                            {whiteBases.map((url, i) => (
-                                                <div key={i} onClick={() => handleBaseSelect(url)} className="aspect-[3/4] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer active:scale-95 transition-all group relative hover:ring-4 ring-vingi-500/30">
-                                                    <img src={url} className="w-full h-full object-cover" loading="lazy" />
-                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                        <span className="bg-white text-vingi-900 px-3 py-1 rounded-full text-xs font-bold shadow-lg transform scale-110">USAR MODELO</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                <div className="flex items-center gap-4 justify-center py-2 opacity-50">
-                                    <div className="h-px bg-gray-300 w-full"></div><span className="text-[10px] text-gray-500 font-bold uppercase whitespace-nowrap">OU USE SUA FOTO</span><div className="h-px bg-gray-300 w-full"></div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <button onClick={() => refInputRef.current?.click()} className={`w-full py-5 border-2 border-dashed rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${referenceImage ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-500 hover:border-vingi-400 hover:bg-white active:bg-gray-50'}`}>
-                                        <input type="file" ref={refInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onload=(ev)=>setReferenceImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*"/>
-                                        {referenceImage ? <><Check size={18}/> Imagem Carregada</> : <><ImageIcon size={20}/> Carregar Foto de Referência</>}
-                                    </button>
-                                    {referenceImage && !isSearching && (
-                                        <button onClick={() => { if(!referenceImage) return; performSearch(undefined, referenceImage.split(',')[1]); }} className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold text-xs shadow-md hover:bg-purple-700 flex items-center justify-center gap-2 animate-fade-in"><Sparkles size={14}/> ENCONTRAR VERSÃO BRANCA PARA MOCKUP</button>
-                                    )}
-                                </div>
-                                {referenceImage && (
-                                    <button onClick={() => setStep('SELECT_PATTERN')} className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-sm shadow-lg hover:bg-green-700 transition-all animate-bounce-subtle flex items-center justify-center gap-2">USAR ESTA BASE E CONTINUAR <ChevronRight size={18}/></button>
-                                )}
+                                <button onClick={performSearch} disabled={isSearching || !searchQuery} className="bg-vingi-900 text-white px-6 rounded-xl font-bold hover:bg-vingi-800 disabled:opacity-50">{isSearching ? <Loader2 className="animate-spin"/> : 'Buscar'}</button>
                             </div>
-                        }
-                    />
+                            
+                            {whiteBases.length > 0 && (
+                                <div className="grid grid-cols-3 gap-3">
+                                    {whiteBases.map((url, i) => (
+                                        <div key={i} onClick={() => changeModel(url)} className="aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:ring-4 ring-vingi-500/50 transition-all relative group">
+                                            <img src={url} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                <span className="bg-white text-black text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">Selecionar</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="text-center opacity-50 text-xs font-bold text-gray-400 uppercase">OU</div>
+                        
+                        <button onClick={() => refInputRef.current?.click()} className="w-full py-6 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center text-gray-500 hover:bg-white hover:border-vingi-400 transition-all gap-2 bg-gray-50">
+                            <UploadCloud size={24}/>
+                            <span>Carregar Foto Própria</span>
+                            <input type="file" ref={refInputRef} onChange={e => { const f=e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=ev=>changeModel(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden"/>
+                        </button>
+                    </div>
                 </div>
             )}
 
             {step === 'SELECT_PATTERN' && (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
-                    <div className="max-w-md w-full text-center bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-                        <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6"><Layers size={32} className="text-purple-600"/></div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-2">Passo 2: Selecione o Tecido</h2>
-                        <p className="text-gray-500 text-sm mb-6">Escolha a estampa que será aplicada sobre a roupa branca.</p>
-                        <div className="space-y-3 mt-6">
-                            <label className="w-full py-4 border-2 border-dashed border-vingi-300 rounded-xl flex items-center justify-center gap-2 cursor-pointer hover:bg-vingi-50 transition-colors">
-                                <UploadCloud size={20} className="text-vingi-500"/> <span className="font-bold text-vingi-700">Carregar Arquivo</span>
-                                <input type="file" onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>{ setSelectedPattern(ev.target?.result as string); setStep('STUDIO'); }; r.readAsDataURL(f); } }} accept="image/*" className="hidden"/>
+                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#f0f2f5] text-gray-800">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-sm w-full border border-gray-100">
+                        <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4"><Layers size={32}/></div>
+                        <h2 className="text-xl font-bold mb-2">Selecione a Estampa</h2>
+                        <p className="text-gray-500 text-sm mb-6">Qual tecido você quer aplicar no modelo?</p>
+                        <div className="space-y-3">
+                            <label className="block w-full py-3 bg-vingi-900 text-white rounded-xl font-bold cursor-pointer hover:bg-vingi-800 transition-colors">
+                                Carregar Arquivo
+                                <input type="file" onChange={e => { const f=e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=ev=>{ setSelectedPattern(ev.target?.result as string); setStep('STUDIO'); }; r.readAsDataURL(f); } }} className="hidden" accept="image/*"/>
                             </label>
-                            <button onClick={onNavigateToCreator} className="w-full py-4 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"><Search size={20}/> Buscar no Radar (Creator)</button>
+                            <button onClick={onNavigateToCreator} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200">Buscar no Radar</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {step === 'STUDIO' && (
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden animate-fade-in">
-                    <div ref={containerRef} className={`flex-1 bg-gray-200 relative flex items-center justify-center overflow-hidden touch-none ${activeTool==='HAND'?'cursor-grab active:cursor-grabbing':'cursor-crosshair'}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
-                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-                        <div 
-                            className="relative shadow-2xl origin-center transition-transform duration-75 ease-out" 
-                            style={{ 
-                                transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
-                                width: baseImgObj ? baseImgObj.width : 'auto',
-                                height: baseImgObj ? baseImgObj.height : 'auto'
-                            }}
-                        >
-                            <canvas ref={canvasRef} className="block bg-white" />
-                            {activeTool !== 'WAND' && activeTool !== 'HAND' && cursorPos && ( <div className="pointer-events-none fixed z-50 rounded-full border border-black/50 bg-white/30 backdrop-invert" style={{ width: brushSize * 2, height: brushSize * 2, left: cursorPos.x, top: cursorPos.y, transform: 'translate(-50%, -50%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.5)' }} /> )}
-                             {!isMaskReady && ( <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white px-6 py-3 rounded-full text-sm font-bold pointer-events-none backdrop-blur animate-pulse flex items-center gap-2"><Sparkles size={16} /> Ajustando Modelo...</div> )}
-                        </div>
+            {step === 'STUDIO' && baseImgObj && (
+                <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
+                    
+                    {/* CANVAS VIEWPORT */}
+                    <div 
+                        ref={containerRef}
+                        className={`flex-1 relative overflow-hidden flex items-center justify-center touch-none ${activeTool === 'HAND' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'}`}
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        onWheel={handleWheel}
+                    >
+                        {/* Background Grid */}
+                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px', transform: `scale(${view.k})`, transformOrigin: '0 0' }} />
                         
-                        {/* ZOOM CONTROLS OVERLAY */}
-                        <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white rounded-lg shadow-md p-1 z-30">
-                            <button onClick={()=>setView(v=>({...v, k: Math.min(v.k*1.2, 8)}))} className="p-2 hover:bg-gray-100 rounded text-gray-600"><ZoomIn size={18}/></button>
-                            <button onClick={()=>setView(v=>({...v, k: Math.max(v.k*0.8, 0.1)}))} className="p-2 hover:bg-gray-100 rounded text-gray-600"><ZoomOut size={18}/></button>
-                            <button onClick={()=>{ if(containerRef.current && baseImgObj) { const rect = containerRef.current.getBoundingClientRect(); setView({x:0, y:0, k: Math.min(rect.width/baseImgObj.width, rect.height/baseImgObj.height)*0.9}); } }} className="p-2 hover:bg-gray-100 rounded text-gray-600"><RotateCcw size={18}/></button>
+                        <div className="relative shadow-2xl transition-transform duration-75 ease-out" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: baseImgObj.width, height: baseImgObj.height }}>
+                            <canvas ref={canvasRef} className="block bg-white" />
                         </div>
+
+                        {/* Floating Cursor for Brush/Eraser */}
+                        {(activeTool === 'BRUSH' || activeTool === 'ERASER') && cursorPos && (
+                            <div 
+                                className="fixed pointer-events-none rounded-full border border-white/80 bg-white/10 z-50 backdrop-invert"
+                                style={{ 
+                                    left: cursorPos.x, 
+                                    top: cursorPos.y, 
+                                    width: brushSize * view.k, // Scale cursor visual with zoom
+                                    height: brushSize * view.k, 
+                                    transform: 'translate(-50%, -50%)',
+                                    boxShadow: '0 0 0 1px rgba(0,0,0,0.5)'
+                                }}
+                            />
+                        )}
+                        
+                        {/* Status Overlay */}
+                        {activeTool === 'AUTO' && history.length === 0 && (
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 animate-pulse">
+                                <BrainCircuit size={14}/> Auto-Detect Ready
+                            </div>
+                        )}
                     </div>
-                    <div className="w-full md:w-80 bg-white border-l border-gray-200 flex flex-col z-20 shadow-xl h-64 md:h-full">
-                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm"><Sliders size={16} className="text-vingi-600"/> Fit Studio</h3>
-                            <button onClick={() => setStep('SEARCH_BASE')} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-gray-50">Trocar Modelo</button>
-                        </div>
-                        <div className="p-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
-                            <div className="bg-gray-100 p-1.5 rounded-xl flex gap-1 shadow-inner">
-                                <button onClick={() => setActiveTool('HAND')} className={`flex-1 py-2 rounded-lg flex flex-col items-center gap-1 text-[9px] font-bold transition-all ${activeTool==='HAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500 hover:bg-gray-200'}`}><Hand size={18}/> Mover</button>
-                                <button onClick={() => setActiveTool('WAND')} className={`flex-1 py-2 rounded-lg flex flex-col items-center gap-1 text-[9px] font-bold transition-all ${activeTool==='WAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500 hover:bg-gray-200'}`}><Wand2 size={18}/> Varinha</button>
-                                <button onClick={() => setActiveTool('BRUSH')} className={`flex-1 py-2 rounded-lg flex flex-col items-center gap-1 text-[9px] font-bold transition-all ${activeTool==='BRUSH' ? 'bg-white shadow text-vingi-600' : 'text-gray-500 hover:bg-gray-200'}`}><Brush size={18}/> Pincel</button>
-                                <button onClick={() => setActiveTool('ERASER')} className={`flex-1 py-2 rounded-lg flex flex-col items-center gap-1 text-[9px] font-bold transition-all ${activeTool==='ERASER' ? 'bg-white shadow text-vingi-600' : 'text-gray-500 hover:bg-gray-200'}`}><Eraser size={18}/> Borracha</button>
-                            </div>
-                            {activeTool !== 'WAND' && activeTool !== 'HAND' && (
-                                <div className="space-y-3">
-                                    <div onClick={() => setSmartBrush(!smartBrush)} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${smartBrush ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
-                                        <div className="flex items-center gap-2"><ShieldCheck size={16} className={smartBrush ? 'text-blue-600' : 'text-gray-400'}/><div><span className={`text-[10px] font-bold uppercase block ${smartBrush ? 'text-blue-800' : 'text-gray-500'}`}>Proteção de Borda</span><span className="text-[9px] text-gray-400 leading-tight">Impede pintar fora da roupa</span></div></div>
-                                        <div className={`w-8 h-4 rounded-full relative transition-colors ${smartBrush ? 'bg-blue-500' : 'bg-gray-300'}`}><div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${smartBrush ? 'translate-x-4' : 'translate-x-0'}`}></div></div>
+
+                    {/* CONTEXTUAL SLIDERS (ABOVE TOOLBAR) */}
+                    {(activeTool === 'WAND' || activeTool === 'BRUSH' || activeTool === 'AUTO') && (
+                        <div className="absolute bottom-16 left-0 right-0 px-4 pb-2 flex justify-center z-40 pointer-events-none">
+                            <div className="bg-black/90 backdrop-blur border border-white/10 rounded-2xl p-4 shadow-2xl w-full max-w-md pointer-events-auto animate-slide-up">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Escala</span><span>{Math.round(patternScale*100)}%</span></div>
+                                        <input type="range" min="0.1" max="2" step="0.05" value={patternScale} onChange={e => setPatternScale(parseFloat(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
                                     </div>
-                                    <div className="space-y-1"><div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><span>Tamanho Pincel</span><span>{brushSize}px</span></div><input type="range" min="5" max="100" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/></div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Rotação</span><span>{patternRotation}°</span></div>
+                                        <input type="range" min="0" max="360" value={patternRotation} onChange={e => setPatternRotation(parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Sombras</span><span>{Math.round(shadowIntensity*100)}%</span></div>
+                                        <input type="range" min="0" max="1" step="0.05" value={shadowIntensity} onChange={e => setShadowIntensity(parseFloat(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-[9px] font-bold text-gray-400 uppercase"><span>Luzes/Dobras</span><span>{Math.round(highlightIntensity*100)}%</span></div>
+                                        <input type="range" min="0" max="1" step="0.05" value={highlightIntensity} onChange={e => setHighlightIntensity(parseFloat(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-white"/>
+                                    </div>
                                 </div>
-                            )}
-                            {activeTool === 'WAND' && ( <div className="space-y-1"><div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><span>Tolerância</span><span>{wandTolerance}</span></div><input type="range" min="5" max="100" value={wandTolerance} onChange={(e) => setWandTolerance(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-600"/></div> )}
-                            <div className="w-full h-px bg-gray-100 my-2"></div>
-                            <div className="space-y-4">
-                                <div><div className="flex justify-between mb-1"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Focus size={10}/> Suavizar Borda</span><span className="text-[10px] font-bold text-gray-600">{edgeFeather}px</span></div><input type="range" min="0" max="10" step="0.5" value={edgeFeather} onChange={(e) => setEdgeFeather(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-purple-500"/></div>
-                                <div><div className="flex justify-between mb-1"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Move size={10}/> Tamanho</span><span className="text-[10px] font-bold text-gray-600">{Math.round(patternScale * 100)}%</span></div><input type="range" min="0.1" max="2" step="0.05" value={patternScale} onChange={(e) => setPatternScale(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-500"/></div>
-                                <div><div className="flex justify-between mb-1"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><RotateCw size={10}/> Rotação</span><span className="text-[10px] font-bold text-gray-600">{patternRotation}°</span></div><input type="range" min="0" max="360" value={patternRotation} onChange={(e) => setPatternRotation(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-vingi-500"/></div>
-                                <div><div className="flex justify-between mb-1"><span className="text-[10px] font-bold text-gray-600 uppercase flex items-center gap-1"><Sun size={10}/> Sombras (Realismo)</span><span className="text-[10px] font-bold text-gray-600">{Math.round(shadowIntensity * 100)}%</span></div><input type="range" min="0" max="1" step="0.05" value={shadowIntensity} onChange={(e) => setShadowIntensity(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none accent-gray-800"/></div>
                             </div>
-                            <div className="space-y-2 pt-4 border-t border-gray-100">
-                                <button onClick={clearMasks} className="w-full py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-xs hover:bg-gray-50 flex items-center justify-center gap-2 disabled:opacity-50"><Eraser size={14}/> Limpar Tudo</button>
-                                <button onClick={() => { if(canvasRef.current){ const l=document.createElement('a'); l.download='vingi-look.jpg'; l.href=canvasRef.current.toDataURL('image/jpeg',0.95); l.click(); } }} className="w-full py-4 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 flex items-center justify-center gap-2 mt-2"><Download size={16}/> Salvar Mockup</button>
-                            </div>
+                        </div>
+                    )}
+
+                    {/* BOTTOM TOOLBAR (INSHOT STYLE) */}
+                    <div className="bg-[#111] border-t border-white/10 shrink-0 z-50 pb-[env(safe-area-inset-bottom)]">
+                        <div className="flex items-center justify-between px-2 py-2 overflow-x-auto no-scrollbar gap-2">
+                            
+                            <button onClick={handleAutoFit} className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-lg gap-1 transition-all active:scale-95 ${activeTool==='AUTO' ? 'bg-gradient-to-br from-vingi-600 to-purple-600 text-white shadow-lg shadow-purple-900/20' : 'text-gray-400 hover:text-white'}`}>
+                                <Sparkles size={18}/>
+                                <span className="text-[9px] font-bold">Auto</span>
+                            </button>
+
+                            <div className="w-px h-8 bg-white/10 mx-1"></div>
+
+                            <ToolBtn icon={Wand2} label="Varinha" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
+                            <ToolBtn icon={Brush} label="Pincel" active={activeTool==='BRUSH'} onClick={() => setActiveTool('BRUSH')} />
+                            <ToolBtn icon={Eraser} label="Borracha" active={activeTool==='ERASER'} onClick={() => setActiveTool('ERASER')} />
+                            <ToolBtn icon={Hand} label="Mover" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
+                            
+                            <div className="w-px h-8 bg-white/10 mx-1"></div>
+
+                            <ToolBtn icon={Undo2} label="Desfazer" onClick={undoMask} disabled={history.length === 0} />
+                            <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => setStep('SELECT_PATTERN')} />
                         </div>
                     </div>
                 </div>
@@ -655,3 +613,14 @@ export const VirtualRunway: React.FC<VirtualRunwayProps> = ({ onNavigateToCreato
         </div>
     );
 };
+
+const ToolBtn = ({ icon: Icon, label, active, onClick, disabled }: any) => (
+    <button 
+        onClick={onClick}
+        disabled={disabled}
+        className={`flex flex-col items-center justify-center min-w-[56px] h-14 rounded-lg gap-1 transition-all active:scale-95 ${disabled ? 'opacity-30' : ''} ${active ? 'text-white bg-white/10' : 'text-gray-500 hover:text-white'}`}
+    >
+        <Icon size={18} strokeWidth={active ? 2.5 : 1.5} />
+        <span className="text-[9px] font-medium">{label}</span>
+    </button>
+);
