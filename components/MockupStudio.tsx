@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw, Layers, CopyCheck } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw, Layers, CopyCheck, Settings2 } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 interface AppliedLayer {
@@ -23,8 +23,9 @@ export const MockupStudio: React.FC = () => {
   const [tool, setTool] = useState<'WAND' | 'MOVE' | 'HAND'>('WAND');
   const [tolerance, setTolerance] = useState(40); 
   
-  // UI Controls for Active Layer / Group
-  const [editAll, setEditAll] = useState(false);
+  // UI Controls (Global State for New Layers & Active Layer)
+  // Default scale 0.5, Rotation 0
+  const [editAll, setEditAll] = useState(true); // Default to True for easier workflow
   const [activeScale, setActiveScale] = useState(0.5);
   const [activeRotation, setActiveRotation] = useState(0);
   const [activeFlipX, setActiveFlipX] = useState(false);
@@ -87,9 +88,9 @@ export const MockupStudio: React.FC = () => {
 
   useEffect(() => { if (patternImage) { const img = new Image(); img.src = patternImage; img.crossOrigin = "anonymous"; img.onload = () => setPatternImgObj(img); } }, [patternImage]);
 
+  // Sync UI controls with active layer selection (ONLY if selecting a specific layer and NOT in Edit All mode)
   useEffect(() => {
-      // Update UI controls when active layer changes
-      if (activeLayerId) {
+      if (activeLayerId && !editAll) {
           const layer = layers.find(l => l.id === activeLayerId);
           if (layer) { 
               setActiveScale(layer.scale); 
@@ -98,14 +99,14 @@ export const MockupStudio: React.FC = () => {
               setActiveFlipY(layer.flipY); 
           }
       }
-  }, [activeLayerId, layers]);
+  }, [activeLayerId]); // Don't depend on layers to avoid loops, only ID change
 
   // Unified Updater: Handles Single or Batch Updates
   const updateTargetLayers = (updater: (l: AppliedLayer) => Partial<AppliedLayer>) => {
       if (layers.length === 0) return;
       
       setLayers(prev => prev.map(l => { 
-          // If Edit All is ON, or if this is the active layer
+          // If Edit All is ON, update everyone. If OFF, only active layer.
           if (editAll || l.id === activeLayerId) { 
               return { ...l, ...updater(l) }; 
           }
@@ -181,23 +182,21 @@ export const MockupStudio: React.FC = () => {
         ctx.drawImage(tempCanvas, 0, 0); 
         ctx.restore();
 
-        // Highlight Active Layer(s)
-        if (layer.id === activeLayerId || editAll) {
+        // Highlight Active Layer(s) - Blue Dot
+        if (layer.id === activeLayerId || (editAll && activeLayerId)) {
             ctx.save(); 
             ctx.globalAlpha = 1; 
             ctx.globalCompositeOperation = 'source-over';
             
             // Draw Indicator Dot
             ctx.beginPath(); 
-            ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 10 / view.k, 0, Math.PI * 2); 
+            ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 8 / view.k, 0, Math.PI * 2); 
             ctx.fillStyle = editAll ? '#8b5cf6' : '#3b82f6'; // Purple for Group, Blue for Single
             ctx.strokeStyle = 'white'; 
-            ctx.lineWidth = 3 / view.k; 
+            ctx.lineWidth = 2 / view.k; 
             ctx.shadowBlur = 5; 
             ctx.fill(); 
             ctx.stroke();
-            
-            // Optional: Draw bounding box for context? Too noisy. Dot is fine.
             ctx.restore();
         }
     });
@@ -296,10 +295,6 @@ export const MockupStudio: React.FC = () => {
       }
 
       if (tool === 'WAND') {
-          // Check if we clicked on an existing layer to select it, instead of creating new mask?
-          // BUT user wants to fill multiple spots.
-          // Let's create mask first. If it overlaps heavily with existing, maybe ignore?
-          // For now, always create.
           const res = createMaskFromClick(x, y);
           if (res) {
               const tempP = document.createElement('canvas');
@@ -315,9 +310,12 @@ export const MockupStudio: React.FC = () => {
                   maskCenter: { x: res.centerX, y: res.centerY },
                   pattern: pat, 
                   offsetX: 0, offsetY: 0, 
-                  scale: editAll && layers.length > 0 ? layers[0].scale : 0.5, // Match existing scale if in group mode
-                  rotation: editAll && layers.length > 0 ? layers[0].rotation : 0,
-                  flipX: false, flipY: false, 
+                  // CRITICAL FIX: Inherit current UI settings immediately
+                  // This prevents the "disappearing" effect where a new layer resets to default tiny scale
+                  scale: activeScale, 
+                  rotation: activeRotation,
+                  flipX: activeFlipX, 
+                  flipY: activeFlipY, 
                   timestamp: Date.now()
               };
               setLayers(prev => [...prev, newLayer]); 
@@ -490,7 +488,7 @@ export const MockupStudio: React.FC = () => {
                   </div>
               </div>
 
-              {/* EDITOR TOOLBAR (FIXED BOTTOM - SCROLLABLE CONTENT) */}
+              {/* EDITOR TOOLBAR (FIXED BOTTOM - ALWAYS VISIBLE) */}
               <div className="shrink-0 bg-white border-t border-gray-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-40 flex flex-col pb-safe max-h-[45vh] overflow-y-auto custom-scrollbar">
                   {/* TOOLS SELECTOR */}
                   <div className="flex items-center justify-between p-2 border-b border-gray-100 overflow-x-auto gap-4 px-4 shrink-0">
@@ -500,7 +498,7 @@ export const MockupStudio: React.FC = () => {
                           <button onClick={() => setTool('MOVE')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='MOVE' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Move size={16}/> AJUSTAR</button>
                       </div>
                       
-                      {/* NEW: GROUP EDIT TOGGLE */}
+                      {/* GROUP EDIT TOGGLE */}
                       <button 
                         onClick={() => setEditAll(!editAll)} 
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all shrink-0 border ${editAll ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-gray-500 border-gray-200'}`}
@@ -512,27 +510,25 @@ export const MockupStudio: React.FC = () => {
                       <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-vingi-900 text-white rounded-lg text-xs font-bold shadow-md hover:bg-vingi-800 shrink-0"><Download size={16}/> Exportar</button>
                   </div>
 
-                  {/* ACTIVE LAYER CONTROLS (Visible when layer active OR editing all) */}
-                  {(activeLayerId || editAll) && (
-                      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center animate-fade-in border-b border-gray-200 ${editAll ? 'bg-purple-50' : 'bg-gray-50'}`}>
-                          <div className="flex flex-col gap-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase">Rotação ({activeRotation}°)</label>
-                              <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} className={`w-full h-2 rounded-lg appearance-none ${editAll ? 'bg-purple-200 accent-purple-600' : 'bg-gray-200 accent-vingi-600'}`}/>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase">Escala ({Math.round(activeScale * 100)}%)</label>
-                              <input type="range" min="0.1" max="3" step="0.1" value={activeScale} onChange={(e) => handleScale(parseFloat(e.target.value))} className={`w-full h-2 rounded-lg appearance-none ${editAll ? 'bg-purple-200 accent-purple-600' : 'bg-gray-200 accent-vingi-600'}`}/>
-                          </div>
-                          <div className="flex gap-2">
-                              <button onClick={handleFlipX} className={`flex-1 py-2 border rounded-lg flex items-center justify-center ${activeFlipX ? 'bg-vingi-200 border-vingi-300' : 'bg-white border-gray-300'}`} title="Espelhar H"><FlipHorizontal size={18}/></button>
-                              <button onClick={handleFlipY} className={`flex-1 py-2 border rounded-lg flex items-center justify-center ${activeFlipY ? 'bg-vingi-200 border-vingi-300' : 'bg-white border-gray-300'}`} title="Espelhar V"><FlipVertical size={18}/></button>
-                          </div>
-                          <div className="flex gap-2">
-                              <button onClick={resetActiveLayer} className="flex-1 py-2 border border-gray-300 bg-white rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 flex items-center justify-center gap-1"><RefreshCcw size={14}/> Reset</button>
-                              <button onClick={() => { setLayers(l => l.filter(x => x.id !== activeLayerId)); setActiveLayerId(null); }} className="flex-1 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 flex items-center justify-center gap-1"><Eraser size={14}/> Del</button>
-                          </div>
+                  {/* ACTIVE LAYER CONTROLS (ALWAYS VISIBLE) */}
+                  <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 p-4 items-center animate-fade-in border-b border-gray-200 ${editAll ? 'bg-purple-50' : 'bg-gray-50'}`}>
+                      <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Settings2 size={10}/> Rotação ({activeRotation}°)</label>
+                          <input type="range" min="0" max="360" value={activeRotation} onChange={(e) => handleRotate(parseInt(e.target.value))} className={`w-full h-2 rounded-lg appearance-none ${editAll ? 'bg-purple-200 accent-purple-600' : 'bg-gray-200 accent-vingi-600'}`}/>
                       </div>
-                  )}
+                      <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Settings2 size={10}/> Escala ({Math.round(activeScale * 100)}%)</label>
+                          <input type="range" min="0.1" max="3" step="0.1" value={activeScale} onChange={(e) => handleScale(parseFloat(e.target.value))} className={`w-full h-2 rounded-lg appearance-none ${editAll ? 'bg-purple-200 accent-purple-600' : 'bg-gray-200 accent-vingi-600'}`}/>
+                      </div>
+                      <div className="flex gap-2">
+                          <button onClick={handleFlipX} className={`flex-1 py-2 border rounded-lg flex items-center justify-center ${activeFlipX ? 'bg-vingi-200 border-vingi-300' : 'bg-white border-gray-300'}`} title="Espelhar H"><FlipHorizontal size={18}/></button>
+                          <button onClick={handleFlipY} className={`flex-1 py-2 border rounded-lg flex items-center justify-center ${activeFlipY ? 'bg-vingi-200 border-vingi-300' : 'bg-white border-gray-300'}`} title="Espelhar V"><FlipVertical size={18}/></button>
+                      </div>
+                      <div className="flex gap-2">
+                          <button onClick={resetActiveLayer} className="flex-1 py-2 border border-gray-300 bg-white rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 flex items-center justify-center gap-1"><RefreshCcw size={14}/> Reset</button>
+                          <button onClick={() => { setLayers(l => l.filter(x => x.id !== activeLayerId)); setActiveLayerId(null); }} className="flex-1 py-2 bg-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 flex items-center justify-center gap-1"><Eraser size={14}/> Del</button>
+                      </div>
+                  </div>
               </div>
           </div>
       )}
