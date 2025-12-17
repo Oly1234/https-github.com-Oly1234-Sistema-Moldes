@@ -1,7 +1,7 @@
 
 /**
- * VINGI SAM-X NEURAL HEURISTIC ENGINE v3.0
- * Simulação de Segment Anything Model (SAM) via Gradiente de Energia e Matriz de Variância.
+ * VINGI SAM-X MODULAR ENGINE v3.1
+ * Motor de segmentação por campo de energia, otimizado para renderização de feedback duplo.
  */
 
 export interface SegmentationResult {
@@ -14,7 +14,7 @@ export interface SegmentationResult {
 
 export const VingiSegmenter = {
     /**
-     * Executa a segmentação SAM-X baseada em Campo de Força de Bordas.
+     * Algoritmo de Difusão SAM-X
      */
     segmentObject: (
         ctx: CanvasRenderingContext2D, 
@@ -33,57 +33,47 @@ export const VingiSegmenter = {
         const startIdx = (Math.floor(startY) * width + Math.floor(startX)) * 4;
         if (startIdx < 0 || startIdx >= data.length) return null;
         
-        // Cor de semente (âncora neural)
         const r0 = data[startIdx], g0 = data[startIdx+1], b0 = data[startIdx+2];
+        const luminance = (r0 * 0.299 + g0 * 0.587 + b0 * 0.114) / 255;
+        const dynamicTolerance = tolerance * (luminance < 0.3 ? 1.4 : 1.0);
 
         let bMinX = width, bMaxX = 0, bMinY = height, bMaxY = 0;
         let pixelCount = 0;
-
-        // Pré-calculo de tolerância adaptativa (mais tolerante em áreas escuras)
-        const luminance = (r0 * 0.299 + g0 * 0.587 + b0 * 0.114) / 255;
-        const dynamicTolerance = tolerance * (luminance < 0.3 ? 1.5 : 1.0);
+        let sumX = 0, sumY = 0;
 
         while (stack.length) {
             const [x, y] = stack.pop()!;
             const idx = y * width + x;
-            
             if (visited[idx]) continue;
             visited[idx] = 1;
-            
             const pos = idx * 4;
             
-            // 1. Diferença de Cor (Energia de Preenchimento)
             const colorDiff = Math.sqrt(
                 Math.pow(data[pos] - r0, 2) + 
                 Math.pow(data[pos+1] - g0, 2) + 
                 Math.pow(data[pos+2] - b0, 2)
             );
 
-            // 2. Cálculo de Gradiente (Detecção de Barreira SAM-X)
-            // Verificamos a mudança de intensidade local para detectar bordas nítidas
             let edgeEnergy = 0;
             if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
                 const idxR = (y * width + (x + 1)) * 4;
                 const idxL = (y * width + (x - 1)) * 4;
                 const idxB = ((y + 1) * width + x) * 4;
                 const idxT = ((y - 1) * width + x) * 4;
-                
-                // Magnitude do Gradiente (Simplificação de Sobel)
-                const gx = Math.abs(data[idxR] - data[idxL]);
-                const gy = Math.abs(data[idxB] - data[idxT]);
-                edgeEnergy = Math.max(gx, gy);
+                edgeEnergy = Math.max(
+                    Math.abs(data[idxR] - data[idxL]),
+                    Math.abs(data[idxB] - data[idxT])
+                );
             }
 
-            // CRITÉRIO SAM-X: Aceita se a cor for similar OU se não houver uma barreira de energia nítida
-            // Se a energia da borda for alta (> 100), o modelo "trava" a expansão ali
-            if (colorDiff <= dynamicTolerance && edgeEnergy < 110) {
+            if (colorDiff <= dynamicTolerance && edgeEnergy < 120) {
                 mask[idx] = 255;
                 pixelCount++;
+                sumX += x; sumY += y;
                 
                 if (x < bMinX) bMinX = x; if (x > bMaxX) bMaxX = x;
                 if (y < bMinY) bMinY = y; if (y > bMaxY) bMaxY = y;
 
-                // Expansão 4-direções
                 if (x > 0) stack.push([x - 1, y]);
                 if (x < width - 1) stack.push([x + 1, y]);
                 if (y > 0) stack.push([x, y - 1]);
@@ -91,35 +81,14 @@ export const VingiSegmenter = {
             }
         }
 
-        // Filtro de ruído semântico
-        if (pixelCount < 60) return null;
+        if (pixelCount < 50) return null;
 
         return {
             mask,
-            bounds: { 
-                x: bMinX, 
-                y: bMinY, 
-                w: (bMaxX - bMinX) + 1, 
-                h: (bMaxY - bMinY) + 1 
-            },
-            center: { 
-                x: bMinX + (bMaxX - bMinX) / 2, 
-                y: bMinY + (bMaxY - bMinY) / 2 
-            },
+            bounds: { x: bMinX, y: bMinY, w: (bMaxX - bMinX) + 1, h: (bMaxY - bMinY) + 1 },
+            center: { x: sumX / pixelCount, y: sumY / pixelCount },
             area: pixelCount,
-            confidence: Math.min(1, pixelCount / 500)
+            confidence: Math.min(1, pixelCount / 1000)
         };
-    },
-
-    mergeMasks: (m1: Uint8Array, m2: Uint8Array): Uint8Array => {
-        const result = new Uint8Array(m1.length);
-        for (let i = 0; i < m1.length; i++) result[i] = (m1[i] || m2[i]) ? 255 : 0;
-        return result;
-    },
-
-    subtractMasks: (base: Uint8Array, remove: Uint8Array): Uint8Array => {
-        const result = new Uint8Array(base.length);
-        for (let i = 0; i < base.length; i++) result[i] = (base[i] && !remove[i]) ? 255 : 0;
-        return result;
     }
 };
