@@ -12,56 +12,43 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
         : "Use colors that match the requested theme.";
 
     // 2. Contexto de Estilo Artístico
+    // AJUSTE: Forçar que mesmo estilos manuais (aquarela) sejam escaneados/flat, não fotos de papel.
     let artStyleInstruction = "";
     if (artStyle === 'CUSTOM' && customStyle) {
-        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Follow this aesthetic strictly.`;
+        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Render as FLAT 2D DIGITAL ART.`;
     } else {
         switch (artStyle) {
-            case 'WATERCOLOR': artStyleInstruction = "ART STYLE: WET WATERCOLOR PAINTING. Translucent washes, bleeding edges, soft gradients, paper texture visible. No hard outlines."; break;
-            case 'GIZ': artStyleInstruction = "ART STYLE: DRY PASTEL / CHALK. Textured strokes, dusty appearance, soft blending, rough paper grain."; break;
-            case 'ACRILICA': artStyleInstruction = "ART STYLE: ACRYLIC IMPASTO. Thick visible brushstrokes, vibrant opaque colors, slight texture relief, expressive painterly look."; break;
-            case 'VETOR': artStyleInstruction = "ART STYLE: FLAT VECTOR ILLUSTRATION. Clean sharp lines, solid fills, no gradients, no texture. Minimalist and modern."; break;
-            case 'BORDADO': artStyleInstruction = "ART STYLE: EMBROIDERY / NEEDLEWORK. Render the design as stitched threads on fabric. Satin stitch, cross-stitch details. Tactile texture."; break;
-            case 'LINHA': artStyleInstruction = "ART STYLE: LINE ART / INK SKETCH. Black outline only (or monochrome), etching style, detailed hatching. No fills."; break;
-            case 'ORNAMENTAL': artStyleInstruction = "ART STYLE: BAROQUE ORNAMENTAL. Highly intricate filigree, flourishes, luxury detailing, damask complexity."; break;
-            default: artStyleInstruction = "ART STYLE: Maintain the aesthetic style of the original reference."; break;
+            case 'WATERCOLOR': artStyleInstruction = "ART STYLE: DIGITAL WATERCOLOR. Wet-on-wet effect but on a FLAT white digital canvas. No paper grain, no lighting."; break;
+            case 'GIZ': artStyleInstruction = "ART STYLE: PASTEL TEXTURE. Chalky strokes, pure 2D composition. No paper background."; break;
+            case 'ACRILICA': artStyleInstruction = "ART STYLE: IMPASTO PAINTING. Visible strokes but rendered as a FLAT SCAN. No glossy highlights."; break;
+            case 'VETOR': artStyleInstruction = "ART STYLE: FLAT VECTOR ILLUSTRATION. Sharp crisp lines, solid fills. Adobe Illustrator style."; break;
+            case 'BORDADO': artStyleInstruction = "ART STYLE: FLAT EMBROIDERY DESIGN. Vector representation of stitches. NO 3D fabric rendering."; break;
+            case 'LINHA': artStyleInstruction = "ART STYLE: TECHNICAL LINE ART. Black ink on white. Clean contours only."; break;
+            case 'ORNAMENTAL': artStyleInstruction = "ART STYLE: BAROQUE VECTOR. Complex filigree, flat gold/color fills. No metallic reflections."; break;
+            default: artStyleInstruction = "ART STYLE: Flat digital textile artwork."; break;
         }
     }
 
-    // 3. Contexto de Layout (Aprimorado)
+    // 3. Contexto de Layout
     let layoutInstruction = "Seamless repeat pattern (All-over/Corrida).";
-    let sizeInstruction = targetSize ? `TARGET DIMENSIONS: ${targetSize}. Compose the elements to fit this scale perfectly.` : "";
+    let sizeInstruction = targetSize ? `TARGET DIMENSIONS: ${targetSize}.` : "";
     
     if (layoutStyle && layoutStyle !== 'ORIGINAL') {
         switch (layoutStyle) {
             case 'BARRADO':
-                layoutInstruction = `
-                LAYOUT: HORIZONTAL BORDER PRINT (Barrado). 
-                STRUCTURE: Heavy, intricate motifs at the BOTTOM edge, flowing upwards into negative space.
-                ${subLayoutStyle === 'DUPLO' ? 'SUB-STYLE: MIRRORED BORDER. Identical heavy borders on BOTH Top and Bottom edges.' : ''}
-                ${subLayoutStyle === 'DEGRADE' ? 'SUB-STYLE: GRADIENT FADE. Motifs visually dissolve from bottom to top.' : ''}
-                `;
+                layoutInstruction = `LAYOUT: BORDER PRINT (Barrado). Heavy motifs at bottom, fading up to whitespace. FLAT 2D VIEW.`;
                 break;
             case 'LENCO':
-                layoutInstruction = `
-                LAYOUT: ENGINEERED SQUARE SCARF (Foulard/Carré).
-                GEOMETRY: Perfectly SYMMETRICAL Square Composition with border frame.
-                ${subLayoutStyle === 'MEDALHAO' ? 'SUB-STYLE: MEDALLION. Central circular motif radiating outwards.' : ''}
-                ${subLayoutStyle === 'BANDANA' ? 'SUB-STYLE: BANDANA/PAISLEY. Concentric frames with paisley.' : ''}
-                `;
+                layoutInstruction = `LAYOUT: ENGINEERED SQUARE SCARF. Symmetrical composition with borders. FLAT 2D VIEW.`;
                 break;
             case 'LOCALIZADA':
-                layoutInstruction = `LAYOUT: PLACED PRINT (T-Shirt Graphic). Single isolated artwork centered on a solid background.`;
+                layoutInstruction = `LAYOUT: PLACED GRAPHIC (Spot Print). Isolated artwork on solid background.`;
                 break;
             case 'PAREO':
-                layoutInstruction = `LAYOUT: BEACH PAREO PANEL (Vertical Rectangle). Large scale tropical/ornamental design framed for a vertical panel.`;
+                layoutInstruction = `LAYOUT: PAREO PANEL. Vertical rectangular composition.`;
                 break;
             case 'CORRIDA':
-                layoutInstruction = `
-                LAYOUT: ALL-OVER SEAMLESS REPEAT.
-                ${subLayoutStyle === 'TOSS' ? 'SUB-STYLE: TOSSED. Elements scattered randomly.' : ''}
-                ${subLayoutStyle === 'GRID' ? 'SUB-STYLE: GRID. Elements aligned in strict rows/columns.' : ''}
-                `;
+                layoutInstruction = `LAYOUT: SEAMLESS REPEAT PATTERN.`;
                 break;
         }
     }
@@ -70,42 +57,40 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     let TECHNIQUE_RULES = "";
     if (technique === 'DIGITAL') {
         TECHNIQUE_RULES = `
-        PRINT TECH: DIGITAL PRINTING (Sublimation/Direct).
-        FEATURES: High fidelity, millions of colors, gradients allowed, photo-realistic details allowed.
+        TECHNIQUE: DIGITAL SUBLIMATION FILE.
+        - High fidelity details allowed.
+        - Complex gradients allowed.
+        - MUST BE A FLAT FILE ready for the printer.
         `;
     } else {
-        // CILINDRO STRICT RULES
         TECHNIQUE_RULES = `
-        PRINT TECH: ROTARY SCREEN (Cilindro/Silk).
-        CRITICAL RULES:
-        1. SOLID SPOT COLORS ONLY.
-        2. NO GRADIENTS, NO FADING, NO TRANSPARENCY.
-        3. DISTINCT SEPARATION between colors.
-        4. SIMPLIFIED SHAPES suitable for engraving.
-        ${colorCount > 0 ? `RESTRICTION: Use EXACTLY ${colorCount} distinct colors.` : "Use a limited palette (Max 8 colors)."}
+        TECHNIQUE: ROTARY SCREEN SEPARATION (Cilindro).
+        - SOLID SPOT COLORS ONLY.
+        - NO GRADIENTS, NO OPACITY, NO BLURS.
+        - Hard edge separation between colors.
+        - Vector-like appearance.
+        ${colorCount > 0 ? `RESTRICTION: Exactly ${colorCount} colors.` : "Limited palette."}
         `;
     }
 
-    // 5. Prompt Final
-    const FULL_PROMPT = `Generate a professional textile pattern design.
+    // 5. Prompt Final - REESCRITO PARA "ARQUIVO DIGITAL"
+    const FULL_PROMPT = `
+    GENERATE A TEXTILE PRINT FILE (DIGITAL ASSET).
     
-    THEME/SUBJECT: ${prompt}.
+    THEME: ${prompt}.
+    
+    VISUAL REQUIREMENTS (CRITICAL):
+    1. VIEW: FLAT 2D TOP-DOWN. This is the SOURCE FILE, NOT a photo of fabric.
+    2. NO TEXTURE: Do not add fabric grain, weave, knits, or threads.
+    3. NO LIGHTING: No shadows, no highlights, no folds, no wrinkles. Pure flat colors.
+    4. BACKGROUND: Solid uniform color (or transparent).
+    5. QUALITY: High definition, sharp edges, professional print-ready file.
     
     ${layoutInstruction}
-    
     ${sizeInstruction}
-    
     ${artStyleInstruction}
-    
     ${colorContext}
-    
-    TECHNICAL SPECS:
     ${TECHNIQUE_RULES}
-    
-    VISUAL RULES:
-    - CLOSE-UP ARTWORK (Top-down view).
-    - NO human models, NO mannequins, NO 3D garments.
-    - Image must be a flat rectangular/square swatch.
     `;
 
     try {

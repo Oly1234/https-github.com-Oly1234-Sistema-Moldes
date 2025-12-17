@@ -1,75 +1,33 @@
 
 // api/modules/departments/qualityControl.js
-// DEPARTAMENTO: CONTROLE DE QUALIDADE & REFINAMENTO (The Polisher)
-// Responsabilidade: Refinar o desenho gerado, aplicando limpeza vetorial e proporção.
+// DEPARTAMENTO: CONTROLE DE QUALIDADE & REFINAMENTO
+// Responsabilidade: Upscaling e Finalização de Arquivo.
 
-export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) => {
-    const MODEL_NAME = 'gemini-2.5-flash-image'; 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
-
-    const POLISHER_PROMPT = `
-    ACT AS: Textile Pre-Press Technician.
-    TASK: Vectorize and Refine this pattern swatch (Image-to-Image).
-    
-    VISUAL IMPROVEMENT GUIDELINES:
-    1. CLEANUP: Refine contours to obtain clean, continuous lines (Clean Vector Lines).
-    2. DENOISE: Eliminate imperfections, grain, and unintended blur.
-    3. COLOR: Flatten colors to "Solid Flat Colors" (simulating screen print separation).
-    4. PROPORTION: Harmonize proportions between graphic elements while maintaining original composition.
-    
-    DESIGN CONTEXT: ${contextPrompt || "Technical vector pattern"}
-    
-    OBJECTIVE: Deliver a high-definition final file ready for cylinder engraving.
-    IMPORTANT: Keep image as FLAT 2D SWATCH. Do not add folds or 3D effects.
-    `;
-
-    const payload = {
-        contents: [{ 
-            parts: [
-                { text: POLISHER_PROMPT },
-                { inline_data: { mime_type: "image/png", data: imageBase64 } }
-            ] 
-        }]
-    };
-
-    try {
-        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const data = await response.json();
-        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
-        if (imagePart) return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
-        throw new Error("Refinamento falhou.");
-    } catch (e) {
-        console.error("QC Department Error:", e);
-        throw e;
-    }
-};
-
-// NOVO: MOTOR DE PRODUÇÃO DEDICADO
+// NOVO: MOTOR DE PRODUÇÃO DEDICADO (CORRIGIDO)
 export const generateHighResProductionFile = async (apiKey, imageBase64, targetSize, technique) => {
+    // Usamos um modelo de visão capaz de Image-to-Image com alta fidelidade
     const MODEL_NAME = 'gemini-2.5-flash-image'; 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    // Instruções específicas baseadas na técnica (Cilindro vs Digital)
     const TECH_SPEC = technique === 'CYLINDER' 
-        ? "STRICTLY SEPARATED COLORS. No gradients. No anti-aliasing. Clean solid edges for rotary screen engraving." 
-        : "HIGH FIDELITY DIGITAL PRINT. Micro-details, smooth gradients, photo-realistic texture.";
+        ? "Ensure colors are FLAT and SOLID (Vector style). Remove JPG artifacts." 
+        : "Enhance details and sharpness. Remove noise.";
 
+    // Prompt ajustado para RESTAURAÇÃO e não CRIAÇÃO
     const PRODUCTION_PROMPT = `
-    ACT AS: Industrial Print Production Engine.
-    INPUT: A generated pattern draft.
-    TASK: UPSCALING & FINALIZATION for Large Format Printing.
+    ACT AS: Image Restoration & Upscaling AI.
     
-    TARGET OUTPUT SIZE: ${targetSize || "Standard 140cm width"}.
+    INPUT: A draft textile pattern image.
+    TASK: UPSCALING and REFINEMENT (High Fidelity Restoration).
     
-    EXECUTION RULES:
-    1. SUPER RESOLUTION: Hallucinate missing details to make the image sharp at large scale.
-    2. DE-NOISE & SHARPEN: Remove any JPG artifacts or blur from the draft.
-    3. SEAMLESS CHECK: Ensure the edges look ready for repeating (even if generating a single tile).
-    4. COLOR CORRECTION: Boost saturation slightly for fabric absorption compensation.
+    STRICT RULES:
+    1. DO NOT CHANGE THE DESIGN. Keep the exact same motifs, composition, and colors.
+    2. INCREASE RESOLUTION: Make lines sharper and details crisper.
+    3. REMOVE NOISE: Clean up compression artifacts or blurriness.
+    4. OUTPUT FORMAT: Flat 2D digital file ready for print.
     
-    TECHNICAL REQUIREMENT: ${TECH_SPEC}
-    
-    OUTPUT: The highest resolution possible image file, visually perfect.
+    Target Use: Large format printing (${targetSize || "Standard Width"}).
+    Specifics: ${TECH_SPEC}
     `;
 
     const payload = {
@@ -83,12 +41,29 @@ export const generateHighResProductionFile = async (apiKey, imageBase64, targetS
 
     try {
         const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API Error ${response.status}: ${errText}`);
+        }
+
         const data = await response.json();
         const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
-        if (imagePart) return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
-        throw new Error("Motor de Produção falhou.");
+        
+        if (imagePart) {
+            return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
+        }
+        
+        // Se a IA se recusar a gerar imagem (safety ou outro motivo), retornamos erro para a UI tratar
+        throw new Error("O motor de produção não retornou uma imagem válida.");
+
     } catch (e) {
         console.error("Production Engine Error:", e);
         throw e;
     }
+};
+
+export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) => {
+    // Mantido para compatibilidade, mas pode usar lógica similar
+    return generateHighResProductionFile(apiKey, imageBase64, "Preview", "DIGITAL");
 };

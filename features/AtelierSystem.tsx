@@ -210,9 +210,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` 
             : userPrompt;
 
-        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Detalhes 4K..." : "Gerando Vetores Chapados...");
+        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Arquivo Digital..." : "Gerando Vetores Chapados...");
         setGeneratedPattern(null); setError(null); setShowDownloadMenu(false);
-        setTimeout(() => setStatusMessage("Aplicando Layout & Estilo..."), 1200);
+        setTimeout(() => setStatusMessage("Finalizando Arte 2D..."), 1200);
         
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
@@ -259,10 +259,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 l.href = data.image; 
                 l.click();
             } else {
-                throw new Error("Falha no motor de produção.");
+                throw new Error("Falha no motor de produção. Tente novamente.");
             }
-        } catch (e) {
-            alert("Erro ao gerar arquivo de produção. Tente novamente.");
+        } catch (e: any) {
+            alert(e.message || "Erro ao gerar arquivo de produção.");
         } finally {
             setIsUpscaling(false);
         }
@@ -375,13 +375,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     <h3 className="text-gray-300 font-bold text-lg mb-1">Área de Visualização</h3>
                                     <p className="text-gray-500 text-sm max-w-xs mx-auto">Sua estampa aparecerá aqui.</p>
                                 </div>
-                                {/* STATUS GUIDE INSIDE CANVAS */}
+                                {/* STATUS GUIDE MOVED TO TOP TO AVOID OVERLAP WITH REFERENCE */}
                                 {colors.length > 0 && (
-                                    <div className="bg-vingi-900/50 border border-vingi-500/30 p-4 rounded-xl max-w-sm animate-slide-up">
-                                        <div className="flex items-center gap-2 mb-2 text-vingi-400 font-bold text-xs uppercase tracking-widest">
-                                            <Check size={12} className="bg-vingi-500 text-black rounded-full p-0.5"/> Análise Concluída
-                                        </div>
-                                        <p className="text-xs text-gray-300">Pantones identificados. Configure o layout no painel lateral.</p>
+                                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-vingi-900/80 backdrop-blur border border-vingi-500/30 px-6 py-3 rounded-full animate-slide-down flex items-center gap-3 shadow-lg z-20">
+                                        <Check size={14} className="bg-vingi-500 text-black rounded-full p-0.5"/>
+                                        <span className="text-xs font-bold text-gray-200">Análise Concluída</span>
                                     </div>
                                 )}
                             </div>
@@ -389,7 +387,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         {error && ( <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-900/90 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-700 max-w-md backdrop-blur"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div> )}
                         
                         {/* Floating Reference (Mini) */}
-                        {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20"><img src={referenceImage} className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" /></div>}
+                        {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20 hover:scale-150 transition-transform origin-bottom-left"><img src={referenceImage} className="w-full h-full object-cover opacity-100" /></div>}
                     </div>
 
                     {/* CONTROL DECK (FLEX LAYOUT) */}
