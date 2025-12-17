@@ -335,13 +335,14 @@ export const ScannerSystem: React.FC = () => {
                             <div className="absolute bottom-3 left-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow"><CheckCircle2 size={10} className="inline mr-1"/> PRONTO PARA SCAN</div>
                         </div>
                         
-                        <div className="flex justify-center gap-4">
-                            <button onClick={() => secondaryInputRef.current?.click()} className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-colors flex items-center gap-2">
-                                {uploadedSecondaryImage ? <CheckCircle2 size={14} className="text-green-500"/> : <Plus size={14}/>} 
-                                {uploadedSecondaryImage ? 'Foto Secundária OK' : 'Add Foto Extra'}
+                        <div className="flex flex-col gap-4">
+                             <button onClick={startAnalysis} className="w-full py-4 bg-vingi-900 text-white rounded-2xl font-bold text-lg shadow-xl hover:bg-vingi-800 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 animate-bounce-subtle">
+                                <ScanLine size={24} /> INICIAR VARREDURA
                             </button>
-                            <button onClick={startAnalysis} className="flex-1 py-3 bg-vingi-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-vingi-800 transition-all flex items-center justify-center gap-2">
-                                <FileSearch size={16} /> INICIAR VARREDURA
+
+                            <button onClick={() => secondaryInputRef.current?.click()} className="w-full px-4 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 border border-transparent hover:border-gray-300">
+                                {uploadedSecondaryImage ? <CheckCircle2 size={14} className="text-green-500"/> : <Plus size={14}/>} 
+                                {uploadedSecondaryImage ? 'Foto Secundária Adicionada' : 'Adicionar Foto Extra (Costas/Detalhe)'}
                             </button>
                         </div>
                     </div>

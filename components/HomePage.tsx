@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, MessageCircle, Layers, Camera } from 'lucide-react';
+import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, Layers, Camera, ArrowUpRight, Fingerprint } from 'lucide-react';
 import { ViewState } from '../types';
 import { AIVoiceAgent } from './AIVoiceAgent';
 
@@ -20,155 +20,156 @@ const ModuleCard: React.FC<{
     icon: React.ReactNode;
     colorClass: string;
     onClick: () => void;
-    delay?: string;
     stats?: string;
-}> = ({ title, description, icon, colorClass, onClick, delay = "0ms", stats }) => (
+}> = ({ title, description, icon, colorClass, onClick, stats }) => (
     <div 
         onClick={onClick}
-        className={`bg-white rounded-2xl p-6 border border-gray-100 shadow-lg shadow-gray-200/50 hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group relative overflow-hidden animate-fade-in`}
-        style={{ animationDelay: delay }}
+        className="bg-white rounded-xl p-4 border border-gray-200/80 shadow-sm hover:shadow-md hover:border-vingi-300 transition-all cursor-pointer group relative overflow-hidden flex flex-col h-full active:scale-[0.98]"
     >
-        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorClass} opacity-10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110`} />
+        {/* Subtle Decoration */}
+        <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${colorClass} opacity-[0.07] rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-125 pointer-events-none`} />
         
-        <div className="relative z-10">
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorClass} text-white flex items-center justify-center mb-4 shadow-md group-hover:rotate-6 transition-transform`}>
+        <div className="flex items-start justify-between mb-3 relative z-10">
+            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${colorClass} text-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
                 {icon}
             </div>
-            
-            <h3 className="text-lg font-bold text-gray-800 mb-1 group-hover:text-vingi-600 transition-colors flex items-center gap-2">
-                {title} <ArrowRight size={14} className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-gray-400"/>
-            </h3>
-            <p className="text-sm text-gray-500 leading-relaxed mb-4 min-h-[40px]">
-                {description}
-            </p>
-
-            {stats && (
-                <div className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 rounded text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    <Zap size={10} className="fill-gray-400"/> {stats}
-                </div>
-            )}
+            <div className="flex items-center gap-1">
+                {stats && (
+                    <span className="text-[8px] font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-full uppercase tracking-wider border border-gray-100 hidden sm:inline-block">
+                        {stats}
+                    </span>
+                )}
+                <ArrowUpRight size={14} className="text-gray-300 group-hover:text-vingi-500 transition-colors" />
+            </div>
         </div>
+        
+        <h3 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2 group-hover:text-vingi-700 transition-colors">
+            {title}
+        </h3>
+        
+        <p className="text-xs text-gray-500 leading-relaxed font-medium line-clamp-2">
+            {description}
+        </p>
     </div>
 );
 
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
-    const handleContactClick = () => {
-        const phone = "5519983569940";
-        const text = encodeURIComponent("Olá Rafael, vi o sistema Vingi AI e gostaria de conhecer suas soluções de IA para minha empresa.");
-        window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
-    };
-
     return (
-        <div className="h-full bg-[#f8fafc] p-6 md:p-12 overflow-y-auto custom-scrollbar relative touch-pan-y">
-            <div className="max-w-6xl mx-auto space-y-10 pb-24">
+        <div className="h-full bg-slate-50/50 p-4 md:p-8 overflow-y-auto custom-scrollbar relative touch-pan-y">
+            <div className="max-w-5xl mx-auto space-y-5 pb-24">
                 
-                {/* HERO SECTION */}
-                <div className="text-center space-y-6 py-10 animate-fade-in flex flex-col items-center">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-vingi-900/5 rounded-full border border-vingi-900/10">
-                        <Sparkles size={12} className="text-vingi-500" />
-                        <span className="text-[10px] font-bold text-vingi-900 tracking-widest uppercase">Vingi AI Workflow 6.5</span>
-                    </div>
-                    
-                    <h1 className="flex flex-col items-center justify-center leading-none">
-                        <span className="text-3xl md:text-5xl font-extrabold text-gray-900 uppercase tracking-[0.2em] md:tracking-[0.3em] scale-y-90">
-                            Engenharia
-                        </span>
-                        <span className="text-xl md:text-3xl text-gray-400 font-serif italic my-2 font-light">
-                            de
-                        </span>
-                        <span className="text-6xl md:text-8xl font-serif font-medium text-transparent bg-clip-text bg-gradient-to-r from-vingi-800 via-vingi-600 to-purple-800 tracking-tighter drop-shadow-sm">
-                            Moda
-                        </span>
-                    </h1>
+                {/* COMPACT HERO SECTION */}
+                <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 md:gap-12">
+                    {/* Background Tech Mesh */}
+                    <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(#475569 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-vingi-50 to-transparent rounded-bl-full pointer-events-none opacity-60" />
 
-                    <p className="text-gray-500 max-w-xl mx-auto text-sm md:text-lg font-light tracking-wide mt-4">
-                        <span className="font-medium text-vingi-600">Assistida por Inteligência.</span> Do escaneamento do molde à simulação realista.
-                    </p>
-                    
-                    <AIVoiceAgent onNavigate={onNavigate} />
+                    {/* Text Content */}
+                    <div className="text-center md:text-left z-10 flex-1">
+                        <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                            <div className="bg-vingi-900/5 p-1 rounded-md"><Sparkles size={12} className="text-vingi-600"/></div>
+                            <span className="text-[10px] font-bold tracking-widest text-vingi-900 uppercase">Vingi OS 6.5</span>
+                        </div>
+                        <h1 className="text-2xl md:text-4xl font-black text-gray-900 leading-tight tracking-tight">
+                            Engenharia <span className="text-transparent bg-clip-text bg-gradient-to-r from-vingi-700 to-purple-700">Têxtil AI</span>
+                        </h1>
+                        <p className="text-xs md:text-sm text-gray-500 mt-2 font-medium max-w-lg mx-auto md:mx-0">
+                            Suite industrial completa: Reconhecimento de moldes, criação de estampas, engenharia de corte e simulação 3D realista.
+                        </p>
+                    </div>
+
+                    {/* Voice Agent Integrated */}
+                    <div className="shrink-0 relative z-10 bg-white/50 rounded-full p-2 border border-white/50 shadow-sm backdrop-blur-sm">
+                        <AIVoiceAgent onNavigate={onNavigate} />
+                    </div>
                 </div>
 
-                {/* MODULES GRID */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* MODULES BENTO GRID */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 animate-fade-in">
                     <ModuleCard 
                         title="Caçador de Moldes"
-                        description="Encontre onde comprar o molde exato de qualquer roupa via foto."
-                        icon={<ScanLine size={24} />}
-                        colorClass="from-blue-500 to-cyan-400"
+                        description="Engenharia reversa de roupas via foto. Identifica silhueta e modelagem."
+                        icon={<ScanLine size={20} />}
+                        colorClass="from-blue-600 to-cyan-500"
                         onClick={() => onNavigate('SCANNER')}
-                        delay="100ms"
-                        stats="Engenharia Reversa"
+                        stats="Scanner"
                     />
                     
                     <ModuleCard 
                         title="Radar Global"
-                        description="Localize fornecedores de tecidos e arquivos digitais globais."
-                        icon={<Globe size={24} />}
-                        colorClass="from-purple-500 to-pink-400"
+                        description="Busca vetorial de estampas e texturas em acervos mundiais."
+                        icon={<Globe size={20} />}
+                        colorClass="from-purple-600 to-pink-500"
                         onClick={() => onNavigate('CREATOR')}
-                        delay="200ms"
-                        stats="Busca Global"
+                        stats="Market"
                     />
 
                     <ModuleCard 
                         title="Estúdio de Criação"
-                        description="Gere estampas exclusivas. Modos Vetorial (Cilindro) e Digital 4K com controle total."
-                        icon={<Palette size={24} />}
-                        colorClass="from-amber-500 to-orange-400"
+                        description="Gerador de estampas Generative AI (Vetorial & Digital 4K)."
+                        icon={<Palette size={20} />}
+                        colorClass="from-amber-500 to-orange-500"
                         onClick={() => onNavigate('ATELIER')}
-                        delay="300ms"
-                        stats="Generative AI"
+                        stats="Gen AI"
                     />
 
                     <ModuleCard 
                         title="Lab de Imagem"
-                        description="Remova fundos, separe elementos e edite camadas complexas."
-                        icon={<Layers size={24} />}
-                        colorClass="from-indigo-500 to-violet-400"
+                        description="Separação inteligente de elementos, remoção de fundo e inpainting."
+                        icon={<Layers size={20} />}
+                        colorClass="from-indigo-600 to-violet-500"
                         onClick={() => onNavigate('LAYER_STUDIO')}
-                        delay="350ms"
-                        stats="Photoshop AI"
+                        stats="Editor"
                     />
 
                     <ModuleCard 
                         title="Aplicação Técnica"
-                        description="Aplicação de arte em moldes de corte. Ferramenta de engenharia 2D."
-                        icon={<Shirt size={24} />}
-                        colorClass="from-gray-600 to-gray-400"
+                        description="Encaixe de arte em moldes de corte (2D) com controle de fio."
+                        icon={<Shirt size={20} />}
+                        colorClass="from-slate-600 to-slate-500"
                         onClick={() => onNavigate('MOCKUP')}
-                        delay="400ms"
-                        stats="Aplicação em Corte"
+                        stats="Engenharia"
                     />
 
                     <ModuleCard 
                         title="Provador Mágico"
-                        description="Veja sua coleção ganhar vida. Aplique estampas em modelos reais instantaneamente."
-                        icon={<Camera size={24} />}
-                        colorClass="from-emerald-500 to-teal-400"
+                        description="Simulação realista em modelos humanos com física de tecido."
+                        icon={<Camera size={20} />}
+                        colorClass="from-emerald-600 to-teal-500"
                         onClick={() => onNavigate('RUNWAY')}
-                        delay="450ms"
-                        stats="Simulação 3D"
+                        stats="Simulador"
                     />
                 </div>
 
-                {/* FOOTER */}
-                <div className="pt-6 border-t border-gray-200">
-                    <div 
-                        className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-6 text-white relative overflow-hidden group cursor-pointer flex flex-col md:flex-row items-center justify-between gap-4 shadow-md" 
-                        onClick={() => onNavigate('HISTORY')}
-                    >
-                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-10 -mt-10 blur-3xl group-hover:bg-white/10 transition-colors pointer-events-none"></div>
-                        <div className="flex items-center gap-4 relative z-10">
-                            <div className="bg-white/10 p-3 rounded-lg text-vingi-300"><History size={24}/></div>
-                            <div className="text-left">
-                                <h3 className="text-lg font-bold">Meus Projetos</h3>
-                                <p className="text-gray-400 text-xs mt-0.5">Acesse seu histórico completo.</p>
-                            </div>
+                {/* FOOTER QUICK ACCESS */}
+                <div 
+                    onClick={() => onNavigate('HISTORY')}
+                    className="bg-gradient-to-r from-gray-900 to-slate-800 rounded-xl p-4 text-white flex items-center justify-between cursor-pointer hover:shadow-lg transition-all group relative overflow-hidden"
+                >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 pointer-events-none blur-2xl group-hover:bg-white/10 transition-colors"></div>
+                    
+                    <div className="flex items-center gap-4 z-10">
+                        <div className="bg-white/10 p-2.5 rounded-lg text-gray-300 group-hover:text-white transition-colors">
+                            <History size={20}/>
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-300 group-hover:text-white transition-colors relative z-10">
-                            <span>Acessar</span><ArrowRight size={14} />
+                        <div>
+                            <h3 className="text-sm font-bold">Meus Projetos</h3>
+                            <p className="text-[10px] text-gray-400 font-medium">Histórico de scans e gerações</p>
                         </div>
                     </div>
+                    
+                    <div className="flex items-center gap-2 pr-2 z-10">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 group-hover:text-gray-300 transition-colors hidden sm:block">Acessar Banco de Dados</span>
+                        <div className="bg-white/10 p-1.5 rounded-full group-hover:bg-white/20 transition-colors">
+                            <ArrowRight size={14} className="text-white" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* VERSION TAG */}
+                <div className="text-center pt-4 opacity-30 flex items-center justify-center gap-2">
+                    <Fingerprint size={12}/>
+                    <span className="text-[9px] font-mono">VINGI SYSTEM ID: 294-X // BUILD 6.5.0</span>
                 </div>
 
             </div>
