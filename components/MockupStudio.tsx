@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Wand2, Download, Eraser, CheckCircle2, Shirt, Zap, Move, Lock, Unlock, FlipHorizontal, FlipVertical, Sparkles, Maximize, Ruler, PenTool, RotateCcw, RefreshCcw, ZoomIn, ZoomOut, Hand, MousePointerClick, RefreshCw } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from './Shared';
 
 interface AppliedLayer {
@@ -222,7 +222,10 @@ export const MockupStudio: React.FC = () => {
                   id: Date.now().toString(), maskCanvas: res.maskCanvas, maskX: res.minX, maskY: res.minY, maskW: res.maskW, maskH: res.maskH, maskCenter: { x: res.centerX, y: res.centerY },
                   pattern: pat, offsetX: 0, offsetY: 0, scale: 0.5, rotation: 0, flipX: false, flipY: false, timestamp: Date.now()
               };
-              setLayers(prev => [...prev, newLayer]); setActiveLayerId(newLayer.id); setTool('MOVE');
+              setLayers(prev => [...prev, newLayer]); 
+              setActiveLayerId(newLayer.id); 
+              // CORREÇÃO: Não mudamos para 'MOVE' automaticamente. O usuário continua no modo preenchimento.
+              // setTool('MOVE'); 
           }
       } else if (tool === 'MOVE') {
           let clickedId = null;
@@ -352,6 +355,24 @@ export const MockupStudio: React.FC = () => {
                       </div>
                   )}
                   
+                  {/* VISUAL PATTERN INDICATOR - SMALL PREVIEW */}
+                  {patternImage && (
+                      <div 
+                        className="absolute top-4 left-4 z-30 bg-white p-1 rounded-lg shadow-md border border-gray-200 cursor-pointer hover:scale-105 transition-transform group"
+                        onClick={() => patternInputRef.current?.click()}
+                        title="Trocar Estampa"
+                      >
+                          <img src={patternImage} className="w-12 h-12 object-cover rounded-md bg-gray-100 border border-gray-100" />
+                          <div className="absolute -top-1 -right-1 bg-vingi-500 rounded-full p-0.5 border border-white text-white">
+                              <RefreshCw size={10} />
+                          </div>
+                          <div className="absolute top-full left-0 mt-1 bg-black/80 text-white text-[9px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                              Trocar Estampa
+                          </div>
+                          <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload = (ev) => setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
+                      </div>
+                  )}
+                  
                   {/* INSTRUCTION OVERLAY IF PATTERN IS READY BUT NO LAYER */}
                   {patternImage && layers.length === 0 && (
                       <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-vingi-600 text-white px-6 py-2 rounded-full text-xs font-bold shadow-xl animate-bounce z-50 flex items-center gap-2 pointer-events-none">
@@ -367,14 +388,14 @@ export const MockupStudio: React.FC = () => {
                   </div>
               </div>
 
-              {/* EDITOR TOOLBAR (FIXED BOTTOM - Shrink-0 prevents crushing) */}
-              <div className="shrink-0 bg-white border-t border-gray-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-40 flex flex-col pb-safe">
+              {/* EDITOR TOOLBAR (FIXED BOTTOM - SCROLLABLE CONTENT) */}
+              <div className="shrink-0 bg-white border-t border-gray-200 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] z-40 flex flex-col pb-safe max-h-[45vh] overflow-y-auto custom-scrollbar">
                   {/* TOOLS SELECTOR */}
-                  <div className="flex items-center justify-between p-2 border-b border-gray-100 overflow-x-auto gap-4 px-4">
+                  <div className="flex items-center justify-between p-2 border-b border-gray-100 overflow-x-auto gap-4 px-4 shrink-0">
                       <div className="flex bg-gray-100 rounded-lg p-1 gap-1 shrink-0">
-                          <button onClick={() => setTool('HAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='HAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Hand size={16}/> MOVER</button>
-                          <button onClick={() => setTool('WAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='WAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Wand2 size={16}/> MÁGICA</button>
-                          <button onClick={() => setTool('MOVE')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='MOVE' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Move size={16}/> EDITAR</button>
+                          <button onClick={() => setTool('HAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='HAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Hand size={16}/> MOVER TELA</button>
+                          <button onClick={() => setTool('WAND')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='WAND' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Wand2 size={16}/> PREENCHER</button>
+                          <button onClick={() => setTool('MOVE')} className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${tool==='MOVE' ? 'bg-white shadow text-vingi-600' : 'text-gray-500'}`}><Move size={16}/> AJUSTAR</button>
                       </div>
                       <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-vingi-900 text-white rounded-lg text-xs font-bold shadow-md hover:bg-vingi-800 shrink-0"><Download size={16}/> Exportar</button>
                   </div>
