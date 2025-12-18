@@ -14,8 +14,11 @@ export interface AtelierState {
 
 export interface GenerationParams {
     prompt: string;
+    customStyle?: string;
+    customLayout?: string;
     colors: PantoneColor[];
     layout: string;
+    variant?: string;
     style: string;
     technique: 'CYLINDER' | 'DIGITAL';
     colorCount: number;

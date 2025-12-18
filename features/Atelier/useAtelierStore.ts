@@ -1,39 +1,44 @@
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { PantoneColor } from '../../types';
 import { AtelierEngine } from './AtelierEngine';
-import { ATELIER_MESSAGES } from './AtelierConstants';
 
 export const useAtelierStore = () => {
+    // Core state
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
-    const [colors, setColors] = useState<PantoneColor[]>([]);
-    const [colorVariation, setColorVariation] = useState<'VIVID' | 'NATURAL' | 'DARK'>('NATURAL');
-    
+    const [technique, setTechnique] = useState<'CYLINDER' | 'DIGITAL' | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     
-    const [activeLayout, setActiveLayout] = useState('CORRIDA');
-    const [activeVariant, setActiveVariant] = useState('');
-    const [activeStyle, setActiveStyle] = useState('VETOR');
-    const [activeTexture, setActiveTexture] = useState('NONE');
+    // Tools settings
+    const [colors, setColors] = useState<PantoneColor[]>([]);
+    const [colorVariation, setColorVariation] = useState<'VIVID' | 'NATURAL' | 'DARK'>('NATURAL');
     
+    const [activeLayout, setActiveLayout] = useState('ORIGINAL');
+    const [activeVariant, setActiveVariant] = useState('');
+    const [layoutText, setLayoutText] = useState('');
+    
+    const [activeStyle, setActiveStyle] = useState('ORIGINAL');
+    const [styleText, setStyleText] = useState('');
+    
+    const [activeTexture, setActiveTexture] = useState('ORIGINAL');
+    const [textureText, setTextureText] = useState('');
+
     const [userPrompt, setUserPrompt] = useState('');
-    const [customInstruction, setCustomInstruction] = useState('');
 
     // Inpainting State
-    const [isInpaintingMode, setIsInpaintingMode] = useState(false);
-    const [maskData, setMaskData] = useState<string | null>(null);
+    const [isInpainting, setIsInpainting] = useState(false);
+    const [inpaintPrompt, setInpaintPrompt] = useState('');
 
     const handleUpload = useCallback(async (base64: string) => {
         setReferenceImage(base64);
+        setGeneratedPattern(null);
         setIsProcessing(true);
-        setStatusMessage(ATELIER_MESSAGES.ANALYZING);
+        setStatusMessage("Mapeando Cromatismo...");
         try {
-            // Corrected to match the updated AtelierEngine.analyzeColors signature
-            const extractedColors = await AtelierEngine.analyzeColors(base64, colorVariation);
-            setColors(extractedColors);
-            // Corrected to match the updated AtelierEngine.extractPrompt method
+            const extracted = await AtelierEngine.analyzeColors(base64, colorVariation);
+            setColors(extracted);
             const prompt = await AtelierEngine.extractPrompt(base64);
             setUserPrompt(prompt);
         } catch (e) {
@@ -47,7 +52,6 @@ export const useAtelierStore = () => {
         setColorVariation(filter);
         if (referenceImage) {
             setIsProcessing(true);
-            // Corrected to match the updated AtelierEngine.analyzeColors signature
             const res = await AtelierEngine.analyzeColors(referenceImage, filter);
             setColors(res);
             setIsProcessing(false);
@@ -55,18 +59,19 @@ export const useAtelierStore = () => {
     };
 
     const generate = useCallback(async () => {
+        if (!referenceImage) return;
         setIsProcessing(true);
-        setStatusMessage(ATELIER_MESSAGES.GENERATING);
+        setStatusMessage("Renderizando IA...");
         try {
-            // Corrected to match the updated AtelierEngine.generate parameter type
             const img = await AtelierEngine.generate({
                 prompt: userPrompt,
-                customPrompt: customInstruction,
                 colors,
                 layout: activeLayout,
                 variant: activeVariant,
                 style: activeStyle,
-                noTexture: true // Crucial para o usuário aplicar a dele depois
+                technique: technique || 'DIGITAL',
+                customLayout: layoutText,
+                customStyle: styleText
             });
             if (img) setGeneratedPattern(img);
         } catch (e) {
@@ -74,14 +79,13 @@ export const useAtelierStore = () => {
         } finally {
             setIsProcessing(false);
         }
-    }, [userPrompt, customInstruction, colors, activeLayout, activeVariant, activeStyle]);
+    }, [referenceImage, userPrompt, colors, activeLayout, activeVariant, activeStyle, technique, layoutText, styleText]);
 
-    const executeInpaint = async (maskBase64: string, inpaintPrompt: string) => {
+    const executeInpaint = async (maskBase64: string) => {
         if (!generatedPattern) return;
         setIsProcessing(true);
-        setStatusMessage(ATELIER_MESSAGES.INPAINTING);
+        setStatusMessage("Refinando área...");
         try {
-            // Corrected to match the updated AtelierEngine.inpaint method
             const result = await AtelierEngine.inpaint({
                 originalImage: generatedPattern,
                 mask: maskBase64,
@@ -92,24 +96,27 @@ export const useAtelierStore = () => {
             console.error(e);
         } finally {
             setIsProcessing(false);
-            setIsInpaintingMode(false);
+            setIsInpainting(false);
+            setInpaintPrompt('');
         }
     };
 
     const reset = () => {
         setReferenceImage(null);
         setGeneratedPattern(null);
+        setTechnique(null);
         setColors([]);
-        setIsInpaintingMode(false);
+        setIsInpainting(false);
     };
 
     return {
-        referenceImage, generatedPattern, colors, setColors,
-        isProcessing, statusMessage,
-        activeLayout, setActiveLayout, activeVariant, setActiveVariant,
-        activeStyle, setActiveStyle, activeTexture, setActiveTexture,
-        userPrompt, setUserPrompt, customInstruction, setCustomInstruction,
-        colorVariation, changePantoneFilter, handleUpload, generate, reset,
-        isInpaintingMode, setIsInpaintingMode, executeInpaint
+        referenceImage, generatedPattern, technique, setTechnique,
+        isProcessing, statusMessage, colors, colorVariation,
+        activeLayout, setActiveLayout, activeVariant, setActiveVariant, layoutText, setLayoutText,
+        activeStyle, setActiveStyle, styleText, setStyleText,
+        activeTexture, setActiveTexture, textureText, setTextureText,
+        userPrompt, setUserPrompt,
+        handleUpload, generate, changePantoneFilter, reset,
+        isInpainting, setIsInpainting, inpaintPrompt, setInpaintPrompt, executeInpaint
     };
 };

@@ -15,8 +15,8 @@ export const generatePattern = async (apiKey, params) => {
     TASK: Generate a professional textile design.
     STRUCTURE: ${params.layout} - ${params.variant}.
     STYLE: ${params.style}.
-    PALETTE: ${params.colors.map(c => c.name).join(', ')}.
-    INSTRUCTION: ${params.prompt}. ${params.customPrompt || ''}.
+    PALETTE: ${params.colors?.map(c => c.name).join(', ') || 'Vibrant Colors'}.
+    INSTRUCTION: ${params.prompt}. ${params.customStyle || ''}. ${params.customLayout || ''}.
     ${MATERIAL_EXCLUSION}
     `;
 
@@ -26,8 +26,45 @@ export const generatePattern = async (apiKey, params) => {
             contents: { parts: [{ text: PROMPT }] },
             config: { imageConfig: { aspectRatio: "1:1" } }
         });
-        // Extração de imagem conforme regras...
-        return extractImageFromResponse(response);
+        
+        // Find the image part in the response
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    const base64EncodeString = part.inlineData.data;
+                    return `data:image/png;base64,${base64EncodeString}`;
+                }
+            }
+        }
+        return null;
+    } catch (e) {
+        throw e;
+    }
+};
+
+export const generateTextureLayer = async (apiKey, textureType, texturePrompt) => {
+    const ai = new GoogleGenAI({ apiKey });
+    
+    const PROMPT = `Generate a high-quality ${textureType} textile texture swatch. 
+    Texture detail: ${texturePrompt}. 
+    Isolated flat view, seamless look, professional quality, high contrast details.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts: [{ text: PROMPT }] },
+            config: { imageConfig: { aspectRatio: "1:1" } }
+        });
+
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    const base64EncodeString = part.inlineData.data;
+                    return `data:image/png;base64,${base64EncodeString}`;
+                }
+            }
+        }
+        return null;
     } catch (e) {
         throw e;
     }
@@ -38,4 +75,5 @@ export const inpaintPattern = async (apiKey, params) => {
     // Lógica de envio de máscara + imagem original + prompt de refinamento
     // Usando o novo Gemini 2.5 Flash Image que suporta context regional
     // ...
+    return null;
 };

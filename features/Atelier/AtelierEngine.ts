@@ -24,10 +24,11 @@ export const AtelierEngine = {
         return data.success ? data.prompt : "";
     },
 
-    // Updated generate to include optional parameters used by the store
+    // Updated generate to include optional parameters used by the store and correctly type customLayout
     async generate(params: {
         prompt: string, 
-        customPrompt?: string,
+        customStyle?: string,
+        customLayout?: string,
         colors: PantoneColor[], 
         layout: string, 
         variant?: string,
@@ -42,7 +43,8 @@ export const AtelierEngine = {
             body: JSON.stringify({ 
                 action: 'GENERATE_PATTERN', 
                 prompt: params.prompt, 
-                customStyle: params.customPrompt,
+                customStyle: params.customStyle,
+                customLayout: params.customLayout,
                 colors: params.colors, 
                 layoutStyle: params.layout, 
                 subLayoutStyle: params.variant,
