@@ -1,69 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-// Added ArrowDownToLine to imports
 import { UploadCloud, Wand2, Download, Palette, Loader2, Grid, Layers, Target, Droplets, Zap, Copy, ExternalLink, Search, X, RefreshCw, Sparkles, SlidersHorizontal, Image as ImageIcon, Check, ChevronRight, Pipette, Brush, Box, Ruler, Scissors, LayoutTemplate, Frame, ArrowDownToLine } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
-
-const PantoneChip: React.FC<{ color: PantoneColor, onDelete?: () => void }> = ({ color, onDelete }) => {
-    const [showMenu, setShowMenu] = useState(false);
-    
-    const handleCopyHex = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(color.hex);
-        setShowMenu(false);
-    };
-
-    const handleSearchPantone = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const query = color.code ? color.code : `${color.name} Pantone`;
-        window.open(`https://www.pantone.com/color-finder/${query.replace(/\s+/g, '-')}`, '_blank');
-        setShowMenu(false);
-    };
-
-    const handleSearchGoogle = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const query = `${color.code || color.hex} textile color trend`;
-        window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
-        setShowMenu(false);
-    };
-
-    return (
-        <div 
-            onClick={() => setShowMenu(!showMenu)} 
-            className="flex flex-col bg-[#111] shadow-xl border border-white/5 rounded-xl overflow-hidden cursor-pointer h-16 w-full group relative hover:scale-105 transition-all duration-300"
-        >
-            <div className="h-9 w-full relative" style={{ backgroundColor: color.hex }}>
-                {onDelete && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-                        className="absolute top-1 right-1 bg-black/40 hover:bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                        <X size={8} />
-                    </button>
-                )}
-            </div>
-            <div className="flex-1 flex flex-col justify-center bg-[#1a1a1a] px-2 py-1">
-                <span className="text-[8px] font-black text-white/90 truncate uppercase tracking-tighter">{color.name}</span>
-                <span className="text-[7px] text-gray-500 font-mono truncate">{color.code || color.hex}</span>
-            </div>
-
-            {showMenu && (
-                <div className="absolute inset-0 bg-black/95 backdrop-blur-md flex flex-col items-stretch justify-center p-1 gap-1 animate-fade-in z-50">
-                    <button onClick={handleCopyHex} className="flex items-center justify-between px-2 py-1 hover:bg-white/10 rounded-md text-[8px] font-bold text-white uppercase tracking-tighter">
-                        <span>COPIAR HEX</span> <Copy size={8}/>
-                    </button>
-                    <button onClick={handleSearchGoogle} className="flex items-center justify-between px-2 py-1 hover:bg-blue-600/30 rounded-md text-[8px] font-bold text-blue-400 uppercase tracking-tighter">
-                        <span>GOOGLE</span> <Search size={8}/>
-                    </button>
-                    <button onClick={handleSearchPantone} className="flex items-center justify-between px-2 py-1 hover:bg-vingi-600/30 rounded-md text-[8px] font-bold text-vingi-400 uppercase tracking-tighter">
-                        <span>PANTONE</span> <ExternalLink size={8}/>
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-};
+import { PantoneChip, PantoneGrid } from '../components/PantoneHub';
 
 const LAYOUT_OPTIONS = [
     { id: 'CORRIDA', label: 'Corrida', icon: Layers },
@@ -184,9 +124,7 @@ export const AtelierSystem: React.FC<{ onNavigateToMockup: () => void, onNavigat
                         <div className="flex-1 overflow-y-auto p-5 space-y-8 custom-scrollbar pb-32">
                             <div className="space-y-4">
                                 <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Pipette size={14} className="text-vingi-400"/> Colorimetria Têxtil</h3>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {colors.map((c, i) => ( <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> ))}
-                                </div>
+                                <PantoneGrid colors={colors} onDelete={(idx) => setColors(prev => prev.filter((_, i) => i !== idx))} columns={4} />
                             </div>
                             <div className="space-y-4">
                                 <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Grid size={14}/> Layout</h3>
@@ -217,17 +155,6 @@ export const AtelierSystem: React.FC<{ onNavigateToMockup: () => void, onNavigat
                             <button onClick={handleGenerate} disabled={isProcessing} className="w-full py-4 bg-vingi-600 hover:bg-vingi-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-2xl transition-all active:scale-95 disabled:opacity-50">
                                 {isProcessing ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16} className="fill-white"/>} Gerar Estampa
                             </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {showDownloadMenu && (
-                <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-fade-in">
-                    <div className="bg-[#111] border border-white/10 rounded-[3rem] p-12 max-w-md w-full text-center space-y-8 shadow-2xl">
-                        <h3 className="text-xl font-black uppercase tracking-widest">Exportar Estampa</h3>
-                        <div className="grid gap-3">
-                            <button onClick={() => { const l=document.createElement('a'); l.download='vingi-pattern.png'; l.href=generatedPattern!; l.click(); setShowDownloadMenu(false); }} className="w-full py-4 bg-white/5 hover:bg-white/10 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-3 transition-all"><ImageIcon size={14}/> Preview (HD)</button>
-                            <button onClick={() => setShowDownloadMenu(false)} className="text-[10px] text-gray-500 font-bold uppercase hover:text-white">Cancelar</button>
                         </div>
                     </div>
                 </div>
