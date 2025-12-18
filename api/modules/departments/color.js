@@ -1,35 +1,42 @@
 
 // DEPARTAMENTO: COLORIMETRIA & TENDÊNCIAS
-// Responsabilidade: Extração de Pantone TCX focado exclusivamente em estampa
+// Responsabilidade: Extração de Pantone TCX com Variações Contextuais e Análise Sênior
 
 export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson, variation = 'NATURAL') => {
     
     let VARIATION_INSTRUCTION = "Extract a Comprehensive Palette (8-12 Colors).";
     
-    if (variation === 'VIVID') VARIATION_INSTRUCTION = "Ignore dull colors. Extract only the most VIBRANT and NEON accents.";
-    else if (variation === 'PASTEL') VARIATION_INSTRUCTION = "Shift the palette to SOFT, MILKY pastel tones.";
-    else if (variation === 'DARK') VARIATION_INSTRUCTION = "Extract the DEEP and RICH shadow tones.";
+    // Lógica de Variação Contextual
+    if (variation === 'VIVID') VARIATION_INSTRUCTION = "Ignore dull colors. Extract only the most VIBRANT, SATURATED, and NEON accents.";
+    else if (variation === 'PASTEL') VARIATION_INSTRUCTION = "Shift the palette to SOFT, MILKY, DESATURATED pastel tones based on the image.";
+    else if (variation === 'DARK') VARIATION_INSTRUCTION = "Extract the DEEP, RICH, SHADOW tones. Ignore highlights.";
+    else if (variation === 'SUMMER') VARIATION_INSTRUCTION = "Extract a SUMMER PALETTE (Warm, Sunny, Tropical) inspired by the image.";
+    else if (variation === 'WINTER') VARIATION_INSTRUCTION = "Extract a WINTER PALETTE (Cool, Icy, Jewel Tones) inspired by the image.";
 
     const COLORIST_PROMPT = `
-    ACT AS: Senior Textile Colorist.
+    ACT AS: Senior Textile Colorist & Trend Forecaster.
     
     TASK: ${VARIATION_INSTRUCTION}
     
-    CRITICAL RULES (ANTI-MODEL FILTER):
-    1. IGNORE HUMAN SKIN: Do NOT extract any skin tones, flesh colors, or lip/eye colors.
-    2. IGNORE HAIR/BODY: Completely ignore hair colors and body parts.
-    3. IGNORE ACCESSORIES: Ignore jewelry, metal, bags, or shoes.
-    4. PRINT FOCUS: Focus 100% on the textile PRINT or PATTERN of the garment.
-    5. ACCENT CAPTURE: Find the small detail colors within the motifs.
+    CRITICAL: Look for subtle details.
+    - If there is a yellow flower with orange details, EXTRACT BOTH the yellow and the orange.
+    - If there is a gradient, extract the start, middle, and end tones.
+    - Don't just pick the background. Pick the tiny details in the artwork.
     
-    OUTPUT JSON:
+    1. Identify 8 to 12 colors that define the full spectrum of this print.
+    2. Assign a commercial/poetic name.
+    3. Provide the closest Pantone TCX code.
+    4. Suggest the role of the color.
+
+    OUTPUT JSON ONLY:
     {
         "colors": [
             { 
                 "name": "Commercial Name", 
                 "hex": "#RRGGBB", 
                 "code": "19-XXXX TCX",
-                "role": "Base/Accent/Motif"
+                "role": "Base/Gradient-Mid/Accent/Shadow",
+                "usage": "Best for..."
             }
         ]
     }
@@ -51,6 +58,7 @@ export const analyzeColorTrend = async (apiKey, imageBase64, mimeType, cleanJson
         return JSON.parse(cleanJson(text));
     } catch (e) {
         console.error("Color Dept Error:", e);
+        // Fallback silencioso
         return { colors: [] };
     }
 };

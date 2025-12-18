@@ -34,39 +34,7 @@ export default async function handler(req, res) {
     const apiKey = rawKey ? rawKey.trim() : null;
     if (!apiKey) return res.status(500).json({ error: "Chave de API não configurada no servidor." });
 
-    if (action === 'FIND_WHITE_MODELS') {
-        let contentParts = [];
-        let basePrompt = prompt || "vestido";
-        
-        if (mainImageBase64) {
-            // Se houver imagem, pede para a IA identificar a peça primeiro
-            contentParts.push({ text: `Analyze this garment image. Identify exactly what type of garment it is (e.g., 'A-line midi dress', 'cargo pants', 'crop top'). Then generate 30 highly specific search queries for 'white solid color [garment type] for virtual try-on' on a clean background.` });
-            contentParts.push({ inline_data: { mime_type: "image/jpeg", data: mainImageBase64 } });
-        } else {
-            contentParts.push({ text: `Generate 30 specific search queries for "white solid color ${basePrompt}" for virtual try-on on a clean studio background.` });
-        }
-
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        const response = await fetch(endpoint, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ contents: [{ parts: contentParts }] }) 
-        });
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        
-        // Extrai linhas que parecem queries
-        const queries = text.split('\n')
-            .filter(line => line.length > 5)
-            .map(line => line.replace(/^\d+\.\s*/, '').replace(/[*"`]/g, '').trim())
-            .slice(0, 30);
-
-        return res.status(200).json({ 
-            success: true, 
-            queries: queries.length > 0 ? queries : [basePrompt + " white clothing model studio"],
-            detectedStructure: basePrompt 
-        });
-    }
+    // --- ROTEAMENTO ---
 
     if (action === 'VOICE_COMMAND') {
         const ROUTER_PROMPT = `Map user command to view: HOME, SCANNER, CREATOR, ATELIER, LAYER_STUDIO, MOCKUP, RUNWAY, HISTORY.`;
@@ -92,6 +60,16 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
+    if (action === 'FIND_WHITE_MODELS') {
+        let finalPrompt = prompt || "Vestido";
+        const MOCKUP_PROMPT = `Generate 30 search queries for "white solid color ${finalPrompt}" for virtual try-on.`;
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return res.status(200).json({ success: true, queries: [finalPrompt + " white model"], detectedStructure: finalPrompt });
+    }
+
     if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {
         const extractedPrompt = await refineDesignPrompt(apiKey, mainImageBase64);
         return res.status(200).json({ success: true, prompt: extractedPrompt });
