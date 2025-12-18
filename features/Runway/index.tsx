@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Check, Loader2, RefreshCw, X, Download, Zap, Hand, Play, Plus, ImageIcon, Upload } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Check, Loader2, RefreshCw, X, Download, Zap, Hand, Play, Plus, ImageIcon, Upload, ArrowRight, MousePointer2 } from 'lucide-react';
 import { ModuleHeader, SmartImageViewer } from '../../components/Shared';
 import { useDevice } from '../../hooks/useDevice';
 import { useRunwayStore } from './useRunwayStore';
@@ -42,12 +42,14 @@ export const VirtualRunway: React.FC = () => {
     const { isMobile } = useDevice();
     const store = useRunwayStore();
     const [studioMode, setStudioMode] = useState(false);
+    const [showPatternUpload, setShowPatternUpload] = useState(false);
     
     // UI Refs
     const canvasRef = useRef<HTMLCanvasElement>(null); 
     const containerRef = useRef<HTMLDivElement>(null);
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null); 
     const searchImageInputRef = useRef<HTMLInputElement>(null);
+    const patternInputRef = useRef<HTMLInputElement>(null);
     
     // Studio State
     const [baseImgObj, setBaseImgObj] = useState<HTMLImageElement | null>(null);
@@ -103,15 +105,24 @@ export const VirtualRunway: React.FC = () => {
             mCanvas.width = img.width; mCanvas.height = img.height;
             maskCanvasRef.current = mCanvas;
             store.setSelectedBase(u);
-            setStudioMode(true);
+            setShowPatternUpload(true); // Solicita a estampa após escolher a base
         };
     };
 
-    const handleImageSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePatternLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const r = new FileReader();
-            r.onload = (ev) => store.handleSearch(ev.target?.result as string);
+            r.onload = (ev) => {
+                const src = ev.target?.result as string;
+                store.setPatternImage(src);
+                const pi = new Image(); pi.src = src;
+                pi.onload = () => {
+                    setPatternImgObj(pi);
+                    setShowPatternUpload(false);
+                    setStudioMode(true);
+                };
+            };
             r.readAsDataURL(file);
         }
     };
@@ -132,58 +143,58 @@ export const VirtualRunway: React.FC = () => {
         }
     };
 
-    if (!studioMode) {
+    if (!studioMode && !showPatternUpload) {
         return (
-            <div className="flex-1 flex flex-col bg-[#f8fafc] overflow-y-auto custom-scrollbar">
-                <ModuleHeader icon={Camera} title="Virtual Runway Pro" subtitle="Seleção de Base Industrial" />
-                <div className="p-4 md:p-8 max-w-5xl mx-auto w-full space-y-8 md:space-y-12 pb-32">
-                    <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl border border-gray-100 flex flex-col items-center text-center gap-8 relative overflow-hidden">
-                        {/* Background Decoration */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-vingi-50 rounded-bl-full opacity-50 -z-0"></div>
+            <div className="flex-1 flex flex-col bg-[#f8fafc] scroll-container">
+                <ModuleHeader icon={Camera} title="Virtual Runway Pro" subtitle="Seleção de Base Contextual" />
+                <div className="p-4 md:p-10 max-w-6xl mx-auto w-full space-y-10 pb-40">
+                    {/* BUSCA NEURAL */}
+                    <div className="bg-white p-6 md:p-14 rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col items-center text-center gap-8 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-bl-full opacity-40 -z-0"></div>
+                        <div className="w-20 h-20 bg-vingi-900 rounded-3xl flex items-center justify-center text-white shadow-xl relative z-10 animate-pulse-slow"><Camera size={40}/></div>
                         
-                        <div className="w-20 h-20 bg-vingi-900 rounded-3xl flex items-center justify-center text-white shadow-xl relative z-10"><Camera size={40}/></div>
                         <div className="max-w-2xl relative z-10">
-                            <h2 className="text-3xl md:text-5xl font-black text-gray-900 uppercase tracking-tight mb-4">Provador Mágico</h2>
-                            <p className="text-gray-500 font-medium text-sm md:text-base">Encontre bases brancas perfeitas para aplicar sua arte. Digite o que deseja ou envie uma foto de referência.</p>
+                            <h2 className="text-3xl md:text-5xl font-black text-gray-900 uppercase tracking-tight mb-4">Encontre a Base Ideal</h2>
+                            <p className="text-gray-500 font-medium text-sm md:text-lg">Carregue uma referência ou descreva o tipo de peça. O sistema buscará modelos reais em branco, priorizando contraste para facilitar a aplicação.</p>
                         </div>
 
                         <div className="w-full max-w-4xl flex flex-col md:flex-row gap-3 relative z-10">
-                            <div className="flex-1 flex gap-3 bg-gray-50 p-2 rounded-2xl md:rounded-3xl border border-gray-200">
+                            <div className="flex-1 flex gap-3 bg-gray-50 p-2 rounded-2xl md:rounded-3xl border border-gray-200 focus-within:border-vingi-500 transition-all">
                                 <input 
                                     type="text" 
                                     value={store.searchQuery} 
                                     onChange={e => store.setSearchQuery(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && store.handleSearch()}
-                                    placeholder="Ex: Vestido longo, T-shirt feminina..." 
-                                    className="flex-1 bg-transparent px-4 py-3 md:px-6 md:py-4 font-bold text-base md:text-lg outline-none text-gray-800"
+                                    placeholder="Ex: Vestido de seda longo, T-shirt feminina..." 
+                                    className="flex-1 bg-transparent px-4 py-3 md:px-6 md:py-4 font-bold text-base md:text-xl outline-none text-gray-800"
                                 />
-                                <button onClick={() => searchImageInputRef.current?.click()} className="p-3 md:p-4 bg-white border border-gray-200 text-gray-500 rounded-xl md:rounded-2xl hover:bg-gray-100 transition-all shadow-sm" title="Pesquisar por Foto">
-                                    <ImageIcon size={20}/>
+                                <button onClick={() => searchImageInputRef.current?.click()} className="p-3 md:p-4 bg-white border border-gray-200 text-gray-500 rounded-xl md:rounded-2xl hover:bg-vingi-50 hover:text-vingi-600 transition-all shadow-sm" title="Pesquisar por Foto">
+                                    <ImageIcon size={24}/>
                                 </button>
-                                <input type="file" ref={searchImageInputRef} onChange={handleImageSearch} className="hidden" accept="image/*" />
+                                <input type="file" ref={searchImageInputRef} onChange={(e) => { const f=e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>store.handleSearch(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
                             </div>
-                            <button onClick={() => store.handleSearch()} disabled={store.isSearching} className="bg-vingi-900 text-white px-8 py-4 md:px-12 md:py-5 rounded-2xl md:rounded-3xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95">
-                                {store.isSearching ? <Loader2 className="animate-spin" size={20}/> : <Search size={20}/>} Buscar
+                            <button onClick={() => store.handleSearch()} disabled={store.isSearching} className="bg-vingi-900 text-white px-10 py-5 rounded-2xl md:rounded-3xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95">
+                                {store.isSearching ? <Loader2 className="animate-spin" size={24}/> : <Search size={24}/>} Buscar Bases
                             </button>
                         </div>
                     </div>
 
+                    {/* GRID DE RESULTADOS (PAGINADO) */}
                     {store.whiteBases.length > 0 && (
                         <div className="space-y-12 animate-fade-in">
                             <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-                                <h3 className="text-lg font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                                    <Check size={16}/> {store.whiteBases.length} Bases Encontradas
+                                <h3 className="text-xl font-black uppercase tracking-widest text-gray-400 flex items-center gap-3">
+                                    <Check className="text-green-500" size={20}/> {store.whiteBases.length} Bases Detectadas
                                 </h3>
-                                <span className="text-[10px] font-bold text-gray-400">PÁGINA 1 DE {Math.ceil(store.whiteBases.length / 10)}</span>
                             </div>
 
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-8">
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8">
                                 {store.whiteBases.slice(0, store.visibleCount).map((u, i) => (
                                     <div key={i} onClick={() => handleSelectBase(u)} className="group cursor-pointer space-y-4">
-                                        <div className="aspect-[3/4] rounded-[1.5rem] md:rounded-[2.5rem] overflow-hidden bg-white shadow-lg border-4 border-white transition-all group-hover:shadow-2xl group-hover:scale-[1.03] relative">
+                                        <div className="aspect-[3/4] rounded-[2rem] md:rounded-[2.5rem] overflow-hidden bg-white shadow-lg border-4 border-white transition-all group-hover:shadow-2xl group-hover:scale-[1.05] relative">
                                             <img src={u} className="w-full h-full object-cover" loading="lazy" />
                                             <div className="absolute inset-0 bg-vingi-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-full flex items-center justify-center text-vingi-900 shadow-2xl"><Play size={20} fill="currentColor" className="ml-1"/></div>
+                                                <div className="bg-white px-6 py-3 rounded-full font-black text-vingi-900 text-xs uppercase tracking-widest flex items-center gap-2">Selecionar <ArrowRight size={14}/></div>
                                             </div>
                                         </div>
                                     </div>
@@ -192,8 +203,8 @@ export const VirtualRunway: React.FC = () => {
 
                             {store.visibleCount < store.whiteBases.length && (
                                 <div className="flex justify-center pt-8">
-                                    <button onClick={store.loadMore} className="bg-white border-2 border-gray-200 text-gray-500 px-12 py-5 rounded-3xl font-black uppercase tracking-widest hover:border-vingi-900 hover:text-vingi-900 transition-all flex items-center gap-3 shadow-sm active:scale-95">
-                                        <Plus size={20}/> Carregar Mais (+10)
+                                    <button onClick={store.loadMore} className="bg-white border-2 border-gray-200 text-gray-500 px-14 py-6 rounded-full font-black uppercase tracking-widest hover:border-vingi-900 hover:text-vingi-900 transition-all flex items-center gap-4 shadow-sm active:scale-95">
+                                        <Plus size={24}/> Carregar Mais (+10)
                                     </button>
                                 </div>
                             )}
@@ -204,15 +215,43 @@ export const VirtualRunway: React.FC = () => {
         );
     }
 
+    if (showPatternUpload) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center bg-[#050505] p-6 text-center animate-fade-in">
+                <div className="max-w-md w-full space-y-10">
+                    <div className="relative inline-block">
+                        <img src={store.selectedBase!} className="w-48 h-64 object-cover rounded-3xl border-4 border-vingi-500/50 shadow-2xl mx-auto" />
+                        <div className="absolute -bottom-4 -right-4 bg-vingi-500 p-3 rounded-full text-white shadow-xl"><Check size={24}/></div>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black uppercase tracking-tight text-white">Base Selecionada!</h2>
+                        <p className="text-gray-500 mt-2 font-medium">Agora selecione a estampa que deseja aplicar.</p>
+                    </div>
+                    <button 
+                        onClick={() => patternInputRef.current?.click()}
+                        className="w-full py-6 bg-white text-black rounded-3xl font-black text-lg uppercase tracking-widest flex items-center justify-center gap-4 hover:bg-vingi-400 transition-all shadow-2xl active:scale-95"
+                    >
+                        <Upload size={24}/> Carregar Estampa
+                    </button>
+                    <input type="file" ref={patternInputRef} onChange={handlePatternLoad} className="hidden" accept="image/*" />
+                    <button onClick={() => setShowPatternUpload(false)} className="text-gray-600 font-bold uppercase text-xs tracking-widest hover:text-white transition-colors">Voltar para Bases</button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
             <div className="bg-[#111] h-14 border-b border-white/5 px-4 flex items-center justify-between z-50">
-                <div className="flex items-center gap-2">
-                    <div className="bg-white/10 p-1.5 rounded-lg"><Camera size={18} className="text-vingi-400"/></div>
-                    <span className="text-xs font-bold uppercase tracking-widest">Estúdio de Prova v4</span>
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-2">
+                        <img src={store.selectedBase!} className="w-8 h-8 rounded-full border border-white/20 object-cover" title="Base" />
+                        <img src={store.patternImage!} className="w-8 h-8 rounded-full border border-white/20 object-cover" title="Estampa" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Runway Studio v6.5</span>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => setStudioMode(false)} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1"><RefreshCw size={12}/> Trocar Base</button>
+                    <button onClick={() => { setStudioMode(false); setBaseImgObj(null); }} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1"><RefreshCw size={12}/> Reiniciar</button>
                     <button onClick={() => {}} className="text-[10px] bg-vingi-600 px-4 py-1.5 rounded-lg font-bold">Salvar 4K</button>
                 </div>
             </div>
@@ -222,28 +261,23 @@ export const VirtualRunway: React.FC = () => {
                     <canvas ref={canvasRef} className="block bg-white" />
                 </div>
 
+                {/* SLIDER HUD */}
                 <div className="absolute bottom-28 left-1/2 -translate-x-1/2 w-full max-w-[280px] pointer-events-none z-50">
-                    <div className="bg-black/80 backdrop-blur-md border border-white/5 p-4 rounded-3xl pointer-events-auto shadow-2xl space-y-4">
-                        <div className="space-y-1.5">
-                            <div className="flex justify-between items-center text-[9px] font-bold text-gray-500 uppercase"><span>Escala Estampa</span><span>{Math.round(patternScale*100)}%</span></div>
+                    <div className="bg-black/90 backdrop-blur-md border border-white/10 p-5 rounded-[2rem] pointer-events-auto shadow-2xl space-y-4">
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Escala Estampa</span><span>{Math.round(patternScale*100)}%</span></div>
                             <input type="range" min="0.1" max="2" step="0.05" value={patternScale} onChange={e => setPatternScale(parseFloat(e.target.value))} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-white"/>
                         </div>
-                        <button onClick={() => {
-                            const f = document.createElement('input'); f.type='file'; f.accept='image/*';
-                            f.onchange=(e:any)=>{
-                                const file=e.target.files[0]; const r=new FileReader();
-                                r.onload=(ev)=>{ const pi=new Image(); pi.src=ev.target?.result as string; pi.onload=()=>setPatternImgObj(pi); };
-                                r.readAsDataURL(file);
-                            }; f.click();
-                        }} className="w-full py-3 bg-vingi-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><UploadCloud size={14}/> Carregar Estampa</button>
+                        <button onClick={() => patternInputRef.current?.click()} className="w-full py-3 bg-white/5 text-white border border-white/10 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"><RefreshCw size={14}/> Trocar Estampa</button>
                     </div>
                 </div>
             </div>
 
             <div className="bg-[#111] border-t border-white/5 shrink-0 z-50 pb-[env(safe-area-inset-bottom)]">
-                <div className="flex items-center justify-center px-2 py-4 gap-6">
+                <div className="flex items-center justify-center px-4 py-5 gap-8">
                     <ToolBtn icon={Hand} label="Pan" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
                     <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
+                    <ToolBtn icon={ImageIcon} label="Bases" onClick={() => { setStudioMode(false); setBaseImgObj(null); }} />
                 </div>
             </div>
         </div>
@@ -251,8 +285,8 @@ export const VirtualRunway: React.FC = () => {
 };
 
 const ToolBtn = ({ icon: Icon, label, active, onClick }: any) => (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center min-w-[70px] h-14 rounded-xl gap-1 transition-all active:scale-90 ${active ? 'bg-vingi-900/60 text-white border border-vingi-500/30 shadow-lg' : 'text-gray-500'}`}>
-        <Icon size={20} strokeWidth={active ? 2.5 : 1.5} /> 
-        <span className="text-[9px] font-bold uppercase tracking-tight">{label}</span>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center min-w-[75px] h-14 rounded-2xl gap-1.5 transition-all active:scale-90 ${active ? 'bg-vingi-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)] border border-white/20' : 'text-gray-500 hover:text-gray-300'}`}>
+        <Icon size={22} strokeWidth={active ? 2.5 : 1.5} /> 
+        <span className="text-[10px] font-black uppercase tracking-tight">{label}</span>
     </button>
 );
