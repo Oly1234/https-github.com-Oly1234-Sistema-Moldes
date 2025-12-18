@@ -84,7 +84,7 @@ export const AtelierSystem: React.FC<{ onNavigateToMockup: () => void, onNavigat
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#050505] text-white overflow-hidden fixed inset-0">
+        <div className="flex flex-col h-full bg-[#050505] text-white overflow-hidden relative">
             {/* Header Global */}
             <div className="bg-[#111] h-14 border-b border-white/5 px-4 flex items-center justify-between shrink-0 z-[100]">
                 <div className="flex items-center gap-2">
@@ -95,7 +95,7 @@ export const AtelierSystem: React.FC<{ onNavigateToMockup: () => void, onNavigat
                     </div>
                 </div>
                 {generatedPattern && (
-                    <button onClick={() => setShowDownloadMenu(true)} className="bg-white text-black px-4 py-1.5 rounded-lg font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg"><Download size={12}/> Salvar</button>
+                    <button onClick={() => setShowDownloadMenu(true)} className="bg-white text-black px-4 py-1.5 rounded-lg font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg hover:bg-gray-200 transition-all"><Download size={12}/> Salvar</button>
                 )}
             </div>
 
@@ -105,21 +105,25 @@ export const AtelierSystem: React.FC<{ onNavigateToMockup: () => void, onNavigat
                     <ModuleLandingPage icon={Palette} title="Atelier de Estamparia" description="Extraia o DNA cromático de referências reais e gere estampas industriais exclusivas com controle de layout e estilo artístico." primaryActionLabel="Selecionar Referência" onPrimaryAction={() => fileInputRef.current?.click()} partners={["PANTONE TCX", "VINGI GENERATIVE", "CAD TEXTILE"]} />
                 </div>
             ) : (
-                isMobile ? <AtelierMobile {...commonProps} /> : <AtelierDesktop {...commonProps} />
+                <div className="flex-1 w-full h-full">
+                    {isMobile ? <AtelierMobile {...commonProps} /> : <AtelierDesktop {...commonProps} />}
+                </div>
             )}
 
             {/* Menu de Download Universal */}
             {showDownloadMenu && (
-                <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6 animate-fade-in">
-                    <div className="bg-[#111] border border-white/10 rounded-[3rem] p-10 max-w-md w-full text-center space-y-6 shadow-2xl">
-                        <div className="w-16 h-16 bg-vingi-900 rounded-2xl flex items-center justify-center mx-auto border border-vingi-500/30">
-                            <Download className="text-vingi-400" size={32}/>
+                <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-fade-in">
+                    <div className="bg-[#111] border border-white/10 rounded-[3rem] p-12 max-w-md w-full text-center space-y-8 shadow-2xl">
+                        <div className="w-20 h-20 bg-vingi-900 rounded-3xl flex items-center justify-center mx-auto border border-vingi-500/30 rotate-3">
+                            <Download className="text-vingi-400" size={40}/>
                         </div>
-                        <h3 className="text-lg font-black uppercase tracking-widest text-white">Exportar Estampa</h3>
-                        <p className="text-gray-500 text-[10px] font-bold uppercase">A imagem será salva em alta definição (Digital 4K) para produção industrial.</p>
-                        <div className="grid gap-2">
-                            <button onClick={() => { const l=document.createElement('a'); l.download='vingi-pattern-4k.png'; l.href=generatedPattern!; l.click(); setShowDownloadMenu(false); }} className="w-full py-4 bg-white text-black rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-3 transition-all hover:bg-gray-100"><ImageIcon size={14}/> Download PNG (4K)</button>
-                            <button onClick={() => setShowDownloadMenu(false)} className="text-[10px] text-gray-500 font-bold uppercase hover:text-white pt-4">Fechar</button>
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Exportar Arte</h3>
+                            <p className="text-gray-500 text-[11px] font-bold uppercase tracking-widest">A imagem será salva em Digital 4K para produção industrial.</p>
+                        </div>
+                        <div className="grid gap-3">
+                            <button onClick={() => { const l=document.createElement('a'); l.download='vingi-pattern-4k.png'; l.href=generatedPattern!; l.click(); setShowDownloadMenu(false); }} className="w-full py-5 bg-white text-black rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-4 transition-all hover:bg-gray-100 shadow-xl"><ImageIcon size={18}/> Download PNG (4K)</button>
+                            <button onClick={() => setShowDownloadMenu(false)} className="text-[10px] text-gray-600 font-bold uppercase hover:text-white transition-all pt-4">Fechar Galeria</button>
                         </div>
                     </div>
                 </div>
