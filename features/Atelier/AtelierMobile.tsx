@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Loader2, Palette, Zap, Frame, Grid, Sparkles, Download, Paintbrush2, X, Brush, Layers } from 'lucide-react';
+import { Loader2, Palette, Zap, Frame, Sparkles, Paintbrush2, X, Brush, Layers } from 'lucide-react';
 import { SmartImageViewer } from '../../components/Shared';
 import { LAYOUT_STRUCTURES, ART_STYLES, TEXTURE_OVERLAYS } from './AtelierConstants';
 
@@ -9,7 +9,6 @@ export const AtelierMobile: React.FC<any> = (props) => {
 
     return (
         <div className="flex-1 flex flex-col bg-[#050505] overflow-hidden">
-            {/* Visualizador Principal PIP */}
             <div className="flex-1 relative bg-black flex items-center justify-center p-4">
                 {props.isProcessing ? (
                     <div className="flex flex-col items-center">
@@ -23,21 +22,17 @@ export const AtelierMobile: React.FC<any> = (props) => {
                 ) : (
                     <div className="text-center opacity-20">
                         <Sparkles size={48} className="mx-auto mb-4" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Aguardando Parâmetros</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest">Aguardando Referência</p>
                     </div>
                 )}
-
-                {/* PIP Referência */}
                 <div className="absolute top-6 left-6 w-16 h-16 rounded-2xl border border-white/20 overflow-hidden shadow-2xl z-20">
                     <img src={props.referenceImage} className="w-full h-full object-cover" />
                 </div>
             </div>
 
-            {/* DOCK FERRAMENTAS (INSHOT STYLE) */}
             <div className="bg-[#0a0a0a] rounded-t-[3rem] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] z-50 flex flex-col shrink-0">
                 <div className="p-4 flex justify-center"><div className="w-12 h-1 bg-white/10 rounded-full" /></div>
                 
-                {/* Menu de Abas */}
                 <div className="overflow-x-auto no-scrollbar px-6 flex items-center gap-8 py-4">
                     <ToolItem active={activeTab==='LAYOUT'} icon={Frame} label="Layout" onClick={() => setActiveTab('LAYOUT')} />
                     <ToolItem active={activeTab==='COLORS'} icon={Palette} label="Cores" onClick={() => setActiveTab('COLORS')} />
@@ -46,32 +41,44 @@ export const AtelierMobile: React.FC<any> = (props) => {
                     <ToolItem icon={Paintbrush2} label="Refinar" onClick={() => props.setIsInpainting(true)} />
                 </div>
 
-                {/* Sub-menu dinâmico */}
                 {activeTab && (
-                    <div className="px-6 py-4 bg-white/5 animate-slide-up border-t border-white/5 space-y-4">
-                        <div className="flex justify-between items-center mb-2">
+                    <div className="px-6 py-6 bg-white/5 animate-slide-up border-t border-white/5 space-y-4">
+                        <div className="flex justify-between items-center">
                             <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">{activeTab}</span>
                             <button onClick={() => setActiveTab(null)}><X size={14} className="text-gray-500"/></button>
                         </div>
                         
                         {activeTab === 'LAYOUT' && (
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                                {LAYOUT_STRUCTURES.map(l => (
-                                    <button key={l.id} onClick={() => props.setActiveLayout(l.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border whitespace-nowrap ${props.activeLayout === l.id ? 'bg-white text-black' : 'bg-black text-gray-500 border-white/10'}`}>{l.label}</button>
-                                ))}
+                            <div className="flex flex-col gap-4">
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                                    {LAYOUT_STRUCTURES.map(l => (
+                                        <button key={l.id} onClick={() => props.setActiveLayout(l.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border whitespace-nowrap ${props.activeLayout === l.id ? 'bg-white text-black' : 'bg-black text-gray-500 border-white/10'}`}>{l.label}</button>
+                                    ))}
+                                </div>
+                                <input value={props.layoutText} onChange={e=>props.setLayoutText(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] text-white" placeholder="Nota de layout..." />
                             </div>
                         )}
                         {activeTab === 'COLORS' && (
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                                 {props.colors.map((c: any, i: number) => (
                                     <div key={i} className="w-10 h-10 rounded-lg border border-white/10 shrink-0" style={{ backgroundColor: c.hex }} />
                                 ))}
                             </div>
                         )}
                         {activeTab === 'STYLE' && (
+                            <div className="flex flex-col gap-4">
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                                    {ART_STYLES.map(s => (
+                                        <button key={s.id} onClick={() => props.setActiveStyle(s.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border whitespace-nowrap ${props.activeStyle === s.id ? 'bg-white text-black' : 'bg-black text-gray-500 border-white/10'}`}>{s.label}</button>
+                                    ))}
+                                </div>
+                                <input value={props.styleText} onChange={e=>props.setStyleText(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] text-white" placeholder="Nota de estilo..." />
+                            </div>
+                        )}
+                        {activeTab === 'TEXTURE' && (
                             <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                                {ART_STYLES.map(s => (
-                                    <button key={s.id} onClick={() => props.setActiveStyle(s.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border whitespace-nowrap ${props.activeStyle === s.id ? 'bg-white text-black' : 'bg-black text-gray-500 border-white/10'}`}>{s.label}</button>
+                                {TEXTURE_OVERLAYS.map(t => (
+                                    <button key={t.id} onClick={() => props.setActiveTexture(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border whitespace-nowrap ${props.activeTexture === t.id ? 'bg-white text-black' : 'bg-black text-gray-500 border-white/10'}`}>{t.label}</button>
                                 ))}
                             </div>
                         )}
@@ -79,7 +86,7 @@ export const AtelierMobile: React.FC<any> = (props) => {
                 )}
 
                 <div className="p-6 pb-10 bg-black/50 border-t border-white/5">
-                    <button onClick={props.onGenerate} disabled={props.isProcessing} className="w-full py-5 bg-white text-black rounded-3xl font-black text-[12px] uppercase tracking-[0.3em] flex items-center justify-center gap-4 shadow-xl active:scale-95 transition-all">
+                    <button onClick={props.onGenerate} disabled={props.isProcessing || !props.referenceImage} className="w-full py-5 bg-white text-black rounded-3xl font-black text-[12px] uppercase tracking-[0.3em] flex items-center justify-center gap-4 shadow-xl active:scale-95 transition-all">
                         {props.isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Zap size={20} fill="black" />} Gerar Estampa
                     </button>
                 </div>

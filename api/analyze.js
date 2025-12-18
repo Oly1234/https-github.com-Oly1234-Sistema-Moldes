@@ -62,12 +62,13 @@ export default async function handler(req, res) {
     
     if (action === 'FIND_WHITE_MODELS') {
         let finalPrompt = prompt || "Vestido";
-        const MOCKUP_PROMPT = `Generate 30 search queries for "white solid color ${finalPrompt}" for virtual try-on.`;
+        const MOCKUP_PROMPT = `Generate 50 highly specific search queries for "white solid color ${finalPrompt}" for high-quality virtual try-on models on white background. Return as simple list.`;
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        return res.status(200).json({ success: true, queries: [finalPrompt + " white model"], detectedStructure: finalPrompt });
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const queries = text.split('\n').filter(q => q.trim().length > 3).map(q => q.replace(/^\d+\.\s*/, '').trim());
+        return res.status(200).json({ success: true, queries: queries.length > 0 ? queries : [finalPrompt + " white model"], detectedStructure: finalPrompt });
     }
 
     if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {
@@ -81,7 +82,6 @@ export default async function handler(req, res) {
     }
 
     if (action === 'GENERATE_PATTERN') {
-        // Fix: generatePattern now expects an object as the second argument
         const image = await generatePattern(apiKey, {
             prompt,
             colors,

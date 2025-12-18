@@ -6,13 +6,20 @@ export const useRunwayStore = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [whiteBases, setWhiteBases] = useState<string[]>([]);
+    const [visibleCount, setVisibleCount] = useState(10);
     const [selectedBase, setSelectedBase] = useState<string | null>(null);
 
-    const handleSearch = useCallback(async () => {
-        if (!searchQuery.trim()) return;
+    const handleSearch = useCallback(async (imageForSearch?: string) => {
         setIsSearching(true);
+        setVisibleCount(10); // Reset pagination on new search
         try {
-            const models = await RunwayEngine.findBaseModels(searchQuery);
+            let models: string[] = [];
+            if (imageForSearch) {
+                // Se o usuário enviou uma imagem, primeiro extraímos o que é
+                models = await RunwayEngine.findBaseModelsByImage(imageForSearch);
+            } else if (searchQuery.trim()) {
+                models = await RunwayEngine.findBaseModels(searchQuery);
+            }
             setWhiteBases(models);
         } catch (e) {
             console.error(e);
@@ -21,21 +28,28 @@ export const useRunwayStore = () => {
         }
     }, [searchQuery]);
 
-    const reset = useCallback(() => {
+    const loadMore = () => {
+        setVisibleCount(prev => Math.min(prev + 10, whiteBases.length));
+    };
+
+    const reset = () => {
         setSearchQuery('');
         setWhiteBases([]);
         setSelectedBase(null);
         setIsSearching(false);
-    }, []);
+        setVisibleCount(10);
+    };
 
     return {
         searchQuery,
         setSearchQuery,
         isSearching,
         whiteBases,
+        visibleCount,
         selectedBase,
         setSelectedBase,
         handleSearch,
+        loadMore,
         reset
     };
 };
