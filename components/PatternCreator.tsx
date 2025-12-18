@@ -3,17 +3,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Image as ImageIcon, Loader2, Sparkles, Layers, Grid3X3, Target, Globe, Move, ZoomIn, Minimize2, Plus, TrendingUp, Brush, Leaf, Droplets, ShoppingBag, Share2, Ruler, Scissors, ArrowDownToLine, ArrowRightToLine, LayoutTemplate, History as HistoryIcon, Trash2, Settings2, Check, Printer, Search, RefreshCw, XCircle, ScanLine, AlertCircle, Info, RotateCcw } from 'lucide-react';
 import { PantoneColor, ExternalPatternMatch } from '../types';
 import { PatternVisualCard } from './PatternVisualCard';
-import { ModuleLandingPage, SmartImageViewer } from './Shared';
+import { ModuleLandingPage, SmartImageViewer, FloatingReference } from './Shared';
 import { PantoneGrid } from './PantoneHub';
 
 const LOADING_STEPS = [
-    "Inicializando Visão Computacional...",
-    "Isolando Motivos da Textura...",
-    "Extraindo Paleta Pantone (TCX)...",
-    "Detectando Padrão de Repetição...",
-    "Varrendo Bancos de Imagem Globais...",
-    "Classificando Por Similaridade...",
-    "Finalizando Curadoria..."
+    "Inicializando Motores Visuais Vingi...",
+    "Isolando Motivos e Elementos Gráficos...",
+    "Extraindo Paleta Pantone (TCX/TPG)...",
+    "Mapeando Repetição e Rapport Industrial...",
+    "Varrendo Bancos Globais (EUA, Europa, Ásia)...",
+    "Filtrando Melhores Resultados por Similaridade...",
+    "Gerando Biblioteca Técnica 4.0..."
 ];
 
 interface PatternCreatorProps {
@@ -38,13 +38,13 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
 };
 
 const SpecBadge: React.FC<{ icon: any, label: string, value: string }> = ({ icon: Icon, label, value }) => (
-    <div className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-3 shadow-sm min-w-[140px]">
-        <div className="p-2 bg-gray-50 rounded-lg text-vingi-500">
-            <Icon size={16} />
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
+        <div className="p-2.5 bg-slate-50 rounded-xl text-vingi-600">
+            <Icon size={20} />
         </div>
         <div>
-            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
-            <span className="block text-[11px] font-bold text-gray-800 capitalize line-clamp-1">{value || "N/A"}</span>
+            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{label}</span>
+            <span className="block text-xs font-bold text-slate-800 capitalize line-clamp-1">{value || "N/A"}</span>
         </div>
     </div>
 );
@@ -54,7 +54,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
     const [prompt, setPrompt] = useState<string>('');
     const [detectedColors, setDetectedColors] = useState<PantoneColor[]>([]);
     const [fabricMatches, setFabricMatches] = useState<ExternalPatternMatch[]>([]);
-    const [visibleMatchesCount, setVisibleMatchesCount] = useState(12); 
+    const [visibleMatchesCount, setVisibleMatchesCount] = useState(16); 
     const [technicalSpecs, setTechnicalSpecs] = useState<any>(null);
     const [genError, setGenError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -66,7 +66,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
         let interval: any;
         if (isAnalyzing) {
             setLoadingStep(0);
-            interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % LOADING_STEPS.length); }, 1200);
+            interval = setInterval(() => { setLoadingStep(prev => (prev + 1) % LOADING_STEPS.length); }, 1400);
         }
         return () => clearInterval(interval);
     }, [isAnalyzing]);
@@ -81,7 +81,7 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
                     setReferenceImage(res);
                     setHasAnalyzed(false);
                     setFabricMatches([]); setDetectedColors([]); setTechnicalSpecs(null); setPrompt(''); setGenError(null);
-                    setVisibleMatchesCount(12);
+                    setVisibleMatchesCount(16);
                 }
             };
             reader.readAsDataURL(file);
@@ -116,78 +116,119 @@ export const PatternCreator: React.FC<PatternCreatorProps> = ({ onNavigateToAtel
 
     return (
         <div className="flex flex-col h-full bg-[#f8fafc] overflow-y-auto overflow-x-hidden relative custom-scrollbar">
-            <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-30 shadow-sm shrink-0">
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-                    <div className="flex items-center gap-2 justify-center">
-                        <div className="bg-vingi-900 p-1.5 rounded text-white shadow-sm"><Globe size={14}/></div>
-                        <h2 className="text-xs font-black text-gray-900 uppercase tracking-[0.2em]">Radar Global de Estampas</h2>
-                    </div>
+            {hasAnalyzed && referenceImage && <FloatingReference image={referenceImage} label="Referência" />}
+
+            <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-[100] shadow-sm shrink-0">
+                <div className="flex items-center gap-3">
+                     <div className="bg-vingi-900 p-2 rounded-lg text-white shadow-lg"><Globe size={18}/></div>
+                     <h2 className="text-sm font-black text-gray-900 uppercase tracking-[0.2em]">Radar Global de Estampas</h2>
                 </div>
-                <div className="ml-auto">
-                    {referenceImage && !isAnalyzing && (
-                        <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-black text-vingi-600 bg-vingi-50 px-4 py-2 rounded-xl hover:bg-vingi-100 flex items-center gap-2 uppercase tracking-widest transition-all">
-                            <RefreshCw size={12}/> Nova Textura
+                <div className="flex gap-3">
+                    {referenceImage && (
+                        <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-black text-gray-500 bg-gray-50 px-5 py-2.5 rounded-xl hover:bg-gray-100 flex items-center gap-2 uppercase tracking-widest transition-all">
+                            <RefreshCw size={14}/> Nova Textura
                         </button>
                     )}
                 </div>
             </header>
 
-            <div className="flex-1 p-4 md:p-8 max-w-[1600px] mx-auto w-full">
+            <div className="flex-1 p-6 md:p-12 max-w-[1700px] mx-auto w-full pb-32">
                 <input type="file" ref={fileInputRef} onChange={handleReferenceUpload} accept="image/*" className="hidden" />
                 
                 {!referenceImage && (
-                    <ModuleLandingPage icon={Globe} title="Radar de Estampas" description="Encontre fornecedores globais para qualquer textura ou padrão têxtil. A IA isola o motivo e varre bancos mundiais em segundos." primaryActionLabel="Escanear Textura" onPrimaryAction={() => fileInputRef.current?.click()} partners={["PATTERN BANK", "SPOONFLOWER", "ADOBE STOCK"]} />
+                    <ModuleLandingPage icon={Globe} title="Radar de Estampas" description="Localize fornecedores globais e arquivos de alta definição para qualquer estampa. A IA isola o motivo visual e varre bibliotecas mundiais em segundos." primaryActionLabel="Escanear Textura" onPrimaryAction={() => fileInputRef.current?.click()} partners={["PATTERN BANK", "SPOONFLOWER", "ADOBE STOCK", "SHUTTERSTOCK"]} />
                 )}
 
                 {referenceImage && (
-                    <div className="w-full space-y-8 animate-fade-in">
+                    <div className="w-full animate-fade-in">
                         {isAnalyzing ? (
-                             <div className="flex flex-col items-center justify-center h-[60vh]">
-                                <div className="relative w-56 h-72 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white bg-slate-900">
-                                    <img src={referenceImage} className="w-full h-full object-cover opacity-60 blur-sm" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-vingi-900/40 to-transparent"></div>
-                                    <div className="absolute top-0 left-0 w-full h-1.5 bg-vingi-400 shadow-[0_0_20px_rgba(96,165,250,1)] animate-scan"></div>
+                             <div className="flex flex-col items-center justify-center h-[70vh]">
+                                <div className="relative w-64 h-80 rounded-[2.5rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.3)] border-8 border-white bg-slate-900 scale-110">
+                                    <img src={referenceImage} className="w-full h-full object-cover opacity-60 blur-md" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-vingi-900/60 to-transparent"></div>
+                                    <div className="absolute top-0 left-0 w-full h-2 bg-vingi-400 shadow-[0_0_30px_rgba(96,165,250,1)] animate-scan"></div>
                                 </div>
-                                <h3 className="mt-8 text-sm font-black text-gray-800 uppercase tracking-widest animate-pulse">{LOADING_STEPS[loadingStep]}</h3>
+                                <div className="mt-12 text-center space-y-3">
+                                    <h3 className="text-lg font-black text-gray-800 uppercase tracking-[0.2em] animate-pulse">{LOADING_STEPS[loadingStep]}</h3>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Acessando servidores internacionais via Vingi Engine 6.5</p>
+                                </div>
                              </div>
                         ) : !hasAnalyzed ? (
-                             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
-                                 <div className="w-64 h-64 rounded-3xl shadow-2xl border-8 border-white overflow-hidden rotate-2 hover:rotate-0 transition-transform duration-500"><SmartImageViewer src={referenceImage} /></div>
-                                 <button onClick={handleStartAnalysis} className="px-12 py-5 bg-vingi-900 text-white rounded-2xl font-black shadow-2xl hover:scale-105 transition-all flex items-center gap-4 text-sm uppercase tracking-widest animate-bounce-subtle"><ScanLine size={20}/> INICIAR PESQUISA MUNDIAL</button>
+                             <div className="flex flex-col items-center justify-center min-h-[70vh] gap-10">
+                                 <div className="relative group">
+                                     <div className="absolute inset-0 bg-vingi-500 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity"></div>
+                                     <div className="w-80 h-80 rounded-[3rem] shadow-2xl border-[12px] border-white overflow-hidden rotate-3 hover:rotate-0 transition-all duration-700 relative z-10">
+                                         <SmartImageViewer src={referenceImage} />
+                                     </div>
+                                 </div>
+                                 <div className="flex flex-col items-center gap-4">
+                                     <button onClick={handleStartAnalysis} className="px-16 py-6 bg-vingi-900 text-white rounded-3xl font-black shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:scale-105 hover:bg-black transition-all flex items-center gap-5 text-sm uppercase tracking-[0.2em] animate-bounce-subtle">
+                                        <ScanLine size={24}/> INICIAR VARREDURA MUNDIAL
+                                     </button>
+                                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Identificação completa de DNA, Pantone e Mercado</p>
+                                 </div>
                              </div>
                         ) : (
-                            <div className="flex flex-col lg:flex-row gap-10 animate-fade-in">
-                                <div className="w-full lg:w-[340px] shrink-0 space-y-8">
-                                    <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Referência Ativa</h4>
-                                        <div className="aspect-square rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 shadow-inner"><SmartImageViewer src={referenceImage} /></div>
-                                        {technicalSpecs && (
-                                            <div className="mt-6 space-y-3">
-                                                <SpecBadge icon={Brush} label="Técnica" value={technicalSpecs.technique} />
-                                                <SpecBadge icon={Leaf} label="Motivo Principal" value={technicalSpecs.motifs?.[0]} />
+                            <div className="flex flex-col xl:flex-row gap-12 animate-fade-in">
+                                {/* Sidebar de Análise Técnica */}
+                                <div className="w-full xl:w-[400px] shrink-0 space-y-8">
+                                    <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-100 space-y-8">
+                                        <div>
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Target size={14}/> DNA Estrutural</h4>
+                                            <div className="grid gap-4">
+                                                {technicalSpecs && (
+                                                    <>
+                                                        <SpecBadge icon={Brush} label="Técnica Dominante" value={technicalSpecs.technique} />
+                                                        <SpecBadge icon={Leaf} label="Motivo Principal" value={technicalSpecs.motifs?.[0]} />
+                                                        <SpecBadge icon={Grid3X3} label="Padrão de Rapport" value={technicalSpecs.layout} />
+                                                    </>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Paleta Pantone (TCX)</h4>
-                                        <PantoneGrid colors={detectedColors} columns={4} />
+                                        </div>
+
+                                        <div className="pt-8 border-t border-gray-100">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Palette size={14}/> Paleta Técnica (TCX)</h4>
+                                            <PantoneGrid colors={detectedColors} columns={4} />
+                                        </div>
+
+                                        <div className="pt-8 border-t border-gray-100 space-y-4">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={14}/> Ações Inteligentes</h4>
+                                            <button 
+                                                onClick={onNavigateToAtelier}
+                                                className="w-full py-5 bg-vingi-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-vingi-500 transition-all flex items-center justify-center gap-3 shadow-lg shadow-vingi-600/20"
+                                            >
+                                                <Palette size={16}/> Abrir no Estúdio IA
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
+                                {/* Resultados de Mercado */}
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h3 className="text-xl font-black text-gray-900 flex items-center gap-3 uppercase tracking-tighter">
-                                            <Globe className="text-vingi-600" size={24}/> 
-                                            Marketplace Global ({uniqueMatches.length})
-                                        </h3>
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                                        <div>
+                                            <h3 className="text-2xl font-black text-gray-900 flex items-center gap-4 uppercase tracking-tighter">
+                                                <Globe className="text-vingi-600" size={32}/> 
+                                                Marketplace Global
+                                            </h3>
+                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Exibindo as melhores correspondências em bancos mundiais</p>
+                                        </div>
+                                        <div className="bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase">Filtro:</span>
+                                            <span className="text-[10px] font-black text-vingi-600 uppercase">Similaridade Visual</span>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
-                                        {visibleData.map((match, i) => ( <PatternVisualCard key={i} match={match} /> ))}
+
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                                        {visibleData.map((match, i) => ( 
+                                            <PatternVisualCard key={i} match={match} /> 
+                                        ))}
                                     </div>
+
                                     {visibleMatchesCount < uniqueMatches.length && (
-                                        <div className="mt-12 flex justify-center">
-                                            <button onClick={() => setVisibleMatchesCount(p => p + 12)} className="px-10 py-4 bg-white border-2 border-gray-200 rounded-2xl font-black text-[11px] text-gray-500 uppercase tracking-widest hover:border-vingi-400 hover:text-vingi-600 transition-all shadow-sm">
-                                                + Carregar Mais Resultados
+                                        <div className="mt-16 flex justify-center">
+                                            <button onClick={() => setVisibleMatchesCount(p => p + 16)} className="px-12 py-5 bg-white border-2 border-gray-200 rounded-3xl font-black text-[11px] text-gray-500 uppercase tracking-widest hover:border-vingi-400 hover:text-vingi-600 transition-all shadow-sm flex items-center gap-3 group">
+                                                <Plus size={18} className="group-hover:rotate-90 transition-transform"/> Carregar Mais Resultados (+16)
                                             </button>
                                         </div>
                                     )}
