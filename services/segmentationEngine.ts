@@ -1,7 +1,8 @@
 
 /**
- * VINGI SAM-X MODULAR ENGINE v5.0
- * Motor de segmentação técnica especializado em padrões têxteis e motifs.
+ * VINGI SAM-X MODULAR ENGINE v5.2
+ * Motor de segmentação técnica especializado em motivos têxteis.
+ * Este arquivo é consumido exclusivamente pelo LayerStudio.
  */
 
 export interface SegmentationResult {
@@ -14,7 +15,7 @@ export interface SegmentationResult {
 export const VingiSegmenter = {
     /**
      * Segmentação de Precisão (Gera a Máscara VERDE)
-     * Utiliza difusão de inundação com tolerância adaptativa.
+     * Utiliza flood-fill com tolerância RGB para isolar o elemento clicado.
      */
     segmentObject: (
         ctx: CanvasRenderingContext2D, 
@@ -77,8 +78,8 @@ export const VingiSegmenter = {
     },
 
     /**
-     * Motor Analista de Sugestão (Gera a Máscara VERMELHA)
-     * Busca áreas na imagem que possuem assinatura cromática idêntica à selecionada.
+     * Motor de Sugestão Inteligente (Gera a Máscara VERMELHA)
+     * Analisa a assinatura cromática do objeto ativo e busca padrões similares na imagem.
      */
     findSimilarAreas: (
         ctx: CanvasRenderingContext2D,
@@ -102,8 +103,8 @@ export const VingiSegmenter = {
         if (count === 0) return null;
         const rAvg = rSum / count, gAvg = gSum / count, bAvg = bSum / count;
 
-        // Amostragem acelerada para manter fluidez técnica
-        for (let i = 0; i < data.length; i += 44) { 
+        // Varredura otimizada para performance fluida
+        for (let i = 0; i < data.length; i += 48) { 
             const idx = i / 4;
             if (activeMask[idx] === 255) continue;
 
@@ -113,7 +114,7 @@ export const VingiSegmenter = {
                 Math.pow(data[i+2] - bAvg, 2)
             );
 
-            if (colorDiff <= tolerance * 1.15) {
+            if (colorDiff <= tolerance * 1.2) {
                 suggestionMask[idx] = 255;
             }
         }

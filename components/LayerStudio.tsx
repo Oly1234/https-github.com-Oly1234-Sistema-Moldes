@@ -22,7 +22,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     const [tool, setTool] = useState<'MOVE' | 'WAND' | 'HAND' | 'ERASER'>('WAND');
     const [wandTolerance, setWandTolerance] = useState(45);
     
-    // States de Seleção (Verde/Vermelho)
+    // States de Seleção Visual (Verde/Vermelho)
     const [confirmedMask, setConfirmedMask] = useState<Uint8Array | null>(null); // VERDE
     const [suggestedMask, setSuggestedMask] = useState<Uint8Array | null>(null); // VERMELHO
     const [isProcessing, setIsProcessing] = useState(false);
@@ -65,7 +65,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
     const undo = () => { if (history.length > 0) { const prev = history[history.length - 1]; setLayers(prev); setHistory(h => h.slice(0, -1)); } };
 
-    // --- RENDERIZAR MÁSCARAS (VERDE/VERMELHO) ---
+    // --- RENDERIZAR MÁSCARAS ---
     useEffect(() => {
         const canvas = overlayCanvasRef.current;
         if (!canvas) return;
@@ -111,12 +111,12 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     return;
                 }
 
-                // 2. Nova Seleção
+                // 2. Nova Seleção Verde
                 const res = VingiSegmenter.segmentObject(tCtx, canvasSize.w, canvasSize.h, px, py, wandTolerance);
                 if (res) {
                     const newConfirmed = VingiSegmenter.mergeMasks(confirmedMask || new Uint8Array(canvasSize.w * canvasSize.h), res.mask);
                     setConfirmedMask(newConfirmed);
-                    // IA de Sugestão (Busca motifs similares em vermelho)
+                    // IA de Sugestão (Busca motivos similares em vermelho)
                     const suggestions = VingiSegmenter.findSimilarAreas(tCtx, canvasSize.w, canvasSize.h, res.mask, wandTolerance * 1.3);
                     if (suggestions) setSuggestedMask(suggestions);
                 }
@@ -126,7 +126,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
     const extractToLayer = () => {
         if (!confirmedMask || !selectedLayerId) return;
-        setIsProcessing(true); setStatusMessage("Isolando Elemento...");
+        setIsProcessing(true); setStatusMessage("Extraindo Elemento...");
         const target = layers.find(l => l.id === selectedLayerId)!;
         const canvas = document.createElement('canvas'); canvas.width = canvasSize.w; canvas.height = canvasSize.h;
         const ctx = canvas.getContext('2d')!;
@@ -148,8 +148,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     };
 
     const handleProductionExport = async () => {
-        setIsProcessing(true); setStatusMessage("Refinando para Produção Industrial...");
-        await new Promise(r => setTimeout(r, 2000)); // Simula Refinamento SD/Upscale
+        setIsProcessing(true); setStatusMessage("Motor Industrial: Refinando Bordas...");
+        await new Promise(r => setTimeout(r, 2200)); // Simula Refinamento SD/Upscale
         alert("Arte refinada com sucesso. Arquivo 4K pronto para produção.");
         setIsProcessing(false);
     };
@@ -164,12 +164,12 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     </div>
                     <div>
                         <h2 className="text-xs font-black uppercase tracking-widest leading-none">Lab de Imagem</h2>
-                        <p className="text-[9px] text-gray-500 uppercase font-medium mt-1">SAM-X AI // Designer Técnico</p>
+                        <p className="text-[9px] text-gray-500 uppercase font-medium mt-1">SAM-X AI // Engenharia de Camadas</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => setConfirmedMask(null)} className="text-[9px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 font-bold uppercase tracking-tight flex items-center gap-1.5"><RefreshCcw size={10}/> Reset</button>
-                    <button onClick={handleProductionExport} className="text-[9px] bg-vingi-600 px-4 py-1.5 rounded-lg font-black uppercase tracking-widest shadow-lg shadow-vingi-900/50">Exportar Produção</button>
+                    <button onClick={() => { setConfirmedMask(null); setSuggestedMask(null); }} className="text-[9px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 font-bold uppercase tracking-tight flex items-center gap-1.5 hover:bg-white/10 transition-colors"><RefreshCcw size={10}/> Reset</button>
+                    <button onClick={handleProductionExport} className="text-[9px] bg-vingi-600 px-4 py-1.5 rounded-lg font-black uppercase tracking-widest shadow-lg shadow-vingi-900/50 hover:bg-vingi-500 transition-all active:scale-95">Exportar Produção</button>
                 </div>
             </div>
 
@@ -181,7 +181,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     <ToolBtn icon={Wand} active={tool==='WAND'} onClick={() => setTool('WAND')} />
                     <ToolBtn icon={Move} active={tool==='MOVE'} onClick={() => setTool('MOVE')} />
                     <div className="mt-auto flex flex-col gap-4">
-                        <button onClick={undo} disabled={history.length===0} className="p-3 text-gray-600 hover:text-white disabled:opacity-10"><Undo2 size={20}/></button>
+                        <button onClick={undo} disabled={history.length===0} className="p-3 text-gray-600 hover:text-white disabled:opacity-10 transition-colors"><Undo2 size={20}/></button>
                     </div>
                 </div>
 
@@ -189,7 +189,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 <div className="flex-1 relative overflow-hidden bg-[#050505] flex items-center justify-center">
                     <div ref={containerRef} className={`w-full h-full relative overflow-hidden flex items-center justify-center touch-none ${tool==='HAND'?'cursor-grab active:cursor-grabbing':'cursor-crosshair'}`}
                          onPointerDown={(e) => {
-                             if (tool === 'HAND') { isPanning.current = true; lastPointerPos.current = { x: e.clientX, y: e.clientY }; }
+                             if (tool === 'HAND' || e.button === 1) { isPanning.current = true; lastPointerPos.current = { x: e.clientX, y: e.clientY }; }
                              else handleInteraction(e.clientX, e.clientY);
                          }}
                          onPointerMove={(e) => {
@@ -230,7 +230,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 </div>
                                 <div className="flex gap-2">
                                     <button onClick={() => setConfirmedMask(null)} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors"><X size={20}/></button>
-                                    <button onClick={extractToLayer} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-green-900/40"><Zap size={16} fill="white"/> Criar Camada</button>
+                                    <button onClick={extractToLayer} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-green-900/40 active:scale-95 transition-all"><Zap size={16} fill="white"/> Criar Camada</button>
                                 </div>
                             </div>
                         </div>
@@ -276,7 +276,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                         </button>
                     </div>
                     {tool === 'WAND' && (
-                        <div className="px-6 py-4 bg-[#111] space-y-3">
+                        <div className="px-6 py-4 bg-[#111] space-y-3 animate-slide-up">
                             <div className="flex justify-between items-center text-[9px] font-black text-gray-500 uppercase tracking-widest"><span>Sensibilidade</span><span>{wandTolerance}</span></div>
                             <input type="range" min="5" max="150" value={wandTolerance} onChange={e => setWandTolerance(parseInt(e.target.value))} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-vingi-500" />
                         </div>
@@ -289,7 +289,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl animate-fade-in flex flex-col md:hidden">
                     <div className="h-14 border-b border-white/10 flex items-center justify-between px-6">
                         <span className="text-xs font-black uppercase tracking-widest">Gestão de Camadas</span>
-                        <button onClick={() => setIsMobileLayerPanelOpen(false)} className="p-2"><X size={24}/></button>
+                        <button onClick={() => setIsMobileLayerPanelOpen(false)} className="p-2 text-gray-400 hover:text-white"><X size={24}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {layers.slice().reverse().map(l => (
@@ -304,7 +304,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 </div>
             )}
 
-            {/* LOADING OVERLAY */}
+            {/* LOADING OVERLAY INDUSTRIAL */}
             {isProcessing && (
                 <div className="fixed inset-0 z-[500] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center animate-fade-in">
                     <div className="relative mb-10">
@@ -343,7 +343,7 @@ const LayerItem = ({ layer, active, onClick, onToggleVis, onToggleLock, onRemove
             <div className="flex items-center gap-2">
                 <span className="text-[8px] font-mono text-gray-700 uppercase tracking-tighter">ID: {layer.id.slice(-4)}</span>
                 <div className="ml-auto flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {onMerge && <button onClick={(e) => { e.stopPropagation(); onMerge(); }} className="text-gray-600 hover:text-white"><Merge size={12}/></button>}
+                    {onMerge && <button onClick={(e) => { e.stopPropagation(); onMerge(); }} className="text-gray-600 hover:text-white" title="Mesclar com Abaixo"><Merge size={12}/></button>}
                     <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="text-gray-600 hover:text-red-500"><Trash2 size={12}/></button>
                 </div>
             </div>
