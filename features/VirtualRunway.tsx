@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Check, Loader2, Image as ImageIcon, RefreshCw, X, Download, Zap, Hand, Play, Plus, ImageIcon as IconImage, ArrowRight, ArrowLeft } from 'lucide-react';
-import { ModuleHeader, SmartImageViewer } from '../components/Shared';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus, MinusCircle, PlusCircle, Target, Move3d, Trash2, RefreshCcw } from 'lucide-react';
+import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 
+// --- HELPERS MATEMÁTICOS & VISÃO ---
 const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tolerance: number) => {
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
@@ -15,7 +16,7 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
     if (startPos < 0 || startPos >= data.length) return null;
     const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
     const visited = new Uint8Array(width * height);
-    const stack: [number, number][] = [[Math.floor(startX), Math.floor(startY)]];
+    const stack = [[Math.floor(startX), Math.floor(startY)]];
     let pixelCount = 0;
     while (stack.length) {
         const [x, y] = stack.pop()!;
@@ -37,104 +38,33 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
 };
 
 export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ onNavigateToCreator }) => {
-    // Flow Management
-    const [step, setStep] = useState<'BASE_SEARCH' | 'PATTERN_UPLOAD' | 'STUDIO'>('BASE_SEARCH');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isSearching, setIsSearching] = useState(false);
-    const [whiteBases, setWhiteBases] = useState<string[]>([]);
-    const [visibleCount, setVisibleCount] = useState(10);
-    
-    // Selection State
-    const [selectedBase, setSelectedBase] = useState<string | null>(null);
+    const [step, setStep] = useState<'SEARCH_BASE' | 'STUDIO'>('SEARCH_BASE');
+    const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
+    const [whiteBases, setWhiteBases] = useState<string[]>([]);
     
-    // Studio Objects
+    // Tools & Studio
     const canvasRef = useRef<HTMLCanvasElement>(null); 
     const containerRef = useRef<HTMLDivElement>(null);
     const maskCanvasRef = useRef<HTMLCanvasElement | null>(null); 
     const [baseImgObj, setBaseImgObj] = useState<HTMLImageElement | null>(null);
     const [patternImgObj, setPatternImgObj] = useState<HTMLImageElement | null>(null);
+    const [history, setHistory] = useState<ImageData[]>([]);
+    const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'OFFSET'>('HAND');
     
-    // Tools & Parameters
-    const [activeTool, setActiveTool] = useState<'WAND' | 'HAND'>('HAND');
+    // Parameters
     const [view, setView] = useState({ x: 0, y: 0, k: 1 });
     const [patternScale, setPatternScale] = useState(0.5);
+    const [patternRotation, setPatternRotation] = useState(0);
+    const [patternOffset, setPatternOffset] = useState({ x: 0, y: 0 });
+    const [edgeFeather, setEdgeFeather] = useState(1.5);
+    const [shadowIntensity, setShadowIntensity] = useState(0.8);
+
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [showPatternModal, setShowPatternModal] = useState(false);
+    const isDrawingRef = useRef(false);
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
-
-    // --- SEARCH LOGIC (Neural & Optimized for Contrast) ---
-    const performSearch = async (imageForSearch?: string) => {
-        setIsSearching(true);
-        setVisibleCount(10);
-        try {
-            let contextPrompt = searchQuery;
-            if (imageForSearch) {
-                const analysis = await fetch('/api/analyze', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ action: 'ANALYZE_REFERENCE_FOR_PROMPT', mainImageBase64: imageForSearch.split(',')[1] || imageForSearch }) 
-                });
-                const analysisData = await analysis.json();
-                contextPrompt = analysisData.prompt || "Peça de roupa";
-            }
-
-            // Force high contrast prompt
-            const refinedQuery = `${contextPrompt} in solid white color, dark background or outdoor shadow, tanned skin professional photoshoot`;
-            
-            const res = await fetch('/api/analyze', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ action: 'FIND_WHITE_MODELS', prompt: refinedQuery }) 
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                // Fetch high quality images for each query variation
-                const results = await Promise.all(data.queries.slice(0, 50).map(async (q: string) => {
-                    const r = await fetch('/api/analyze', { 
-                        method: 'POST', 
-                        headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ action: 'GET_LINK_PREVIEW', backupSearchTerm: q, linkType: 'SEARCH_QUERY' }) 
-                    });
-                    const d = await r.json(); 
-                    return d.success ? d.image : null;
-                }));
-                setWhiteBases(results.filter(u => u !== null));
-            }
-        } catch(e) { 
-            console.error(e); 
-        } finally { 
-            setIsSearching(false); 
-        }
-    };
-
-    const handleSelectBase = (url: string) => {
-        setSelectedBase(url);
-        const img = new Image(); img.src = url; img.crossOrigin = "anonymous";
-        img.onload = () => {
-            setBaseImgObj(img);
-            const mCanvas = document.createElement('canvas');
-            mCanvas.width = img.width; mCanvas.height = img.height;
-            maskCanvasRef.current = mCanvas;
-            setStep('PATTERN_UPLOAD');
-        };
-    };
-
-    const handlePatternUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const r = new FileReader();
-            r.onload = (ev) => {
-                const src = ev.target?.result as string;
-                setSelectedPattern(src);
-                const pi = new Image(); pi.src = src;
-                pi.onload = () => {
-                    setPatternImgObj(pi);
-                    setStep('STUDIO');
-                };
-            };
-            r.readAsDataURL(file);
-        }
-    };
 
     // --- RENDERER ---
     const renderCanvas = useCallback(() => {
@@ -149,27 +79,62 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
 
         const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
         const tCtx = tempC.getContext('2d')!;
+        if (edgeFeather > 0) tCtx.filter = `blur(${edgeFeather}px)`;
         tCtx.drawImage(maskCanvas, 0, 0);
+        tCtx.filter = 'none';
         tCtx.globalCompositeOperation = 'source-in';
         tCtx.save();
-        tCtx.translate(w/2, h/2);
+        tCtx.translate(w/2 + patternOffset.x, h/2 + patternOffset.y);
+        tCtx.rotate((patternRotation * Math.PI) / 180);
         tCtx.scale(patternScale, patternScale);
         const pat = tCtx.createPattern(patternImgObj, 'repeat');
-        if (pat) { tCtx.fillStyle = pat; tCtx.fillRect(-w*4, -h*4, w*8, h*8); }
+        if (pat) { tCtx.fillStyle = pat; tCtx.fillRect(-w*8, -h*8, w*16, h*16); }
         tCtx.restore();
 
-        ctx.save(); ctx.globalAlpha = 0.95; ctx.drawImage(tempC, 0, 0); ctx.restore();
+        ctx.save(); ctx.globalAlpha = 0.96; ctx.drawImage(tempC, 0, 0); ctx.restore();
         
         const shadowC = document.createElement('canvas'); shadowC.width = w; shadowC.height = h;
         const sCtx = shadowC.getContext('2d')!;
         sCtx.drawImage(maskCanvas, 0, 0);
         sCtx.globalCompositeOperation = 'source-in';
-        sCtx.filter = `grayscale(100%) contrast(160%) brightness(90%)`;
+        sCtx.filter = `grayscale(100%) contrast(150%)`;
         sCtx.drawImage(baseImgObj, 0, 0);
-        ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.8; ctx.drawImage(shadowC, 0, 0); ctx.restore();
-    }, [baseImgObj, patternImgObj, patternScale]);
+        ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = shadowIntensity; ctx.drawImage(shadowC, 0, 0); ctx.restore();
+    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOffset, edgeFeather, shadowIntensity]);
 
     useEffect(() => { if(step === 'STUDIO') requestAnimationFrame(renderCanvas); }, [renderCanvas, step]);
+
+    useEffect(() => {
+        if (referenceImage) {
+            const img = new Image(); img.src = referenceImage; img.crossOrigin = "anonymous";
+            img.onload = () => {
+                setBaseImgObj(img);
+                const mCanvas = document.createElement('canvas');
+                mCanvas.width = img.width; mCanvas.height = img.height;
+                maskCanvasRef.current = mCanvas;
+                if (containerRef.current) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setView({ x: 0, y: 0, k: Math.min(rect.width / img.width, rect.height / img.height) * 0.8 });
+                }
+            };
+        }
+    }, [referenceImage]);
+
+    const performSearch = async () => {
+        if (!searchQuery.trim()) return;
+        setIsSearching(true);
+        try {
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'FIND_WHITE_MODELS', prompt: searchQuery }) });
+            const data = await res.json();
+            if (data.success) {
+                const results = await Promise.all(data.queries.slice(0, 10).map(async (q: string) => {
+                    const r = await fetch('/api/analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'GET_LINK_PREVIEW', backupSearchTerm: q, linkType: 'SEARCH_QUERY' }) });
+                    const d = await r.json(); return d.success ? d.image : null;
+                }));
+                setWhiteBases(results.filter(u => u));
+            }
+        } catch(e) { console.error(e); } finally { setIsSearching(false); }
+    };
 
     const handlePointerDown = (e: React.PointerEvent) => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -179,164 +144,113 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         const py = (e.clientY - rect.top - cy - view.y) / view.k + (baseImgObj?.height || 0) / 2;
         
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
-        if (activeTool === 'WAND' && canvasRef.current) {
-            const res = createMockupMask(canvasRef.current.getContext('2d')!, canvasRef.current.width, canvasRef.current.height, px, py, 35);
+        if (activeTool === 'HAND' || e.button === 1) return;
+        
+        if (activeTool === 'WAND') {
+            const res = createMockupMask(canvasRef.current!.getContext('2d')!, canvasRef.current!.width, canvasRef.current!.height, px, py, 30);
             if (res && maskCanvasRef.current) {
+                setHistory(h => [...h.slice(-20), maskCanvasRef.current!.getContext('2d')!.getImageData(0,0,maskCanvasRef.current!.width,maskCanvasRef.current!.height)]);
                 maskCanvasRef.current.getContext('2d')!.drawImage(res.maskCanvas, 0, 0);
                 renderCanvas();
             }
+        } else if (activeTool === 'OFFSET') {
+            isDrawingRef.current = true;
         }
     };
 
-    // --- STEP: BASE SEARCH ---
-    if (step === 'BASE_SEARCH') {
-        return (
-            <div className="flex-1 flex flex-col bg-[#f8fafc] view-scroll-container">
-                <ModuleHeader icon={Camera} title="Virtual Runway Pro" subtitle="Seleção de Base Neural" />
-                <div className="p-4 md:p-10 max-w-6xl mx-auto w-full space-y-12 pb-32">
-                    <div className="bg-white p-8 md:p-14 rounded-[3.5rem] shadow-2xl border border-gray-100 flex flex-col items-center text-center gap-8 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-vingi-50 rounded-bl-full opacity-50 -z-0"></div>
-                        <div className="w-20 h-20 bg-vingi-900 rounded-3xl flex items-center justify-center text-white shadow-xl relative z-10 animate-pulse-slow"><Camera size={40}/></div>
-                        
-                        <div className="max-w-2xl relative z-10">
-                            <h2 className="text-3xl md:text-5xl font-black text-gray-900 uppercase tracking-tight mb-4">Provador Mágico</h2>
-                            <p className="text-gray-500 font-medium text-sm md:text-lg leading-relaxed">A IA buscará modelos com roupas brancas e fundos de alto contraste. Envie uma foto ou descreva o modelo desejado.</p>
-                        </div>
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (isDrawingRef.current && lastPointerPos.current && activeTool === 'OFFSET') {
+            const dx = (e.clientX - lastPointerPos.current.x) / view.k;
+            const dy = (e.clientY - lastPointerPos.current.y) / view.k;
+            setPatternOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+            lastPointerPos.current = { x: e.clientX, y: e.clientY };
+        }
+    };
 
-                        <div className="w-full max-w-4xl flex flex-col md:flex-row gap-3 relative z-10">
-                            <div className="flex-1 flex gap-3 bg-gray-50 p-2 rounded-2xl md:rounded-3xl border border-gray-200 focus-within:border-vingi-500 transition-all">
-                                <input 
-                                    type="text" 
-                                    value={searchQuery} 
-                                    onChange={e => setSearchQuery(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && performSearch()}
-                                    placeholder="Ex: Vestido de seda longo, T-shirt feminina..." 
-                                    className="flex-1 bg-transparent px-4 py-3 md:px-6 md:py-4 font-bold text-base md:text-xl outline-none text-gray-800"
-                                />
-                                <button 
-                                    onClick={() => {
-                                        const f = document.createElement('input'); f.type='file'; f.accept='image/*';
-                                        f.onchange=(ev:any)=>{ const file=ev.target.files[0]; const r=new FileReader(); r.onload=(e)=>performSearch(e.target?.result as string); r.readAsDataURL(file); };
-                                        f.click();
-                                    }} 
-                                    className="p-3 md:p-4 bg-white border border-gray-200 text-gray-500 rounded-xl md:rounded-2xl hover:text-vingi-600 transition-all shadow-sm"
-                                >
-                                    <IconImage size={24}/>
-                                </button>
-                            </div>
-                            <button onClick={() => performSearch()} disabled={isSearching} className="bg-vingi-900 text-white px-10 py-5 rounded-2xl md:rounded-3xl font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95">
-                                {isSearching ? <Loader2 className="animate-spin" size={24}/> : <Search size={24}/>} Buscar Bases
-                            </button>
-                        </div>
-                    </div>
-
-                    {whiteBases.length > 0 && (
-                        <div className="space-y-12 animate-fade-in">
-                            <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-                                <h3 className="text-xl font-black uppercase tracking-widest text-gray-400 flex items-center gap-3">
-                                    <Check className="text-green-500" size={20}/> {whiteBases.length} Bases Encontradas
-                                </h3>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-8">
-                                {whiteBases.slice(0, visibleCount).map((u, i) => (
-                                    <div key={i} onClick={() => handleSelectBase(u)} className="group cursor-pointer">
-                                        <div className="aspect-[3/4] rounded-[2rem] md:rounded-[2.5rem] overflow-hidden bg-white shadow-lg border-4 border-white transition-all group-hover:shadow-2xl group-hover:scale-[1.05] relative">
-                                            <img src={u} className="w-full h-full object-cover" loading="lazy" />
-                                            <div className="absolute inset-0 bg-vingi-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <div className="bg-white px-6 py-3 rounded-full font-black text-vingi-900 text-xs uppercase tracking-widest flex items-center gap-2">Selecionar <ArrowRight size={14}/></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {visibleCount < whiteBases.length && (
-                                <div className="flex justify-center pt-8">
-                                    <button onClick={() => setVisibleCount(p => p + 10)} className="bg-white border-2 border-gray-200 text-gray-500 px-14 py-6 rounded-full font-black uppercase tracking-widest hover:border-vingi-900 hover:text-vingi-900 transition-all flex items-center gap-4 shadow-sm active:scale-95">
-                                        <Plus size={24}/> Carregar Mais (+10)
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    // --- STEP: PATTERN UPLOAD ---
-    if (step === 'PATTERN_UPLOAD') {
-        return (
-            <div className="flex-1 flex flex-col items-center justify-center bg-[#050505] p-6 text-center animate-fade-in h-full">
-                <div className="max-w-md w-full space-y-10">
-                    <div className="relative inline-block">
-                        <img src={selectedBase!} className="w-48 h-64 object-cover rounded-[2.5rem] border-4 border-vingi-500 shadow-2xl mx-auto" />
-                        <div className="absolute -bottom-4 -right-4 bg-vingi-500 p-4 rounded-full text-white shadow-xl"><Check size={28}/></div>
-                    </div>
-                    <div>
-                        <h2 className="text-3xl font-black uppercase tracking-tight text-white">Base Escolhida!</h2>
-                        <p className="text-gray-500 mt-3 font-medium text-lg">Agora, selecione a estampa que deseja aplicar neste modelo.</p>
-                    </div>
-                    <button 
-                        onClick={() => { const f=document.createElement('input'); f.type='file'; f.accept='image/*'; f.onchange=handlePatternUpload; f.click(); }}
-                        className="w-full py-7 bg-white text-black rounded-3xl font-black text-lg uppercase tracking-widest flex items-center justify-center gap-4 hover:bg-vingi-400 transition-all shadow-2xl active:scale-95"
-                    >
-                        <UploadCloud size={28}/> Carregar Estampa
-                    </button>
-                    <button onClick={() => setStep('BASE_SEARCH')} className="text-gray-600 font-black uppercase text-[10px] tracking-[0.3em] hover:text-white transition-colors flex items-center justify-center gap-2 mx-auto"><ArrowLeft size={14}/> Voltar para Bases</button>
-                </div>
-            </div>
-        );
-    }
-
-    // --- STEP: STUDIO ---
     return (
-        <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505] h-full">
-            <div className="bg-[#111] h-14 border-b border-white/5 px-4 flex items-center justify-between z-50">
-                <div className="flex items-center gap-3">
-                    <div className="flex -space-x-3">
-                        <img src={selectedBase!} className="w-9 h-9 rounded-full border-2 border-white/20 object-cover" title="Base" />
-                        <img src={selectedPattern!} className="w-9 h-9 rounded-full border-2 border-white/20 object-cover" title="Estampa" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hidden sm:block">Runway Studio Pro v6.5</span>
-                </div>
-                <div className="flex gap-2">
-                    <button onClick={() => { setStep('BASE_SEARCH'); setBaseImgObj(null); setPatternImgObj(null); }} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-1.5 font-bold"><RefreshCw size={14}/> Reiniciar</button>
-                    <button onClick={() => { if(canvasRef.current){ const l=document.createElement('a'); l.download='runway.png'; l.href=canvasRef.current.toDataURL(); l.click(); } }} className="text-[10px] bg-vingi-600 px-5 py-1.5 rounded-xl font-black uppercase tracking-widest">Exportar 4K</button>
-                </div>
-            </div>
-            
-            <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden touch-none" onPointerDown={handlePointerDown}>
-                <div className="relative shadow-2xl origin-center" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
-                    <canvas ref={canvasRef} className="block bg-white" />
-                </div>
-
-                <div className="absolute bottom-28 left-1/2 -translate-x-1/2 w-full max-w-[300px] pointer-events-none z-50">
-                    <div className="bg-black/90 backdrop-blur-2xl border border-white/10 p-6 rounded-[2.5rem] pointer-events-auto shadow-2xl space-y-5">
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest"><span>Escala Estampa</span><span>{Math.round(patternScale*100)}%</span></div>
-                            <input type="range" min="0.1" max="2" step="0.05" value={patternScale} onChange={e => setPatternScale(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none accent-white"/>
+        <div className="flex flex-col h-full bg-[#080808] text-white overflow-hidden font-sans">
+            {step === 'SEARCH_BASE' ? (
+                <div className="flex-1 bg-[#f0f2f5] overflow-y-auto text-gray-800">
+                    <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Busca de Base" />
+                    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-24">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+                            <h3 className="text-xl font-black mb-4 uppercase tracking-wider">Selecione um Modelo de Base</h3>
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && performSearch()} placeholder="Ex: Vestido branco seda..." className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-vingi-500 font-bold" />
+                                <button onClick={performSearch} className="bg-vingi-900 text-white px-8 py-4 rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2">{isSearching ? <Loader2 className="animate-spin" size={20}/> : <Search size={20}/>} Buscar Modelos</button>
+                            </div>
                         </div>
-                        <button onClick={() => { const f=document.createElement('input'); f.type='file'; f.accept='image/*'; f.onchange=handlePatternUpload; f.click(); }} className="w-full py-3.5 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"><RefreshCw size={14}/> Trocar Estampa</button>
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {whiteBases.map((u, i) => (
+                                <div key={i} onClick={() => { setReferenceImage(u); setShowPatternModal(true); }} className="aspect-[3/4] bg-white rounded-xl overflow-hidden cursor-pointer hover:ring-4 ring-vingi-500 transition-all shadow-md group relative">
+                                    <img src={u} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Check size={32} className="text-white"/></div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </div>
+            ) : (
+                <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
+                    <div className="bg-[#111] h-14 border-b border-white/5 px-4 flex items-center justify-between shrink-0 z-50">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-white/10 p-1.5 rounded-lg"><Camera size={18} className="text-vingi-400"/></div>
+                            <div><h2 className="text-xs font-bold uppercase tracking-widest leading-none">Virtual Runway</h2><p className="text-[9px] text-gray-500 uppercase font-medium">Estúdio de Prova</p></div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setStep('SEARCH_BASE')} className="text-[10px] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1"><X size={12}/> Trocar Base</button>
+                            <button onClick={() => { if(canvasRef.current){ const l=document.createElement('a'); l.download='vingi.jpg'; l.href=canvasRef.current.toDataURL('image/jpeg',0.9); l.click(); } }} className="text-[10px] bg-vingi-600 px-4 py-1.5 rounded-lg font-bold">Salvar</button>
+                        </div>
+                    </div>
+                    
+                    <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden touch-none" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => isDrawingRef.current = false}>
+                        <div className="relative shadow-2xl origin-center" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: baseImgObj?.width, height: baseImgObj?.height }}>
+                            <canvas ref={canvasRef} className="block bg-white" />
+                        </div>
 
-            <div className="bg-[#111] border-t border-white/5 shrink-0 z-50 pb-[env(safe-area-inset-bottom)]">
-                <div className="flex items-center justify-center px-4 py-6 gap-10">
-                    <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
-                    <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
-                    <ToolBtn icon={ImageIcon} label="Novas Bases" onClick={() => setStep('BASE_SEARCH')} />
+                        {/* SLIDER OVERLAY */}
+                        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 w-full max-w-[280px] pointer-events-none z-50">
+                            <div className="bg-black/80 backdrop-blur-md border border-white/5 p-3 rounded-2xl pointer-events-auto shadow-2xl">
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between items-center text-[9px] font-bold text-gray-500 uppercase"><span>Escala da Estampa</span><span>{Math.round(patternScale*100)}%</span></div>
+                                    <input type="range" min="0.1" max="2" step="0.05" value={patternScale} onChange={e => setPatternScale(parseFloat(e.target.value))} className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-white"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-[#111] border-t border-white/5 shrink-0 z-50 pb-[env(safe-area-inset-bottom)]">
+                        <div className="flex items-center justify-between px-2 py-2 overflow-x-auto gap-1 max-w-4xl mx-auto no-scrollbar">
+                            <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
+                            <ToolBtn icon={Move3d} label="Posicionar" active={activeTool==='OFFSET'} onClick={() => setActiveTool('OFFSET')} />
+                            <ToolBtn icon={Wand2} label="Varinha" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
+                            <div className="w-px h-8 bg-white/10 mx-1"></div>
+                            <ToolBtn icon={Undo2} label="Desfazer" onClick={() => {}} disabled={history.length === 0} />
+                            <ToolBtn icon={RefreshCcw} label="Estampa" onClick={() => setShowPatternModal(true)} />
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {showPatternModal && (
+                <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+                    <div className="bg-[#1a1a1a] border border-white/10 rounded-[32px] p-10 max-w-md w-full text-center relative shadow-2xl">
+                        <div className="w-20 h-20 bg-vingi-900 rounded-full flex items-center justify-center mx-auto mb-6"><Layers size={40} className="text-vingi-400"/></div>
+                        <h3 className="text-2xl font-black mb-2 uppercase tracking-tighter">Aplicar Estampa</h3>
+                        <p className="text-gray-500 text-sm mb-8 leading-relaxed">Selecione o arquivo da arte para iniciarmos a simulação neural no modelo.</p>
+                        <input type="file" onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r=new FileReader(); r.onload=(ev)=>{ setSelectedPattern(ev.target?.result as string); const pi=new Image(); pi.src=ev.target?.result as string; pi.onload=()=>setPatternImgObj(pi); setShowPatternModal(false); setStep('STUDIO'); }; r.readAsDataURL(f); } }} className="hidden" id="p-up" />
+                        <label htmlFor="p-up" className="w-full py-5 bg-vingi-600 text-white rounded-2xl font-black flex items-center justify-center gap-3 cursor-pointer hover:bg-vingi-500 transition-all text-sm uppercase tracking-widest"><UploadCloud size={24}/> CARREGAR ARQUIVO</label>
+                        <button onClick={() => setShowPatternModal(false)} className="mt-6 text-[10px] text-gray-600 hover:text-white uppercase font-black tracking-[0.2em] transition-colors">Cancelar</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
-const ToolBtn = ({ icon: Icon, label, active, onClick }: any) => (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center min-w-[80px] h-16 rounded-2xl gap-2 transition-all active:scale-90 ${active ? 'bg-vingi-600 text-white shadow-[0_0_25px_rgba(59,130,246,0.4)] border border-white/30' : 'text-gray-500 hover:text-gray-300'}`}>
-        <Icon size={24} strokeWidth={active ? 2.5 : 1.5} /> 
-        <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+const ToolBtn = ({ icon: Icon, label, active, onClick, disabled }: any) => (
+    <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center justify-center min-w-[64px] h-14 rounded-xl gap-1 transition-all active:scale-90 ${disabled ? 'opacity-20' : 'hover:bg-white/5'} ${active ? 'bg-vingi-900/40 text-white border border-vingi-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'text-gray-500 hover:text-gray-300'}`}>
+        <Icon size={20} strokeWidth={active ? 2.5 : 1.5} className={active ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]' : ''} /> 
+        <span className="text-[9px] font-bold uppercase tracking-tight">{label}</span>
     </button>
 );

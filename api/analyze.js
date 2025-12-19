@@ -9,6 +9,7 @@ import { reconstructElement, transformElement } from './modules/departments/laye
 import { generateHighResProductionFile } from './modules/departments/qualityControl.js';
 
 export default async function handler(req, res) {
+  // Configuração CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -33,4 +34,83 @@ export default async function handler(req, res) {
     const apiKey = rawKey ? rawKey.trim() : null;
     if (!apiKey) return res.status(500).json({ error: "Chave de API não configurada no servidor." });
 
-    if (action === 'VOICE_COMMAND
+    // --- ROTEAMENTO ---
+
+    if (action === 'VOICE_COMMAND') {
+        const ROUTER_PROMPT = `Map user command to view: HOME, SCANNER, CREATOR, ATELIER, LAYER_STUDIO, MOCKUP, RUNWAY, HISTORY.`;
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT + `\nCommand: ${commandText}` }] }] }) });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return res.status(200).json({ success: true, targetView: text || 'HOME', message: "Navegando..." });
+    }
+
+    if (action === 'GET_LINK_PREVIEW') {
+        const image = await getLinkPreview(targetUrl, backupSearchTerm, userReferenceImage, apiKey, 'CLOTHING', linkType);
+        return res.status(200).json({ success: true, image });
+    }
+
+    if (action === 'RECONSTRUCT_ELEMENT') {
+        const result = await reconstructElement(apiKey, cropBase64);
+        return res.status(200).json({ success: true, ...result });
+    }
+
+    if (action === 'TRANSFORM_ELEMENT') {
+        const result = await transformElement(apiKey, cropBase64, userPrompt);
+        return res.status(200).json({ success: true, ...result });
+    }
+    
+    if (action === 'FIND_WHITE_MODELS') {
+        let finalPrompt = prompt || "Vestido";
+        const MOCKUP_PROMPT = `Generate 30 search queries for "white solid color ${finalPrompt}" for virtual try-on.`;
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return res.status(200).json({ success: true, queries: [finalPrompt + " white model"], detectedStructure: finalPrompt });
+    }
+
+    if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {
+        const extractedPrompt = await refineDesignPrompt(apiKey, mainImageBase64);
+        return res.status(200).json({ success: true, prompt: extractedPrompt });
+    }
+
+    if (action === 'ANALYZE_COLOR_TREND') {
+        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, 'image/jpeg', cleanJson, variation || 'NATURAL');
+        return res.status(200).json({ success: true, colors: colorData.colors });
+    }
+
+    if (action === 'GENERATE_PATTERN') {
+        const image = await generatePattern(apiKey, prompt, colors, selvedge, technique, colorCount, layoutStyle, subLayoutStyle, artStyle, targetSize, customStyle);
+        return res.status(200).json({ success: true, image });
+    }
+
+    if (action === 'GENERATE_TEXTURE') {
+        const textureImage = await generateTextureLayer(apiKey, textureType, texturePrompt);
+        return res.status(200).json({ success: true, image: textureImage });
+    }
+
+    if (action === 'PREPARE_PRODUCTION') {
+        const enhancedImage = await generateHighResProductionFile(apiKey, mainImageBase64, targetSize, technique);
+        return res.status(200).json({ success: true, image: enhancedImage });
+    }
+
+    if (action === 'DESCRIBE_PATTERN') {
+        const colorData = await analyzeColorTrend(apiKey, mainImageBase64, mainMimeType, cleanJson, 'NATURAL');
+        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'TEXTURE');
+        const matches = generateMarketLinks(visualData, 'TEXTURE');
+        return res.status(200).json({ success: true, colors: colorData.colors, prompt: visualData.visualDescription, technicalSpecs: visualData.technicalSpecs, stockMatches: matches });
+    }
+
+    if (action === 'SCAN_CLOTHING' || !action) { 
+        const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType, cleanJson, 'GARMENT');
+        const matches = generateMarketLinks(visualData, 'GARMENT');
+        return res.status(200).json({ patternName: visualData.visualDescription, technicalDna: visualData.technicalSpecs, matches: { exact: matches, close: [], adventurous: [] } });
+    }
+    
+    return res.status(200).json({ success: false, error: "Ação desconhecida" });
+
+  } catch (error) {
+    res.status(503).json({ error: error.message || "Erro interno no servidor." });
+  }
+}
