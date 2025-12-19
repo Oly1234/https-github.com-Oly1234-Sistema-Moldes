@@ -1,106 +1,43 @@
 
-<!-- 
-  VINGI MOLDES AI v6.4
-  Created by Rafael Rodrigues Alves de Olival
-  Date: 2024
--->
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0f172a" />
-    
-    <!-- Meta Tags PWA Atualizadas -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#020202" />
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
     <title>VINGI MOLDES AI</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/logo.svg">
     <link rel="apple-touch-icon" href="/logo.svg">
-    
-    <!-- Tailwind CDN mantido para compatibilidade imediata -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              mono: ['JetBrains Mono', 'monospace'],
-            },
-            colors: {
-              vingi: {
-                900: '#0f172a', // Deep slate
-                800: '#1e293b', // Card bg
-                700: '#334155', // Borders
-                500: '#3b82f6', // Primary Blue
-                400: '#60a5fa', // Accent Blue
-                accent: '#8b5cf6', // Purple for AI
-              }
-            },
-            animation: {
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'scan': 'scan 3s ease-in-out infinite', // SLOWER SCAN (3s)
-            },
-            keyframes: {
-              scan: {
-                '0%': { transform: 'translateY(0%)', opacity: '0' },
-                '10%': { opacity: '1' },
-                '90%': { opacity: '1' },
-                '100%': { transform: 'translateY(100vh)', opacity: '0' },
-              }
-            }
+            fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+            colors: { vingi: { 900: '#0f172a', 800: '#1e293b', 700: '#334155', 500: '#3b82f6', 400: '#60a5fa', accent: '#8b5cf6' } },
+            animation: { 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite', 'scan': 'scan 3s linear infinite' },
+            keyframes: { scan: { '0%': { transform: 'translateY(0%)' }, '100%': { transform: 'translateY(100vh)' } } }
           }
         }
       }
     </script>
     <style>
-      body {
-        background-color: #0b0f19; /* Ultra dark background */
-        color: #f8fafc;
-        overscroll-behavior-y: none; /* Previne pull-to-refresh no mobile */
-      }
-      /* Custom scrollbar for technical feel */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #0f172a; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #334155; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #475569; 
-      }
-      .glass-panel {
-        background: rgba(30, 41, 59, 0.6);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-      }
+      body { background-color: #020202; color: #f8fafc; overscroll-behavior: none; touch-action: none; -webkit-overflow-scrolling: auto; }
+      canvas { image-rendering: -moz-crisp-edges; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; image-rendering: pixelated; }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: #000; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.559.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "vite": "https://aistudiocdn.com/vite@^7.2.7",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2"
-  }
-}
-</script>
-</head>
+    <script type="importmap">
+    { "imports": { "lucide-react": "https://aistudiocdn.com/lucide-react@^0.559.0", "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0", "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/", "vite": "https://aistudiocdn.com/vite@^7.2.7", "react/": "https://aistudiocdn.com/react@^19.2.1/", "react": "https://aistudiocdn.com/react@^19.2.1", "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.2" } }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

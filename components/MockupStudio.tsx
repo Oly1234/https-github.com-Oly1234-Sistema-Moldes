@@ -79,6 +79,23 @@ export const MockupStudio: React.FC = () => {
       }
   };
 
+  // --- KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+    const handleKeys = (e: KeyboardEvent) => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (activeLayerId) {
+                const nextL = layers.filter(x => x.id !== activeLayerId);
+                saveToHistory(nextL);
+                setActiveLayerId(null);
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', handleKeys);
+    return () => window.removeEventListener('keydown', handleKeys);
+  }, [activeLayerId, layers, historyIndex]);
+
   // --- INIT ---
   useEffect(() => {
     const checkStorage = () => {
@@ -99,8 +116,6 @@ export const MockupStudio: React.FC = () => {
         setLayers([]); 
         setHistory([]);
         setHistoryIndex(-1);
-        
-        // Auto Fit
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             setTimeout(() => {
@@ -108,7 +123,6 @@ export const MockupStudio: React.FC = () => {
                 setView({ x: 0, y: 0, k: k || 0.5 });
             }, 50);
         }
-        
         if (mainCanvasRef.current) { mainCanvasRef.current.width = img.naturalWidth; mainCanvasRef.current.height = img.naturalHeight; }
         if (!tempCanvasRef.current) tempCanvasRef.current = document.createElement('canvas');
         tempCanvasRef.current.width = img.naturalWidth; tempCanvasRef.current.height = img.naturalHeight;
@@ -118,7 +132,6 @@ export const MockupStudio: React.FC = () => {
 
   useEffect(() => { if (patternImage) { const img = new Image(); img.src = patternImage; img.crossOrigin = "anonymous"; img.onload = () => setPatternImgObj(img); } }, [patternImage]);
 
-  // Sync UI with selection
   useEffect(() => {
       if (activeLayerId && !editAll) {
           const layer = layers.find(l => l.id === activeLayerId);
@@ -139,23 +152,11 @@ export const MockupStudio: React.FC = () => {
 
   const handleFlipX = () => updateTargetLayers(l => ({ flipX: !l.flipX, offsetX: -l.offsetX }), true);
   const handleFlipY = () => updateTargetLayers(l => ({ flipY: !l.flipY, offsetY: -l.offsetY }), true);
-  
-  const handleRotate = (val: number, commit = false) => {
-      setActiveRotation(val);
-      updateTargetLayers(l => ({ rotation: val }), commit);
-  };
+  const handleRotate = (val: number, commit = false) => { setActiveRotation(val); updateTargetLayers(l => ({ rotation: val }), commit); };
+  const handleScale = (val: number, commit = false) => { setActiveScale(val); updateTargetLayers(l => ({ scale: val }), commit); };
+  const handleModeSwitch = (mode: 'ALL' | 'SINGLE') => { setEditAll(mode === 'ALL'); if (mode === 'ALL') setActiveLayerId(null); };
 
-  const handleScale = (val: number, commit = false) => {
-      setActiveScale(val);
-      updateTargetLayers(l => ({ scale: val }), commit);
-  };
-
-  const handleModeSwitch = (mode: 'ALL' | 'SINGLE') => {
-      setEditAll(mode === 'ALL');
-      if (mode === 'ALL') setActiveLayerId(null);
-  };
-
-  // --- RENDERER (FIXED) ---
+  // --- RENDERER ---
   const render = useCallback(() => {
     const canvas = mainCanvasRef.current; 
     const tempCanvas = tempCanvasRef.current;
@@ -163,29 +164,20 @@ export const MockupStudio: React.FC = () => {
     const ctx = canvas.getContext('2d', { alpha: false })!; 
     const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })!;
 
-    // 1. Draw Base Mold
-    ctx.fillStyle = '#ffffff'; 
-    ctx.fillRect(0, 0, canvas.width, canvas.height); 
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); 
     ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height);
 
-    // 2. Draw Layers
     layers.forEach(layer => {
         tempCtx.globalCompositeOperation = 'source-over'; 
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-        
-        // Draw Mask
         tempCtx.drawImage(layer.maskCanvas, layer.maskX, layer.maskY);
-        
-        // Clip Pattern to Mask
         tempCtx.globalCompositeOperation = 'source-in';
-        
         tempCtx.save();
         tempCtx.translate(layer.maskCenter.x, layer.maskCenter.y);
         tempCtx.rotate((layer.rotation * Math.PI) / 180);
         tempCtx.scale(layer.flipX ? -1 : 1, layer.flipY ? -1 : 1);
         tempCtx.scale(layer.scale, layer.scale);
         tempCtx.translate(layer.offsetX, layer.offsetY);
-        
         if (layer.pattern) { 
             tempCtx.fillStyle = layer.pattern; 
             const diag = Math.sqrt(layer.maskW**2 + layer.maskH**2); 
@@ -193,54 +185,28 @@ export const MockupStudio: React.FC = () => {
             tempCtx.fillRect(-safeSize, -safeSize, safeSize*2, safeSize*2); 
         }
         tempCtx.restore();
-        
-        // Composite to Main
-        ctx.save(); 
-        ctx.globalAlpha = 0.95; 
-        ctx.drawImage(tempCanvas, 0, 0); 
-        ctx.restore();
-
-        // Active Highlight
+        ctx.save(); ctx.globalAlpha = 0.95; ctx.drawImage(tempCanvas, 0, 0); ctx.restore();
         if (layer.id === activeLayerId || (editAll && activeLayerId)) {
-            ctx.save(); 
-            ctx.globalCompositeOperation = 'source-over';
+            ctx.save(); ctx.globalCompositeOperation = 'source-over';
             ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 4;
-            ctx.beginPath(); 
-            ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 6 / view.k, 0, Math.PI * 2); 
-            ctx.fillStyle = editAll ? '#8b5cf6' : '#3b82f6'; 
-            ctx.strokeStyle = 'white'; 
-            ctx.lineWidth = 2 / view.k; 
-            ctx.fill(); ctx.stroke();
-            ctx.restore();
+            ctx.beginPath(); ctx.arc(layer.maskCenter.x, layer.maskCenter.y, 6 / view.k, 0, Math.PI * 2); 
+            ctx.fillStyle = editAll ? '#8b5cf6' : '#3b82f6'; ctx.strokeStyle = 'white'; 
+            ctx.lineWidth = 2 / view.k; ctx.fill(); ctx.stroke(); ctx.restore();
         }
     });
-
-    // 3. Multiply Shadows
-    ctx.save(); 
-    ctx.globalCompositeOperation = 'multiply'; 
-    ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height); 
-    ctx.restore();
-
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(moldImgObj, 0, 0, canvas.width, canvas.height); ctx.restore();
   }, [moldImgObj, layers, activeLayerId, editAll, view.k]);
 
   useEffect(() => { requestAnimationFrame(render); }, [render]);
 
-  // --- INTERACTION & ZOOM LOGIC ---
   const handleWheel = (e: React.WheelEvent) => {
       if (e.ctrlKey || activeTool === 'HAND') { 
           e.preventDefault();
           const rect = containerRef.current!.getBoundingClientRect();
-          // Calculate mouse pos relative to canvas view
-          const mouseX = e.clientX - rect.left;
-          const mouseY = e.clientY - rect.top;
-          
-          const s = Math.exp(-e.deltaY * 0.001);
-          const newK = Math.min(Math.max(0.1, view.k * s), 8);
-          
-          // Zoom towards mouse pointer
+          const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top;
+          const s = Math.exp(-e.deltaY * 0.001); const newK = Math.min(Math.max(0.1, view.k * s), 8);
           const dx = (mouseX - view.x) * (newK / view.k - 1);
           const dy = (mouseY - view.y) * (newK / view.k - 1);
-
           setView({ k: newK, x: view.x - dx, y: view.y - dy });
       }
   };
@@ -252,6 +218,7 @@ export const MockupStudio: React.FC = () => {
       const tCtx = tempCanvas.getContext('2d')!; tCtx.drawImage(moldImgObj, 0, 0, width, height);
       const data = tCtx.getImageData(0, 0, width, height).data;
       const startPos = (Math.floor(startY) * width + Math.floor(startX)) * 4;
+      if (startPos < 0) return null;
       const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
       const visited = new Uint8Array(width * height);
       const stack = [[Math.floor(startX), Math.floor(startY)]];
@@ -259,7 +226,6 @@ export const MockupStudio: React.FC = () => {
       let minX = width, maxX = 0, minY = height, maxY = 0;
       let pixelCount = 0;
       const validPixels: number[] = [];
-
       while (stack.length) {
           const [x, y] = stack.pop()!;
           const idx = y * width + x;
@@ -290,23 +256,13 @@ export const MockupStudio: React.FC = () => {
 
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
       if (!moldImgObj || !patternImgObj) return;
-      const canvas = mainCanvasRef.current!;
-      const rect = canvas.getBoundingClientRect();
+      const canvas = mainCanvasRef.current!; const rect = canvas.getBoundingClientRect();
       const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-      
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const x = (clientX - rect.left) * scaleX;
-      const y = (clientY - rect.top) * scaleY;
-      
+      const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
+      const x = (clientX - rect.left) * scaleX; const y = (clientY - rect.top) * scaleY;
       lastPos.current = { x: clientX, y: clientY };
-
-      if (activeTool === 'HAND' || ('buttons' in e && e.buttons === 4)) {
-          isPanning.current = true;
-          return;
-      }
-
+      if (activeTool === 'HAND' || ('buttons' in e && e.buttons === 4)) { isPanning.current = true; return; }
       if (activeTool === 'WAND') {
           const res = createMaskFromClick(x, y);
           if (res) {
@@ -319,10 +275,7 @@ export const MockupStudio: React.FC = () => {
                   scale: activeScale, rotation: activeRotation, flipX: false, flipY: false, timestamp: Date.now()
               };
               const nextLayers = [...layers, newLayer];
-              saveToHistory(nextLayers);
-              // Auto-select the newly created layer and switch to Single Edit mode implicitly for UX
-              setActiveLayerId(newLayer.id); 
-              setEditAll(false); 
+              saveToHistory(nextLayers); setActiveLayerId(newLayer.id); setEditAll(false); 
           }
       } else if (activeTool === 'ADJUST') {
           let clickedId = null;
@@ -330,15 +283,7 @@ export const MockupStudio: React.FC = () => {
               const l = layers[i];
               if (Math.sqrt((x - l.maskCenter.x)**2 + (y - l.maskCenter.y)**2) < 50 / view.k) { clickedId = l.id; break; }
           }
-          if (clickedId) { 
-              setActiveLayerId(clickedId); 
-              setEditAll(false); // Implicitly switch to single edit when clicking an object
-              isDragging.current = true; 
-          } else {
-              // Clicked empty space? Deselect or switch to Global?
-              // setActiveLayerId(null); 
-              // setEditAll(true); 
-          }
+          if (clickedId) { setActiveLayerId(clickedId); setEditAll(false); isDragging.current = true; }
       }
   };
 
@@ -366,14 +311,10 @@ export const MockupStudio: React.FC = () => {
       }
   };
 
-  const handleDownload = () => {
-    if (!mainCanvasRef.current) return;
-    const link = document.createElement('a'); link.download = 'vingi-mockup.png'; link.href = mainCanvasRef.current.toDataURL('image/png', 1.0); link.click();
-  };
+  const handleDownload = () => { if (!mainCanvasRef.current) return; const link = document.createElement('a'); link.download = 'vingi-mockup.png'; link.href = mainCanvasRef.current.toDataURL('image/png', 1.0); link.click(); };
 
   return (
     <div className="flex flex-col h-full w-full bg-[#000000] overflow-hidden text-white">
-      {/* HEADER COMPACTO */}
       <div className="bg-[#111111] px-4 py-2 flex items-center justify-between border-b border-gray-900 shrink-0 z-50 h-14">
           <div className="flex items-center gap-2"><Shirt size={18} className="text-vingi-400"/><span className="font-bold text-sm">Mockup Studio</span></div>
           <div className="flex gap-2">
@@ -381,15 +322,13 @@ export const MockupStudio: React.FC = () => {
               <button onClick={handleDownload} className="text-[10px] bg-vingi-600 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-500 flex items-center gap-1"><Download size={12}/> Salvar</button>
           </div>
       </div>
-
       {!moldImage ? (
           <div className="flex-1 bg-[#f0f2f5] overflow-y-auto">
               <input type="file" ref={moldInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload = (ev) => setMoldImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
-              <ModuleLandingPage icon={Shirt} title="Mockup Técnico" description="Aplicação de estampas em moldes de corte." primaryActionLabel="Carregar Molde" onPrimaryAction={() => moldInputRef.current?.click()} />
+              <ModuleLandingPage icon={Shirt} title="Mockup Técnico" description="Aplicação de estampas em moldes de corte. Use 'Delete' para remover elementos." primaryActionLabel="Carregar Molde" onPrimaryAction={() => moldInputRef.current?.click()} />
           </div>
       ) : (
           <div className="flex-1 flex flex-col relative min-h-0 bg-[#050505]">
-              {/* CANVAS */}
               <div 
                 ref={containerRef} 
                 className={`flex-1 relative flex items-center justify-center overflow-hidden touch-none ${activeTool==='HAND'?'cursor-grab active:cursor-grabbing': activeTool==='WAND' ? 'cursor-cell' : 'cursor-default'}`} 
@@ -401,20 +340,14 @@ export const MockupStudio: React.FC = () => {
                   <div className="relative shadow-2xl transition-transform duration-75 ease-out" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: moldImgObj ? moldImgObj.width : 'auto', height: moldImgObj ? moldImgObj.height : 'auto' }}>
                       <canvas ref={mainCanvasRef} className="block bg-white" />
                   </div>
-
-                  {/* ACTIVE PATTERN INDICATOR */}
                   {patternImage && (
                       <div className="absolute top-4 left-4 z-30 animate-fade-in group">
                           <div className="relative w-12 h-12 rounded-full border-2 border-white/20 shadow-lg overflow-hidden cursor-pointer hover:scale-110 transition-transform bg-black" onClick={() => patternInputRef.current?.click()}>
                               <img src={patternImage} className="w-full h-full object-cover opacity-80" />
-                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <RefreshCw size={14} className="text-white"/>
-                              </div>
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><RefreshCw size={14} className="text-white"/></div>
                           </div>
                       </div>
                   )}
-
-                  {/* PATTERN SELECTOR (IF EMPTY) */}
                   {!patternImage && (
                       <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 backdrop-blur-sm">
                           <button onClick={() => patternInputRef.current?.click()} className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 hover:scale-105 transition-transform"><UploadCloud size={20}/> Selecionar Estampa</button>
@@ -422,27 +355,12 @@ export const MockupStudio: React.FC = () => {
                   )}
                   <input type="file" ref={patternInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload = (ev) => setPatternImage(ev.target?.result as string); r.readAsDataURL(f); } }} className="hidden" accept="image/*" />
               </div>
-
-              {/* --- INSHOT STYLE TOOLBAR --- */}
-              {/* STATUS BAR: SINGLE VS ALL MODE (PERSISTENT & CLEAR) */}
               <div className="bg-black/95 backdrop-blur-sm px-4 py-2 flex justify-center items-center shrink-0 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
                   <div className="bg-gray-900 rounded-full p-0.5 flex items-center border border-gray-800">
-                      <button 
-                          onClick={() => handleModeSwitch('ALL')} 
-                          className={`px-4 py-1 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-1 ${editAll ? 'bg-gray-700 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                      >
-                          <Grid size={10} /> Todos
-                      </button>
-                      <button 
-                          onClick={() => handleModeSwitch('SINGLE')}
-                          className={`px-4 py-1 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-1 ${!editAll ? 'bg-vingi-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                      >
-                          <BoxSelect size={10} /> Seleção {activeLayerId ? '' : '(Clique no molde)'}
-                      </button>
+                      <button onClick={() => handleModeSwitch('ALL')} className={`px-4 py-1 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-1 ${editAll ? 'bg-gray-700 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}><Grid size={10} /> Todos</button>
+                      <button onClick={() => handleModeSwitch('SINGLE')} className={`px-4 py-1 rounded-full text-[9px] font-bold uppercase transition-all flex items-center gap-1 ${!editAll ? 'bg-vingi-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}><BoxSelect size={10} /> Seleção {activeLayerId ? '' : '(Clique no molde)'}</button>
                   </div>
               </div>
-
-              {/* SLIDERS CONTEXTUAL PANEL */}
               {activeTool === 'ADJUST' && (
                   <div className="bg-black px-6 py-4 flex flex-col gap-4 animate-slide-up shrink-0 z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.8)] border-t border-white/5">
                       <div className="flex gap-6">
@@ -457,27 +375,18 @@ export const MockupStudio: React.FC = () => {
                       </div>
                   </div>
               )}
-
-              {/* BOTTOM DOCK (INSHOT STYLE) - COMPACT & DARK */}
               <div className="bg-black flex flex-col shrink-0 z-50 pb-[env(safe-area-inset-bottom)] border-t border-white/5">
                   <div className="w-full overflow-hidden relative">
-                      <div className="flex items-center justify-between px-4 py-2 overflow-x-auto w-full no-scrollbar gap-4" 
-                           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
-                          <style>{`.no-scrollbar::-webkit-scrollbar { display: none !important; width: 0 !important; }`}</style>
-                          
+                      <div className="flex items-center justify-between px-4 py-2 overflow-x-auto w-full no-scrollbar gap-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
                           <ToolBtn icon={Wand2} label="Preencher" active={activeTool==='WAND'} onClick={() => setActiveTool('WAND')} />
                           <ToolBtn icon={Sliders} label="Ajustar" active={activeTool==='ADJUST'} onClick={() => setActiveTool('ADJUST')} />
                           <ToolBtn icon={Hand} label="Mover Tela" active={activeTool==='HAND'} onClick={() => setActiveTool('HAND')} />
-                          
                           <div className="w-px h-6 bg-gray-800 shrink-0 mx-1"></div>
-
                           <ToolBtn icon={FlipHorizontal} label="Espelhar H" onClick={handleFlipX} />
                           <ToolBtn icon={FlipVertical} label="Espelhar V" onClick={handleFlipY} />
                           <ToolBtn icon={RotateCcw} label="Girar +90" onClick={() => handleRotate((activeRotation + 90) % 360, true)} />
                           <ToolBtn icon={RefreshCw} label="Estampa" onClick={() => patternInputRef.current?.click()} />
-
                           <div className="w-px h-6 bg-gray-800 shrink-0 mx-1"></div>
-
                           <ToolBtn icon={Undo2} label="Desfazer" onClick={undo} disabled={historyIndex <= -1} />
                           <ToolBtn icon={Eraser} label="Apagar" onClick={() => { const newL = layers.filter(x => x.id !== activeLayerId); saveToHistory(newL); setActiveLayerId(null); }} disabled={!activeLayerId} danger />
                       </div>
