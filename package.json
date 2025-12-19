@@ -12,8 +12,8 @@
     "lucide-react": "^0.559.0",
     "@google/genai": "^1.32.0",
     "react-dom": "^19.2.1",
-    "vite": "^7.2.7",
     "react": "^19.2.1",
+    "vite": "^7.3.0",
     "@vitejs/plugin-react": "^5.1.2"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 
 /**
- * VINGI SAM-X MODULAR ENGINE v3.2
- * Motor de segmentação por campo de energia com suporte a fusão de máscaras.
+ * VINGI SAM-X MODULAR ENGINE v5.0
+ * Motor de segmentação técnica especializado em padrões têxteis e motifs.
  */
 
 export interface SegmentationResult {
@@ -9,12 +9,12 @@ export interface SegmentationResult {
     bounds: { x: number; y: number; w: number; h: number };
     center: { x: number; y: number };
     area: number;
-    confidence: number;
 }
 
 export const VingiSegmenter = {
     /**
-     * Algoritmo de Difusão SAM-X
+     * Segmentação de Precisão (Gera a Máscara VERDE)
+     * Utiliza difusão de inundação com tolerância adaptativa.
      */
     segmentObject: (
         ctx: CanvasRenderingContext2D, 
@@ -34,8 +34,6 @@ export const VingiSegmenter = {
         if (startIdx < 0 || startIdx >= data.length) return null;
         
         const r0 = data[startIdx], g0 = data[startIdx+1], b0 = data[startIdx+2];
-        const luminance = (r0 * 0.299 + g0 * 0.587 + b0 * 0.114) / 255;
-        const dynamicTolerance = tolerance * (luminance < 0.3 ? 1.4 : 1.0);
 
         let bMinX = width, bMaxX = 0, bMinY = height, bMaxY = 0;
         let pixelCount = 0;
@@ -54,23 +52,10 @@ export const VingiSegmenter = {
                 Math.pow(data[pos+2] - b0, 2)
             );
 
-            let edgeEnergy = 0;
-            if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
-                const idxR = (y * width + (x + 1)) * 4;
-                const idxL = (y * width + (x - 1)) * 4;
-                const idxB = ((y + 1) * width + x) * 4;
-                const idxT = ((y - 1) * width + x) * 4;
-                edgeEnergy = Math.max(
-                    Math.abs(data[idxR] - data[idxL]),
-                    Math.abs(data[idxB] - data[idxT])
-                );
-            }
-
-            if (colorDiff <= dynamicTolerance && edgeEnergy < 120) {
+            if (colorDiff <= tolerance) {
                 mask[idx] = 255;
                 pixelCount++;
                 sumX += x; sumY += y;
-                
                 if (x < bMinX) bMinX = x; if (x > bMaxX) bMaxX = x;
                 if (y < bMinY) bMinY = y; if (y > bMaxY) bMaxY = y;
 
@@ -81,20 +66,60 @@ export const VingiSegmenter = {
             }
         }
 
-        if (pixelCount < 50) return null;
+        if (pixelCount < 30) return null;
 
         return {
             mask,
             bounds: { x: bMinX, y: bMinY, w: (bMaxX - bMinX) + 1, h: (bMaxY - bMinY) + 1 },
             center: { x: sumX / pixelCount, y: sumY / pixelCount },
-            area: pixelCount,
-            confidence: Math.min(1, pixelCount / 1000)
+            area: pixelCount
         };
     },
 
     /**
-     * Funde duas máscaras em uma única camada de bits.
+     * Motor Analista de Sugestão (Gera a Máscara VERMELHA)
+     * Busca áreas na imagem que possuem assinatura cromática idêntica à selecionada.
      */
+    findSimilarAreas: (
+        ctx: CanvasRenderingContext2D,
+        width: number,
+        height: number,
+        activeMask: Uint8Array,
+        tolerance: number
+    ): Uint8Array | null => {
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const data = imgData.data;
+        const suggestionMask = new Uint8Array(width * height);
+        
+        let rSum = 0, gSum = 0, bSum = 0, count = 0;
+        for (let i = 0; i < activeMask.length; i++) {
+            if (activeMask[i] === 255) {
+                const pos = i * 4;
+                rSum += data[pos]; gSum += data[pos+1]; bSum += data[pos+2];
+                count++;
+            }
+        }
+        if (count === 0) return null;
+        const rAvg = rSum / count, gAvg = gSum / count, bAvg = bSum / count;
+
+        // Amostragem acelerada para manter fluidez técnica
+        for (let i = 0; i < data.length; i += 44) { 
+            const idx = i / 4;
+            if (activeMask[idx] === 255) continue;
+
+            const colorDiff = Math.sqrt(
+                Math.pow(data[i] - rAvg, 2) + 
+                Math.pow(data[i+1] - gAvg, 2) + 
+                Math.pow(data[i+2] - bAvg, 2)
+            );
+
+            if (colorDiff <= tolerance * 1.15) {
+                suggestionMask[idx] = 255;
+            }
+        }
+        return suggestionMask;
+    },
+
     mergeMasks: (m1: Uint8Array, m2: Uint8Array): Uint8Array => {
         const result = new Uint8Array(m1.length);
         for (let i = 0; i < m1.length; i++) {
