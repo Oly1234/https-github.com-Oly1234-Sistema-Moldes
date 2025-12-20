@@ -507,8 +507,9 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 />
                             </div>
 
-                            <div className="absolute top-16 left-20 right-80 flex flex-col gap-3 z-50">
-                                <div className="flex items-center gap-6 px-4 py-2 bg-black/80 backdrop-blur rounded-xl border border-white/5 shadow-2xl">
+                            {/* COMPACT TOOLBAR DECK (DESKTOP) */}
+                            <div className="absolute top-16 left-24 flex flex-col gap-4 z-50 pointer-events-none w-auto max-w-[calc(100%-420px)]">
+                                <div className="flex items-center gap-4 px-4 py-3 bg-black/70 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl pointer-events-auto w-max">
                                     {(tool === 'BRUSH' || tool === 'ERASER') && (
                                         <>
                                             <div className="min-w-[140px]">
@@ -519,40 +520,51 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                                     min={5} max={400} 
                                                 />
                                             </div>
-                                            <button onClick={() => setBrushParams(p=>({...p, smart:!p.smart}))} className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${brushParams.smart ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 text-gray-500'}`}>Smart: {brushParams.smart ? 'ON' : 'OFF'}</button>
+                                            <div className="h-8 w-px bg-white/10 mx-1"></div>
+                                            <button onClick={() => setBrushParams(p=>({...p, smart:!p.smart}))} className={`px-4 py-2 rounded-xl text-[10px] font-black border transition-all flex items-center gap-2 ${brushParams.smart ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-transparent text-gray-500'}`}><Brain size={14}/> Neural: {brushParams.smart ? 'ON' : 'OFF'}</button>
                                         </>
                                     )}
                                     {tool === 'WAND' && (
-                                        <div className="flex items-center gap-4 flex-1">
-                                            <div className="min-w-[200px]"><MobileSlider label="Tolerância" value={wandParams.tolerance} onChange={v => setWandParams(p=>({...p, tolerance:v}))} min={1} max={180} /></div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="min-w-[200px]"><MobileSlider label="Tolerância da Mira" value={wandParams.tolerance} onChange={v => setWandParams(p=>({...p, tolerance:v}))} min={1} max={180} /></div>
+                                            <div className="h-8 w-px bg-white/10 mx-1"></div>
                                             <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
                                                 <button onClick={() => setToolMode('ADD')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center gap-2 ${toolMode==='ADD' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}><Plus size={14}/> Somar</button>
                                                 <button onClick={() => setToolMode('SUB')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center gap-2 ${toolMode==='SUB' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}><Minus size={14}/> Subtrair</button>
                                             </div>
-                                            <button onClick={() => setWandParams(p=>({...p, contiguous:!p.contiguous}))} className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${wandParams.contiguous ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 text-gray-500'}`}>Modo Contínuo: {wandParams.contiguous ? 'ON' : 'OFF'}</button>
+                                            <button onClick={() => setWandParams(p=>({...p, contiguous:!p.contiguous}))} className={`px-4 py-2 rounded-xl text-[10px] font-black border transition-all flex items-center gap-2 ${wandParams.contiguous ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-transparent text-gray-500'}`}>Contínuo: {wandParams.contiguous ? 'ON' : 'OFF'}</button>
+                                        </div>
+                                    )}
+                                    {tool === 'HAND' && (
+                                        <button onClick={fitImageToContainer} className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black text-white flex items-center gap-2 uppercase tracking-widest transition-all"><Maximize2 size={14}/> Centralizar Visualização</button>
+                                    )}
+                                    {tool === 'LASSO' && (
+                                        <div className="flex items-center gap-3 px-4 py-1">
+                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">Modo Laço Livre</span>
                                         </div>
                                     )}
                                 </div>
                                 
-                                {/* TEXT GUIDED SEGMENTATION BAR */}
+                                {/* TEXT GUIDED SEGMENTATION BAR (COMPACT) */}
                                 {tool === 'WAND' && (
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-900/40 to-black/80 backdrop-blur rounded-xl border border-blue-500/20 shadow-xl animate-fade-in group">
-                                        <Sparkles size={16} className="text-blue-400 group-hover:animate-pulse"/>
+                                    <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-900/60 to-black/80 backdrop-blur-xl rounded-2xl border border-blue-500/30 shadow-2xl pointer-events-auto w-full max-w-lg animate-in slide-in-from-top-1 group">
+                                        <Sparkles size={18} className="text-blue-400 group-hover:rotate-12 transition-transform duration-500"/>
                                         <input 
                                             type="text" 
                                             value={semanticPrompt}
                                             onChange={(e) => setSemanticPrompt(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleSemanticWand(semanticPrompt)}
-                                            placeholder="Descreva o elemento para selecionar (ex: 'Flor vermelha', 'Miolo da estampa')..." 
-                                            className="flex-1 bg-transparent border-none text-[11px] font-bold text-white placeholder-gray-500 outline-none"
+                                            placeholder="Descreva o elemento que deseja segmentar..." 
+                                            className="flex-1 bg-transparent border-none text-[12px] font-bold text-white placeholder-gray-500 outline-none"
                                         />
                                         <button 
                                             onClick={() => handleSemanticWand(semanticPrompt)}
                                             disabled={!semanticPrompt || isSemanticLoading}
-                                            className="bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all disabled:opacity-30 flex items-center gap-2 px-3"
+                                            className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-xl transition-all disabled:opacity-30 flex items-center gap-2 px-4 shadow-lg shadow-blue-900/20"
                                         >
-                                            {isSemanticLoading ? <Loader2 size={14} className="animate-spin"/> : <SearchCode size={14}/>}
-                                            <span className="text-[9px] font-black uppercase tracking-widest">Segmentar</span>
+                                            {isSemanticLoading ? <Loader2 size={14} className="animate-spin"/> : <SearchCode size={16}/>}
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Segmentar</span>
                                         </button>
                                     </div>
                                 )}
