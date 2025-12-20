@@ -7,7 +7,7 @@ import {
     Activity, Brain, Crosshair, Target, MoreVertical, MoreHorizontal, Copy, MoveDown, Edit2, FlipHorizontal2, FlipVertical2,
     GripVertical, FolderPlus, Link as LinkIcon, Folder, ChevronRight, FolderOpen, Combine, Ungroup, LogOut,
     PlusCircle, Maximize2, MousePointerClick, Settings, Save, ArrowLeft, SlidersHorizontal, Shirt, PlusSquare,
-    SearchCode, MessageSquare, Sparkles, BrainCircuit, MinusCircle, ArrowUp, ArrowDown
+    SearchCode, MessageSquare, Sparkles, BrainCircuit, MinusCircle, ArrowUp, ArrowDown, Target as TargetIcon
 } from 'lucide-react';
 import { DesignLayer } from '../types';
 import { ModuleLandingPage } from './Shared';
@@ -233,11 +233,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         if (tool === 'LASSO' && lassoPoints.length > 3) {
             const currentMask = activeMask || new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
             if (activeMask) setUndoStack(prev => LayerEnginePro.pushHistory(prev, activeMask));
-            
-            // INTELIGÊNCIA DE INTENÇÃO: Decide automaticamente se adiciona ou remove
             const intent = LayerEnginePro.detectLassoIntent(currentMask, originalImg.naturalWidth, originalImg.naturalHeight, lassoPoints);
             const nextMask = LayerEnginePro.createPolygonMask(originalImg.naturalWidth, originalImg.naturalHeight, lassoPoints, intent, currentMask);
-            
             setActiveMask(nextMask);
             setLassoPoints([]);
         }
@@ -274,54 +271,24 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const { x, y } = mousePos, k = view.k;
         ctx.clearRect(0, 0, originalImg.naturalWidth, originalImg.naturalHeight);
         
-        // MIRA DE PRECISÃO TELESCÓPICA PARA O LAÇO
         if (tool === 'LASSO') {
-            // Rastro do Laço (Marching Ants Neon)
             if (lassoPoints.length > 0) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 3/k;
+                ctx.save(); ctx.beginPath(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3/k;
                 ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
                 lassoPoints.forEach(p => ctx.lineTo(p.x, p.y));
                 if (isInteracting.current) ctx.lineTo(x, y);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.setLineDash([5/k, 5/k]);
-                ctx.lineDashOffset = -Date.now() / 50; // Animação
-                ctx.strokeStyle = '#3b82f6';
-                ctx.lineWidth = 2.5/k;
+                ctx.stroke(); ctx.beginPath(); ctx.setLineDash([5/k, 5/k]); ctx.lineDashOffset = -Date.now() / 50;
+                ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2.5/k;
                 ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
                 lassoPoints.forEach(p => ctx.lineTo(p.x, p.y));
                 if (isInteracting.current) ctx.lineTo(x, y);
-                ctx.stroke();
-                ctx.restore();
+                ctx.stroke(); ctx.restore();
             }
-
-            // Cursor Mira Telescópica (Alta Visibilidade)
-            ctx.save();
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-            ctx.lineWidth = 1.5/k;
-            ctx.arc(x, y, 10/k, 0, Math.PI * 2);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth = 2/k;
-            ctx.moveTo(x - 15/k, y); ctx.lineTo(x - 5/k, y);
-            ctx.moveTo(x + 15/k, y); ctx.lineTo(x + 5/k, y);
-            ctx.moveTo(x, y - 15/k); ctx.lineTo(x, y - 5/k);
-            ctx.moveTo(x, y + 15/k); ctx.lineTo(x, y + 5/k);
-            ctx.stroke();
-            
-            // Ponto central de foco
-            ctx.beginPath();
-            ctx.fillStyle = '#fff';
-            ctx.arc(x, y, 2/k, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+            ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 1.5/k;
+            ctx.arc(x, y, 10/k, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2/k;
+            ctx.moveTo(x - 15/k, y); ctx.lineTo(x - 5/k, y); ctx.moveTo(x + 15/k, y); ctx.lineTo(x + 5/k, y);
+            ctx.moveTo(x, y - 15/k); ctx.lineTo(x, y - 5/k); ctx.moveTo(x, y + 15/k); ctx.lineTo(x, y + 5/k);
+            ctx.stroke(); ctx.beginPath(); ctx.fillStyle = '#fff'; ctx.arc(x, y, 2/k, 0, Math.PI * 2); ctx.fill(); ctx.restore();
         }
         
         if (tool === 'WAND') {
@@ -359,29 +326,17 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 <div className="flex-1 flex flex-col overflow-hidden relative">
                     <div ref={containerRef} className="flex-1 relative bg-[#050505] overflow-hidden cursor-none touch-none" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
                         <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-                        <div 
-                            className="absolute shadow-[0_0_80px_rgba(0,0,0,1)] transition-transform duration-75 will-change-transform" 
-                            style={{ 
-                                width: originalImg.naturalWidth, height: originalImg.naturalHeight, left: '50%', top: '50%',
-                                marginLeft: -originalImg.naturalWidth / 2, marginTop: -originalImg.naturalHeight / 2,
-                                transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center'
-                            }}
-                        >
+                        <div className="absolute shadow-[0_0_80px_rgba(0,0,0,1)] transition-transform duration-75 will-change-transform" style={{ width: originalImg.naturalWidth, height: originalImg.naturalHeight, left: '50%', top: '50%', marginLeft: -originalImg.naturalWidth / 2, marginTop: -originalImg.naturalHeight / 2, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center' }}>
                             {layers.map(l => ( <img key={l.id} src={l.src} className={`absolute inset-0 w-full h-full pointer-events-none ${selectedLayerIds.includes(l.id) ? 'filter drop-shadow-[0_0_10px_rgba(59,130,246,0.4)] z-10' : ''}`} draggable={false} style={{ objectFit: 'contain', display: l.visible ? 'block' : 'none', opacity: l.opacity ?? 1 }} /> ))}
                             <canvas ref={overlayRef} width={originalImg.naturalWidth} height={originalImg.naturalHeight} className="absolute inset-0 pointer-events-none z-[60]" />
                             <canvas ref={cursorRef} width={originalImg.naturalWidth} height={originalImg.naturalHeight} className="absolute inset-0 pointer-events-none z-[70] mix-blend-difference" />
                         </div>
-                        
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[200] pointer-events-none">
                             {tool === 'BRUSH' && activeMask && !isSemanticLoading && (
-                                <button onClick={handleSemanticIdentification} className="pointer-events-auto bg-blue-600 text-white px-6 py-3 rounded-full font-black text-[10px] shadow-[0_0_30px_rgba(59,130,246,0.8)] animate-bounce-subtle flex items-center gap-2 border-2 border-white/20 active:scale-95 transition-transform uppercase tracking-widest">
-                                    <BrainCircuit size={16}/> Localizar Elemento
-                                </button>
+                                <button onClick={handleSemanticIdentification} className="pointer-events-auto bg-blue-600 text-white px-6 py-3 rounded-full font-black text-[10px] shadow-[0_0_30px_rgba(59,130,246,0.8)] animate-bounce-subtle flex items-center gap-2 border-2 border-white/20 active:scale-95 transition-transform uppercase tracking-widest"><BrainCircuit size={16}/> Localizar Elemento</button>
                             )}
                             {isSemanticLoading && (
-                                <div className="bg-black/80 backdrop-blur-md text-white px-6 py-3 rounded-full font-black text-[10px] border border-blue-500/50 flex items-center gap-3 uppercase tracking-widest">
-                                    <Loader2 size={16} className="animate-spin text-blue-400"/> Identificando...
-                                </div>
+                                <div className="bg-black/80 backdrop-blur-md text-white px-6 py-3 rounded-full font-black text-[10px] border border-blue-500/50 flex items-center gap-3 uppercase tracking-widest"><Loader2 size={16} className="animate-spin text-blue-400"/> Identificando...</div>
                             )}
                         </div>
                     </div>
@@ -391,27 +346,16 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             <div className="h-20 px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black">
                                 <button onClick={() => document.getElementById('l-up')?.click()} className="min-w-[48px] h-[48px] rounded-xl bg-white/5 border border-dashed border-white/20 flex flex-col items-center justify-center text-gray-500 shrink-0"><PlusSquare size={18}/><span className="text-[7px] mt-1 uppercase font-bold">Novo</span></button>
                                 {[...layers].reverse().map(l => (
-                                    <div 
-                                        key={l.id} 
-                                        onClick={() => setSelectedLayerIds([l.id])}
-                                        onContextMenu={(e) => { e.preventDefault(); setMobileMenuLayerId(l.id); }}
-                                        className={`min-w-[48px] h-[48px] rounded-xl border-2 transition-all relative bg-black shrink-0 flex flex-col items-center ${selectedLayerIds.includes(l.id) ? 'border-blue-500 scale-105 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-60'}`}
-                                    >
+                                    <div key={l.id} onClick={() => setSelectedLayerIds([l.id])} onContextMenu={(e) => { e.preventDefault(); setMobileMenuLayerId(l.id); }} className={`min-w-[48px] h-[48px] rounded-xl border-2 transition-all relative bg-black shrink-0 flex flex-col items-center ${selectedLayerIds.includes(l.id) ? 'border-blue-500 scale-105 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-60'}`}>
                                         <div className="w-full h-full rounded-lg overflow-hidden relative">
                                             <img src={l.src} className="w-full h-full object-contain" />
                                             {!l.visible && <div className="absolute inset-0 bg-red-900/40 flex items-center justify-center backdrop-blur-[1px]"><EyeOff size={12}/></div>}
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); toggleVisibility(l.id); }} 
-                                                className={`absolute top-0 right-0 p-0.5 rounded-bl-lg backdrop-blur-md ${l.visible ? 'bg-blue-500/80' : 'bg-red-500/80'}`}
-                                            >
-                                                {l.visible ? <Eye size={10}/> : <EyeOff size={10}/>}
-                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); toggleVisibility(l.id); }} className={`absolute top-0 right-0 p-0.5 rounded-bl-lg backdrop-blur-md ${l.visible ? 'bg-blue-500/80' : 'bg-red-500/80'}`}>{l.visible ? <Eye size={10}/> : <EyeOff size={10}/>}</button>
                                         </div>
                                         <span className="absolute -bottom-5 text-[8px] font-black uppercase text-gray-400 truncate w-full text-center tracking-tighter">{l.name}</span>
                                     </div>
                                 ))}
                             </div>
-
                             <div className="h-14 px-4 flex items-center justify-between gap-4 border-b border-white/5 bg-[#0a0a0a]">
                                 {(tool === 'BRUSH' || tool === 'ERASER') && (
                                     <div className="flex items-center gap-4 w-full">
@@ -432,7 +376,6 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                     <div className="w-full text-center"><span className="text-[10px] font-black uppercase tracking-widest text-blue-400 animate-pulse">Laço Inteligente: Envolva a área</span></div>
                                 )}
                             </div>
-
                             <div className="h-20 flex items-center justify-around px-2 bg-black">
                                 <ToolBtn icon={Hand} label="Pan" active={tool==='HAND'} onClick={() => setTool('HAND')} />
                                 <ToolBtn icon={Wand2} label="Mira" active={tool==='WAND'} onClick={() => setTool('WAND')} />
@@ -444,10 +387,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                     <button onClick={() => setToolMode('ADD')} className={`p-2.5 rounded-lg transition-all ${toolMode==='ADD' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-600'}`}><Plus size={16}/></button>
                                     <button onClick={() => setToolMode('SUB')} className={`p-2.5 rounded-lg transition-all ${toolMode==='SUB' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-600'}`}><Minus size={16}/></button>
                                 </div>
-                                <button onClick={() => setMobileMenuLayerId(selectedLayerIds[0])} disabled={selectedLayerIds.length === 0} className="flex flex-col items-center justify-center min-w-[50px] h-12 rounded-xl text-vingi-400 bg-vingi-500/10 ml-1">
-                                    <Settings size={18}/>
-                                    <span className="text-[7px] font-black mt-0.5 uppercase">Ação</span>
-                                </button>
+                                <button onClick={() => setMobileMenuLayerId(selectedLayerIds[0])} disabled={selectedLayerIds.length === 0} className="flex flex-col items-center justify-center min-w-[50px] h-12 rounded-xl text-vingi-400 bg-vingi-500/10 ml-1"><Settings size={18}/><span className="text-[7px] font-black mt-0.5 uppercase">Ação</span></button>
                             </div>
                         </div>
                     ) : (
@@ -460,12 +400,42 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 <ToolBtn icon={Eraser} label="Apagar" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
                                 <ToolBtn icon={PenTool} label="Laço" active={tool==='LASSO'} onClick={() => setTool('LASSO')} />
                                 <div className="mt-auto flex flex-col gap-4 mb-4">
-                                    <button onClick={() => setToolMode(toolMode==='ADD'?'SUB':'ADD')} className={`p-2 rounded-xl transition-all ${toolMode==='ADD' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
-                                        {toolMode==='ADD' ? <Plus size={20}/> : <Minus size={20}/>}
-                                    </button>
+                                    <button onClick={() => setToolMode(toolMode==='ADD'?'SUB':'ADD')} className={`p-2 rounded-xl transition-all ${toolMode==='ADD' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{toolMode==='ADD' ? <Plus size={20}/> : <Minus size={20}/>}</button>
                                 </div>
                             </div>
                             <div className="absolute top-0 right-0 bottom-0 w-80 bg-[#080808] border-l border-white/5 flex flex-col z-[100] shadow-2xl">
+                                {/* TOOL SETTINGS DESKTOP */}
+                                <div className="p-5 border-b border-white/5 bg-black">
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4 flex items-center gap-2"><SlidersHorizontal size={14}/> Opções da Ferramenta</h3>
+                                    {(tool === 'BRUSH' || tool === 'ERASER') && (
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center"><span className="text-[9px] font-bold text-gray-400 uppercase">Tamanho</span><span className="text-[9px] font-mono text-blue-400">{tool==='ERASER'?brushParams.eraserSize:brushParams.size}px</span></div>
+                                                <input type="range" min={5} max={500} value={tool==='ERASER'?brushParams.eraserSize:brushParams.size} onChange={e => setBrushParams(p=>({...p, [tool==='ERASER'?'eraserSize':'size']:parseInt(e.target.value)}))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center"><span className="text-[9px] font-bold text-gray-400 uppercase">Dureza</span><span className="text-[9px] font-mono text-blue-400">{brushParams.hardness}%</span></div>
+                                                <input type="range" min={1} max={100} value={brushParams.hardness} onChange={e => setBrushParams(p=>({...p, hardness:parseInt(e.target.value)}))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
+                                            </div>
+                                            <button onClick={() => setBrushParams(p=>({...p, smart:!p.smart}))} className={`w-full py-2.5 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 border transition-all ${brushParams.smart ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : 'bg-white/5 border-transparent text-gray-500'}`}><Brain size={14}/> {brushParams.smart ? 'Segmentação Neural Ativa' : 'Pincel de Pixel Livre'}</button>
+                                        </div>
+                                    )}
+                                    {tool === 'WAND' && (
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center"><span className="text-[9px] font-bold text-gray-400 uppercase">Tolerância</span><span className="text-[9px] font-mono text-blue-400">{wandParams.tolerance}</span></div>
+                                                <input type="range" min={1} max={255} value={wandParams.tolerance} onChange={e => setWandParams(p=>({...p, tolerance:parseInt(e.target.value)}))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
+                                            </div>
+                                            <button onClick={() => setWandParams(p=>({...p, contiguous:!p.contiguous}))} className={`w-full py-2.5 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 border transition-all ${wandParams.contiguous ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : 'bg-white/5 border-transparent text-gray-500'}`}><TargetIcon size={14}/> {wandParams.contiguous ? 'Busca Contígua Ativa' : 'Seleção Global de Cor'}</button>
+                                        </div>
+                                    )}
+                                    {tool === 'LASSO' && (
+                                        <div className="bg-blue-900/10 border border-blue-500/20 p-3 rounded-lg"><p className="text-[9px] font-bold text-blue-300 leading-relaxed uppercase tracking-tight">O Laço detecta automaticamente a intenção de adição ou subtração baseado no preenchimento da área.</p></div>
+                                    )}
+                                    {tool === 'HAND' && (
+                                        <button onClick={fitImageToContainer} className="w-full py-2.5 rounded-lg text-[9px] font-black uppercase bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2"><Maximize2 size={14}/> Resetar Visualização</button>
+                                    )}
+                                </div>
                                 <LayerList layers={layers} selectedIds={selectedLayerIds} onSelect={(id:string, m:boolean)=>setSelectedLayerIds(m?([...selectedLayerIds, id]):[id])} onRename={(id:string,n:string)=>setLayers(ls=>ls.map(l=>l.id===id?{...l,name:n}:l))} onDelete={(id:string)=>setLayers(ls=>ls.filter(l=>l.id!==id))} onVisibility={toggleVisibility} onReorder={reorderLayer} editingLayerId={editingLayerId} setEditingLayerId={setEditingLayerId} />
                             </div>
                         </>
