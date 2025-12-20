@@ -1,7 +1,7 @@
 
 /**
- * VINGI LAYER ENGINE PRO v10.8
- * Foco: Estabilidade de Pincel em Larga Escala & Precisão Neural.
+ * VINGI LAYER ENGINE PRO v10.9
+ * Foco: Laço Inteligente por Intenção & Precisão Neural.
  */
 
 export interface MaskSnapshot {
@@ -73,7 +73,6 @@ export const LayerEnginePro = {
 
     /**
      * Pincel / Borracha Inteligente
-     * Otimizado para grandes tamanhos para evitar pintura fora da área.
      */
     paintSmartMask: (
         mask: Uint8Array, 
@@ -91,7 +90,6 @@ export const LayerEnginePro = {
 
         if (centerX < 0 || centerX >= width || centerY < 0 || centerY >= height) return newMask;
 
-        // AMOSTRAGEM ESTABILIZADA (3x3 para evitar ruído em pincéis grandes)
         let r0 = 0, g0 = 0, b0 = 0, samples = 0;
         for (let sy = -1; sy <= 1; sy++) {
             for (let sx = -1; sx <= 1; sx++) {
@@ -106,9 +104,8 @@ export const LayerEnginePro = {
         r0 /= samples; g0 /= samples; b0 /= samples;
 
         const hardnessK = params.hardness / 100;
-        const smartTolerance = (100 - params.hardness) * 0.5 + 15; // Mais rigoroso em tamanhos grandes
+        const smartTolerance = (100 - params.hardness) * 0.5 + 15;
 
-        // Bounding box otimizada
         const startY = Math.max(0, Math.floor(centerY - radius));
         const endY = Math.min(height - 1, Math.ceil(centerY + radius));
         const startX = Math.max(0, Math.floor(centerX - radius));
@@ -128,7 +125,6 @@ export const LayerEnginePro = {
                         const pos = idx * 4;
                         const diff = Math.abs(imgData[pos] - r0) + Math.abs(imgData[pos+1] - g0) + Math.abs(imgData[pos+2] - b0);
                         if (diff > smartTolerance) {
-                            // Queda de afinidade mais abrupta para evitar "vazamento"
                             affinity = Math.max(0, 1 - (diff - smartTolerance) / 25);
                         }
                     }
@@ -138,14 +134,11 @@ export const LayerEnginePro = {
                     const dist = Math.sqrt(distSq);
                     const innerRadius = radius * hardnessK;
                     let force = dist > innerRadius ? 1 - (dist - innerRadius) / (radius - innerRadius) : 1;
-                    
-                    // Aplicação suave da opacidade
                     const alpha = force * opacityByte * affinity;
 
                     if (params.mode === 'ADD') {
                         if (alpha > newMask[idx]) newMask[idx] = alpha;
                     } else {
-                        // Borracha linear e precisa
                         const erasePower = Math.min(255, alpha * 2); 
                         newMask[idx] = Math.max(0, newMask[idx] - erasePower);
                     }
@@ -156,10 +149,41 @@ export const LayerEnginePro = {
     },
 
     /**
+     * DETECT LASSO INTENT (Motor de Decisão Automática)
+     */
+    detectLassoIntent: (mask: Uint8Array, width: number, height: number, points: {x: number, y: number}[]): 'ADD' | 'SUB' => {
+        let insidePixels = 0;
+        let maskedPixels = 0;
+        
+        let minX = width, maxX = 0, minY = height, maxY = 0;
+        points.forEach(p => {
+            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        });
+
+        // Amostra a área do laço para decidir a intenção
+        const step = Math.max(1, Math.floor((maxX - minX) / 20)); // Amostragem para performance
+        for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
+            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    if (LayerEnginePro.isPointInPoly(x, y, points)) {
+                        insidePixels++;
+                        if (mask[y * width + x] > 128) maskedPixels++;
+                    }
+                }
+            }
+        }
+
+        // Se mais de 60% da área do laço já estiver mascarada, a intenção é REMOVER
+        if (insidePixels > 0 && (maskedPixels / insidePixels) > 0.6) return 'SUB';
+        return 'ADD';
+    },
+
+    /**
      * LASSO INTELLIGENCE
      */
-    createPolygonMask: (width: number, height: number, points: {x: number, y: number}[], imgData?: Uint8ClampedArray) => {
-        const mask = new Uint8Array(width * height);
+    createPolygonMask: (width: number, height: number, points: {x: number, y: number}[], mode: 'ADD' | 'SUB', existingMask?: Uint8Array) => {
+        const mask = existingMask ? new Uint8Array(existingMask) : new Uint8Array(width * height);
         let minX = width, maxX = 0, minY = height, maxY = 0;
         points.forEach(p => {
             minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
@@ -171,7 +195,7 @@ export const LayerEnginePro = {
                 if (x >= 0 && x < width && y >= 0 && y < height) {
                     if (LayerEnginePro.isPointInPoly(x, y, points)) {
                         const idx = y * width + x;
-                        mask[idx] = 255;
+                        mask[idx] = mode === 'ADD' ? 255 : 0;
                     }
                 }
             }

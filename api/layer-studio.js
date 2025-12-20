@@ -24,27 +24,36 @@ export default async function handler(req, res) {
     let apiKey = process.env.API_KEY;
     const ai = new GoogleGenAI({ apiKey });
 
-    // 1. SEGMENTAÇÃO SEMÂNTICA / GUIADA POR TEXTO
+    // 1. MOTOR DE SEGMENTAÇÃO SEMÂNTICA ZERO-SHOT (VINGI SAM-X)
     if (action === 'SEMANTIC_SEGMENTATION') {
-        const systemPrompt = `Você é um especialista em visão computacional têxtil avançada.
-        Sua tarefa é localizar com precisão milimétrica o objeto descrito pelo usuário ou o elemento principal clicado.
+        const systemInstruction = `Você é o VINGI NEURAL SEGMENTER (Baseado em SAM-X e Vision-Language Models).
+        Sua missão é realizar a "Conclusão Semântica" de objetos a partir de entradas esparsas do usuário.
         
-        INSTRUÇÕES:
-        - Identifique o "Elemento Inteiro" (Ex: Flor completa incluindo pétalas e miolo).
-        - Retorne as coordenadas normalizadas (0-1000) do retângulo delimitador (bbox).
-        - Descreva brevemente o que compõe o elemento.`;
+        PRINCÍPIOS DE OPERAÇÃO:
+        1. COMPLETUDE DO OBJETO (Zero-Shot): Se o usuário pintar ou clicar em uma parte, identifique o objeto INTEIRO (ex: uma pétala -> a flor completa; um rosto -> a pessoa inteira).
+        2. EXPANSÃO DE BUSCA: Garante que o retângulo delimitador (bbox) englobe 100% do objeto, expandindo as bordas em 5% para segurança de recorte.
+        3. DIFERENCIAÇÃO FUNDO/FIGURA: Isole o elemento principal ignorando sombras projetadas, dobras de tecido ou ruídos de impressão.
+        4. UNIVERSALIDADE: Funcione com qualquer categoria (botânica, humana, geométrica, arquitetônica).
+        
+        FORMATO DE SAÍDA (JSON):
+        {
+          "objectName": "nome técnico do elemento",
+          "bbox": {"ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000},
+          "analysis": "descrição curta do que foi identificado e o porquê da expansão"
+        }`;
 
-        const prompt = userPrompt 
-            ? `Localize e segmente o seguinte: "${userPrompt}"` 
-            : `O usuário clicou em (x:${contextData?.x || 0.5}, y:${contextData?.y || 0.5}). Localize o objeto completo (flor, folha, arabesco) que contém este ponto.`;
+        const prompt = contextData?.bbox 
+            ? `O usuário marcou uma área aproximada em: ${JSON.stringify(contextData.bbox)}. Realize a SEGMENTAÇÃO SEMÂNTICA COMPLETA deste objeto. Expanda a busca para garantir que o elemento inteiro seja capturado.`
+            : `Ponto de interesse: (x:${contextData?.x || 0.5}, y:${contextData?.y || 0.5}). Identifique e retorne o BBox do objeto completo que contém este ponto.`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: [{ parts: [
-                { text: systemPrompt + "\n\n" + prompt }, 
+                { text: prompt }, 
                 { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
             ] }],
             config: { 
+                systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -67,11 +76,10 @@ export default async function handler(req, res) {
             }
         });
         
-        const outputText = response.text;
-        return res.status(200).json(JSON.parse(cleanJson(outputText)));
+        return res.status(200).json(JSON.parse(cleanJson(response.text)));
     }
 
-    // 2. SEPARAÇÃO INDUSTRIAL DE CORES
+    // 2. SEPARAÇÃO INDUSTRIAL DE CORES (Mantido)
     if (action === 'COLOR_SEPARATION') {
         const prompt = `Analyze this textile print for industrial color separation.
         Group colors by: BACKGROUND, PRIMARY MOTIFS, SECONDARY MOTIFS, DETAILS.
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
         return res.status(200).json(JSON.parse(cleanJson(response.text)));
     }
 
-    // 3. REFINAMENTO DE PRODUÇÃO
+    // 3. REFINAMENTO DE PRODUÇÃO (Mantido)
     if (action === 'EXPORT_PRODUCTION') {
         const prodPrompt = `Industrial Refinement for Production:
         - Harmonize edges and textures.
