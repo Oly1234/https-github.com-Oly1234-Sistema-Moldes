@@ -24,38 +24,95 @@ export default async function handler(req, res) {
     let apiKey = process.env.API_KEY;
     const ai = new GoogleGenAI({ apiKey });
 
-    // 1. SEPARAÇÃO INDUSTRIAL DE CORES
+    // 1. SEGMENTAÇÃO SEMÂNTICA / GUIADA POR TEXTO
+    if (action === 'SEMANTIC_SEGMENTATION') {
+        const systemPrompt = `Você é um especialista em visão computacional têxtil avançada.
+        Sua tarefa é localizar com precisão milimétrica o objeto descrito pelo usuário ou o elemento principal clicado.
+        
+        INSTRUÇÕES:
+        - Identifique o "Elemento Inteiro" (Ex: Flor completa incluindo pétalas e miolo).
+        - Retorne as coordenadas normalizadas (0-1000) do retângulo delimitador (bbox).
+        - Descreva brevemente o que compõe o elemento.`;
+
+        const prompt = userPrompt 
+            ? `Localize e segmente o seguinte: "${userPrompt}"` 
+            : `O usuário clicou em (x:${contextData?.x || 0.5}, y:${contextData?.y || 0.5}). Localize o objeto completo (flor, folha, arabesco) que contém este ponto.`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ parts: [
+                { text: systemPrompt + "\n\n" + prompt }, 
+                { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
+            ] }],
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        objectName: { type: Type.STRING },
+                        bbox: {
+                            type: Type.OBJECT,
+                            properties: {
+                                ymin: { type: Type.NUMBER },
+                                xmin: { type: Type.NUMBER },
+                                ymax: { type: Type.NUMBER },
+                                xmax: { type: Type.NUMBER }
+                            },
+                            required: ["ymin", "xmin", "ymax", "xmax"]
+                        },
+                        analysis: { type: Type.STRING }
+                    },
+                    required: ["objectName", "bbox"]
+                }
+            }
+        });
+        
+        const outputText = response.text;
+        return res.status(200).json(JSON.parse(cleanJson(outputText)));
+    }
+
+    // 2. SEPARAÇÃO INDUSTRIAL DE CORES
     if (action === 'COLOR_SEPARATION') {
         const prompt = `Analyze this textile print for industrial color separation.
         Group colors by: BACKGROUND, PRIMARY MOTIFS, SECONDARY MOTIFS, DETAILS.
-        Provide Pantone TCX suggestions for each.
-        Output JSON: { "groups": [ { "type": "BACKGROUND", "colors": [ {"hex": "#...", "name": "...", "pantone": "..."} ] } ] }`;
+        Provide Pantone TCX suggestions for each.`;
         
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
-            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'image/png', data: imageBase64 } }] }],
-            config: { responseMimeType: "application/json" }
+            model: 'gemini-2.5-flash',
+            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }] }],
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        groups: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    type: { type: Type.STRING },
+                                    colors: {
+                                        type: Type.ARRAY,
+                                        items: {
+                                            type: Type.OBJECT,
+                                            properties: {
+                                                hex: { type: Type.STRING },
+                                                name: { type: Type.STRING },
+                                                pantone: { type: Type.STRING }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
         return res.status(200).json(JSON.parse(cleanJson(response.text)));
     }
 
-    // 2. ANÁLISE DE PINCEL CONTEXTUAL
-    if (action === 'SMART_BRUSH_PROPOSAL') {
-        const prompt = `The user is painting over an area in this print. 
-        Context: ${userPrompt || 'Suggest variation'}.
-        Analyze the surrounding style, scale, and colors.
-        Propose 3 variations for this element that maintain the print's identity.
-        Output JSON: { "proposals": ["proposal 1", "proposal 2", "proposal 3"] }`;
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
-            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'image/png', data: imageBase64 } }] }],
-            config: { responseMimeType: "application/json" }
-        });
-        return res.status(200).json(JSON.parse(cleanJson(response.text)));
-    }
-
-    // 3. REFINAMENTO DE PRODUÇÃO (EXPORTAÇÃO FINAL)
+    // 3. REFINAMENTO DE PRODUÇÃO
     if (action === 'EXPORT_PRODUCTION') {
         const prodPrompt = `Industrial Refinement for Production:
         - Harmonize edges and textures.
@@ -63,8 +120,8 @@ export default async function handler(req, res) {
         - Output a high-fidelity textile asset.`;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
-            contents: [{ parts: [{ text: prodPrompt }, { inlineData: { mimeType: 'image/png', data: imageBase64 } }] }]
+            model: 'gemini-2.5-flash',
+            contents: [{ parts: [{ text: prodPrompt }, { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }] }]
         });
         
         const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -76,6 +133,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, message: "Endpoint Layer Studio Pro Ativo" });
 
   } catch (error) {
+    console.error("API Studio Error:", error);
     res.status(503).json({ error: error.message });
   }
 }
