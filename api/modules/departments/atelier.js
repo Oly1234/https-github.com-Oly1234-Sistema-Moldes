@@ -1,27 +1,27 @@
 
 // api/modules/departments/atelier.js
-// DEPARTAMENTO: ANÁLISE DE REFERÊNCIA (Vision to Prompt)
+// DEPARTAMENTO: ANÁLISE CRÍTICA E DIREÇÃO DE ARTE
 import { GoogleGenAI } from "@google/genai";
 
-// Análise Visual Ultra-Precisa para extrair o DNA da Estampa
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
     const ai = new GoogleGenAI({ apiKey });
 
     const SYSTEM_PROMPT = `
-    ACT AS: Senior Textile Art Director & Botanical Illustrator (Forensic Specialist).
+    ACT AS: Executive Creative Director for High-End Textile Design (Como um Diretor Criativo de Luxo).
     
-    TASK: Perform a technical "Semantic Decomposition" of this image to guide a PRECISE LUXURY DIGITAL REPRODUCTION.
+    TASK: Perform an "Aesthetic Blueprint Extraction". Your goal is to identify the SOUL of the image and plan an ELITE UPGRADE.
     
     ANALYSIS PROTOCOL:
-    1. MOTIF IDENTIFICATION (Species & Form): Do not just say "flower" or "leaf". Identify the exact species if possible (e.g., "Hibiscus rosa-sinensis", "Monstera deliciosa") or describe the specific anatomy (e.g., "serrated edges", "tubular petals", "veined foliage").
-    2. STROKE & LINEAGE: Analyze how the art was drawn. Is it a "0.1mm technical pen", a "textured dry-brush stroke", "bleeding watercolor edges", or "clean vector bezier curves"?
-    3. BACKGROUND ARCHITECTURE: Identify if the background is a "flat solid color", a "multi-tonal watercolor wash", "recycled paper grain", or "atmospheric gradient with soft bokeh".
-    4. SHADING & LIGHTING: Map the light source. Are there "directional highlights", "soft drop shadows creating 3D lift", or "inner glows"?
-    5. ARTISTIC TECHNIQUE: Define the style precisely: "Art Nouveau illustration", "Impasto Oil Painting", "Photorealistic Digital Collage", "Minimalist Japanese Line Art".
-    6. COLOR ATMOSPHERE: Describe transitions like "velvety tone-on-tone gradients" or "high-contrast vibrant accents".
+    1. STYLE DECODING: Identify the specific artistic genre (e.g., "Organic Abstract", "Neo-Victorian Floral", "Geometric Bauhaus", "Japanese Minimalist").
+    2. MOTIF ANATOMY: Identify botanical species or geometric structures with scientific precision.
+    3. ARTISTIC GAP ANALYSIS: What is the reference missing? (e.g., "needs more spatial depth", "lacks highlight contrast", "requires micro-texture refinement").
+    4. EVOLUTIONARY PATH: How can we make this "more beautiful" while keeping the "same visual"? 
+       - If Abstract: "Add fluid translucency and layered depth."
+       - If Floral: "Add botanical hyper-realism and dramatic studio lighting."
+       - If Geometric: "Add metallic micro-textures and precise optical depth."
 
-    OUTPUT: A technical, extremely rich narrative prompt (in English) that describes every layer of this artwork as if explaining it to a master painter.
-    Start directly with the technical breakdown.
+    OUTPUT: A technical "Production Roadmap" in English. 
+    Format: Start with "ESTILO DETECTADO: [Genre]" and then provide the detailed elevation prompt.
     `;
 
     try {
@@ -36,12 +36,12 @@ export const refineDesignPrompt = async (apiKey, imageBase64) => {
         });
 
         const text = response.text;
-        return text ? text.trim() : "Clean high-end digital textile pattern with sophisticated motifs.";
+        return text ? text.trim() : "Premium luxury textile print with high-end artistic finish.";
 
     } catch (e) {
-        console.error("Atelier Analysis Error:", e);
-        return "Professional high-fidelity textile print design.";
+        console.error("Atelier Style Analysis Error:", e);
+        return "Professional high-fidelity textile design elevation.";
     }
 };
 
-export const createTextileDesign = async () => null; // Stub
+export const createTextileDesign = async () => null;
