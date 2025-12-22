@@ -1,380 +1,333 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-    Palette, Wand2, Download, UploadCloud, RefreshCw, 
-    Layers, Image as ImageIcon, Sparkles, 
-    Check, X, Loader2, Settings2, Sliders, Brush, 
-    Scissors, Ruler, Droplets, Info, Shirt, AlertCircle, 
-    ArrowRight, Share2, Globe, Archive, BrainCircuit
-} from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity } from 'lucide-react';
 import { PantoneColor } from '../types';
-import { ModuleHeader, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
+import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
-/**
- * ATELIER SYSTEM PRO v7.0
- * Advanced Generative Textile Studio
- */
+// --- COMPONENTS ---
+const PantoneChip: React.FC<{ color: PantoneColor, onDelete?: () => void }> = ({ color, onDelete }) => {
+    const [showMenu, setShowMenu] = useState(false);
+    const handleCopy = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(color.hex);
+    };
+    return (
+        <div onClick={() => setShowMenu(!showMenu)} className="flex flex-col bg-[#111] shadow-sm border border-gray-800 rounded-lg overflow-hidden cursor-pointer h-14 w-full group relative hover:scale-105 transition-transform">
+            <div className="h-8 w-full relative" style={{ backgroundColor: color.hex }}>
+                {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="absolute top-1 right-1 bg-black/40 hover:bg-red-500 hover:text-white text-white rounded-full p-0.5 backdrop-blur-sm transition-colors"><X size={10} /></button>}
+            </div>
+            <div className="flex-1 flex flex-col justify-center bg-[#1a1a1a] px-1.5 py-0.5">
+                <span className="text-[9px] font-bold text-gray-300 truncate">{color.name}</span>
+                <span className="text-[8px] text-gray-600 font-mono truncate">{color.code || color.hex}</span>
+            </div>
+            {showMenu && <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-2 animate-fade-in z-10"><button onClick={handleCopy} className="text-white text-[9px] font-bold flex items-center gap-1 hover:text-vingi-400"><Copy size={10}/> HEX</button></div>}
+        </div>
+    );
+};
 
-interface AtelierSystemProps {
-    onNavigateToMockup: () => void;
-    onNavigateToLayerStudio: () => void;
-}
+/* Consolidate triggerTransfer to avoid redeclaration and handle 'LAYER' */
+const triggerTransfer = (targetModule: string, imageData: string) => {
+    if (targetModule === 'MOCKUP') localStorage.setItem('vingi_mockup_pattern', imageData);
+    if (targetModule === 'LAYER') localStorage.setItem('vingi_layer_studio_source', imageData);
+    window.dispatchEvent(new CustomEvent('vingi_transfer', { detail: { module: targetModule } }));
+};
 
-// Utility for image compression before AI processing
-const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = base64Str;
+const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        if (!base64Str) { reject(new Error("Imagem vazia")); return; }
+        const img = new Image(); img.src = base64Str;
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            if (width > maxWidth) {
-                height = Math.round((height * maxWidth) / width);
-                width = maxWidth;
-            }
-            canvas.width = width;
-            canvas.height = height;
+            let w = img.width, h = img.height;
+            if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+            canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
-            ctx?.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
+            if (ctx) { ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.8)); } else reject(new Error("Canvas error"));
         };
+        img.onerror = () => reject(new Error("Load error"));
     });
 };
 
-export const AtelierSystem: React.FC<AtelierSystemProps> = ({ 
-    onNavigateToMockup, 
-    onNavigateToLayerStudio 
-}) => {
-    // Component state management
+interface AtelierSystemProps {
+    onNavigateToMockup?: () => void;
+    onNavigateToLayerStudio?: () => void;
+}
+
+const LAYOUT_OPTIONS = [
+    { id: 'ORIGINAL', label: 'Original', icon: ImageIcon },
+    { id: 'CORRIDA', label: 'Corrida', icon: Layers },
+    { id: 'BARRADO', label: 'Barrado', icon: ArrowDownToLine },
+    { id: 'LENCO', label: 'Lenço', icon: Frame }, 
+    { id: 'LOCALIZADA', label: 'Localizada', icon: Target },
+    { id: 'PAREO', label: 'Pareô', icon: Maximize },
+];
+
+const SUB_LAYOUT_CONFIG: Record<string, { id: string, label: string, icon: any }[]> = {
+    'LENCO': [
+        { id: 'MEDALHAO', label: 'Medalhão', icon: Target },
+        { id: 'BANDANA', label: 'Bandana', icon: BoxSelect },
+        { id: 'LISTRADO', label: 'Listrado', icon: Grid3X3 },
+        { id: 'FLORAL', label: 'Floral Frame', icon: Feather },
+    ],
+    'BARRADO': [
+        { id: 'SIMPLES', label: 'Simples', icon: ArrowDownToLine },
+        { id: 'DUPLO', label: 'Espelhado', icon: ArrowDownToLine }, 
+        { id: 'DEGRADE', label: 'Degradê', icon: Droplets },
+    ],
+    'CORRIDA': [
+        { id: 'TOSS', label: 'Aleatório', icon: Sparkles },
+        { id: 'GRID', label: 'Grid', icon: Grid3X3 },
+        { id: 'ORGANIC', label: 'Orgânico', icon: Droplets },
+    ]
+};
+
+const SIZE_OPTIONS: Record<string, string[]> = {
+    'LENCO': ['60x60cm (Bandana)', '90x90cm (Carré)', '110x110cm (Xale)', '140x140cm (Maxi)'],
+    'PAREO': ['100x140cm (Standard)', '115x145cm (Maxi Pareo)', '100x180cm (Canga)'],
+    'BARRADO': ['140cm (Largura Útil)', '150cm (Largura Útil)', '100cm (Metro Linear)'],
+    'CORRIDA': ['A4 (Rapport)', '50x50cm (Rapport)', '100x100cm (Full Width)'],
+    'LOCALIZADA': ['A3 (Frontal)', 'A4 (Bolso/Detalhe)', 'A2 (Costas Full)']
+};
+
+const ART_STYLES = [
+    { id: 'ORIGINAL', label: 'Original', icon: ImageIcon },
+    { id: 'WATERCOLOR', label: 'Aquarela', icon: Droplets },
+    { id: 'GIZ', label: 'Giz Pastel', icon: Edit3 },
+    { id: 'ACRILICA', label: 'Acrílica', icon: Palette },
+    { id: 'VETOR', label: 'Vetor Flat', icon: Box },
+    { id: 'BORDADO', label: 'Bordado', icon: Scissors },
+    { id: 'LINHA', label: 'Line Art', icon: PenTool },
+    { id: 'ORNAMENTAL', label: 'Barroco', icon: Feather },
+    { id: 'CUSTOM', label: 'Outro', icon: Edit3 },
+];
+
+const TEXTURE_PRESETS = [
+    { id: 'NONE', label: 'Lisa', css: 'none' },
+    { id: 'LINEN', label: 'Linho', css: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 3px), repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 3px)` },
+    { id: 'CANVAS', label: 'Canvas', css: `repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(0,0,0,0.15) 3px), repeating-linear-gradient(-45deg, transparent 0, transparent 2px, rgba(0,0,0,0.15) 3px)` },
+    { id: 'PAPER', label: 'Papel', css: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E")` },
+    { id: 'TWILL', label: 'Sarja', css: `repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(0,0,0,0.1) 1px, rgba(0,0,0,0.1) 4px)` },
+    { id: 'CUSTOM_AI', label: 'Criar (AI)', css: 'none', isAI: true }
+];
+
+export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
+    const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT'>('IMAGE');
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
-    const [creationMode, setCreationMode] = useState<'PROMPT' | 'IMAGE'>('IMAGE');
+    const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
+    const [userPrompt, setUserPrompt] = useState<string>(''); 
+    const [customInstruction, setCustomInstruction] = useState<string>(''); 
+    const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
+    const [colors, setColors] = useState<PantoneColor[]>([]);
+    const [colorCount, setColorCount] = useState<number>(0); 
+    const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
+    const [subLayout, setSubLayout] = useState<string>(''); 
+    const [artStyle, setArtStyle] = useState<string>('ORIGINAL');
+    const [customStyleText, setCustomStyleText] = useState<string>(''); 
+    const [targetSize, setTargetSize] = useState<string>('');
+    const [isCustomSize, setIsCustomSize] = useState(false);
+    const [customW, setCustomW] = useState('');
+    const [customH, setCustomH] = useState('');
+    const [activeTexture, setActiveTexture] = useState('NONE');
+    const [textureScale, setTextureScale] = useState(1);
+    const [textureOpacity, setTextureOpacity] = useState(0.3);
+    const [customTexturePrompt, setCustomTexturePrompt] = useState('');
+    const [generatedTextureUrl, setGeneratedTextureUrl] = useState<string | null>(null);
+    const [isGeneratingTexture, setIsGeneratingTexture] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
-    const [userPrompt, setUserPrompt] = useState('');
-    const [customInstruction, setCustomInstruction] = useState('');
-    const [colors, setColors] = useState<PantoneColor[]>([]);
     const [error, setError] = useState<string | null>(null);
-    const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-    const [printTechnique, setPrintTechnique] = useState<'DIGITAL' | 'CYLINDER'>('DIGITAL');
-    
-    // Technical Parameters
-    const [selvedge, setSelvedge] = useState('Inferior');
-    const [colorCount, setColorCount] = useState(8);
-    const [layoutStyle, setLayoutStyle] = useState('ORIGINAL');
-    const [subLayoutStyle, setSubLayoutStyle] = useState('');
-    const [artStyle, setArtStyle] = useState('ORIGINAL');
-    const [targetSize, setTargetSize] = useState('PADRAO');
-    const [customStyle, setCustomStyle] = useState('');
+    const [isUpscaling, setIsUpscaling] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Deep link from other modules via localStorage
+    /* Define missing logic flags and handlers */
+    const isAnalysisComplete = !!userPrompt && colors.length > 0;
+    const hasActiveSession = !!referenceImage || !!generatedPattern;
+
+    const handleTransfer = (target: 'MOCKUP' | 'LAYER') => {
+        if (generatedPattern) {
+            triggerTransfer(target, generatedPattern);
+            if (target === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
+            if (target === 'LAYER' && onNavigateToLayerStudio) onNavigateToLayerStudio();
+        }
+    };
+
     useEffect(() => {
-        const transferImg = localStorage.getItem('vingi_transfer_image');
-        if (transferImg) {
-            handleReferenceUpload(transferImg);
+        const transferImage = localStorage.getItem('vingi_transfer_image');
+        if (transferImage) {
+            handleReferenceUpload(transferImage);
             localStorage.removeItem('vingi_transfer_image');
         }
     }, []);
 
-    // Process uploaded reference image to extract DNA and color trends
+    useEffect(() => { 
+        setSubLayout(''); 
+        setTargetSize('');
+        setIsCustomSize(false);
+        setCustomW(''); setCustomH('');
+    }, [targetLayout]);
+
+    useEffect(() => {
+        if (isCustomSize && customW && customH) {
+            setTargetSize(`${customW}x${customH}cm`);
+        }
+    }, [customW, customH, isCustomSize]);
+
+    const resetSession = () => {
+        setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setCustomInstruction(''); setColors([]); setError(null); setCreationMode('IMAGE');
+        setTargetLayout('ORIGINAL'); setSubLayout(''); setTargetSize(''); setArtStyle('ORIGINAL'); setColorCount(0); setIsCustomSize(false);
+        setCustomStyleText(''); setShowDownloadMenu(false); setIsUpscaling(false);
+        setActiveTexture('NONE'); setGeneratedTextureUrl(null);
+    };
+
     const handleReferenceUpload = async (imgBase64: string) => {
-        setReferenceImage(imgBase64); 
-        setCreationMode('IMAGE'); 
-        setIsProcessing(true); 
-        setError(null);
+        setReferenceImage(imgBase64); setCreationMode('IMAGE'); setIsProcessing(true); 
         try {
-            setStatusMessage("Analisando DNA Estético...");
-            const compressed = await compressImage(imgBase64); 
-            const cleanBase64 = compressed.split(',')[1];
-            
-            setStatusMessage("Mapeando Movimento Artístico...");
-            const resPrompt = await fetch('/api/analyze', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ action: 'ANALYZE_REFERENCE_FOR_PROMPT', mainImageBase64: cleanBase64 }) 
-            });
+            setStatusMessage("Lendo Referência Visual...");
+            const compressed = await compressImage(imgBase64); const cleanBase64 = compressed.split(',')[1];
+            setStatusMessage("Identificando DNA & Cores...");
+            const resPrompt = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ANALYZE_REFERENCE_FOR_PROMPT', mainImageBase64: cleanBase64 }) });
             const dataPrompt = await resPrompt.json();
             if (dataPrompt.success && dataPrompt.prompt) setUserPrompt(dataPrompt.prompt);
-            
-            setStatusMessage("Colorimetria Sênior Pantone...");
-            const resColors = await fetch('/api/analyze', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ action: 'ANALYZE_COLOR_TREND', mainImageBase64: cleanBase64, variation: 'NATURAL' }) 
-            });
+            const resColors = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ANALYZE_COLOR_TREND', mainImageBase64: cleanBase64, variation: 'NATURAL' }) });
             const dataColors = await resColors.json();
             if (dataColors.success && dataColors.colors) setColors(dataColors.colors);
-            
-            setStatusMessage("Estúdio Digital Pronto.");
+            setStatusMessage("Preparando Estúdio...");
             await new Promise(resolve => setTimeout(resolve, 800));
-        } catch (e) { 
-            console.error(e); 
-            setError("Erro ao analisar imagem."); 
-        } finally { 
-            setIsProcessing(false); 
-        }
+        } catch (e) { console.error(e); setError("Erro ao analisar imagem."); } 
+        finally { setIsProcessing(false); }
     };
 
-    // Trigger AI pattern generation
-    const handleGenerate = async () => {
-        if (!userPrompt.trim() && creationMode === 'IMAGE') { 
-            setError("Aguarde a análise da referência ou digite um prompt."); 
-            return; 
-        }
-
-        const finalPrompt = customInstruction 
-            ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt || 'Custom textile design'}` 
-            : userPrompt;
-
-        setIsProcessing(true); 
-        setStatusMessage(printTechnique === 'DIGITAL' ? "Elevando Estética: Rendering Masterpiece..." : "Gerando Engenharia de Cilindro...");
-        setGeneratedPattern(null); 
-        setError(null); 
-        setShowDownloadMenu(false);
-
+    const handleGenerateTexture = async () => {
+        if (!customTexturePrompt.trim()) return;
+        setIsGeneratingTexture(true);
         try {
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'GENERATE_PATTERN',
-                    prompt: finalPrompt,
-                    colors,
-                    selvedge,
-                    technique: printTechnique,
-                    colorCount,
-                    layoutStyle,
-                    subLayoutStyle,
-                    artStyle,
-                    targetSize,
-                    customStyle
-                })
-            });
-            
-            const data = await response.json();
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'GENERATE_TEXTURE', textureType: 'CUSTOM', texturePrompt: customTexturePrompt }) });
+            const data = await res.json();
             if (data.success && data.image) {
-                setGeneratedPattern(data.image);
-                setStatusMessage("Sincronização Têxtil Completa.");
-            } else {
-                throw new Error(data.error || "O motor de geração falhou.");
+                setGeneratedTextureUrl(data.image);
+                setActiveTexture('CUSTOM_AI');
             }
-        } catch (e: any) {
-            console.error(e);
-            setError(e.message || "Erro crítico no motor VINGI GEN-AI.");
-        } finally {
-            setIsProcessing(false);
-        }
+        } catch (e) { console.error(e); }
+        finally { setIsGeneratingTexture(false); }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const res = ev.target?.result as string;
-                if (res) handleReferenceUpload(res);
-            };
-            reader.readAsDataURL(file);
-        }
+    const handleGenerate = async () => {
+        if (!userPrompt.trim()) { setError("Aguarde a análise da referência ou digite um prompt."); return; }
+        const finalPrompt = customInstruction ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` : userPrompt;
+        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Engine Senior Duo (4K)..." : "Gerando Vetores Chapados...");
+        setGeneratedPattern(null); setError(null); setShowDownloadMenu(false);
+        try {
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                action: 'GENERATE_PATTERN', prompt: finalPrompt, colors: colors, selvedge: 'NENHUMA', layoutStyle: targetLayout, 
+                subLayoutStyle: subLayout, artStyle: artStyle, customStyle: customStyleText, targetSize: targetSize, colorCount: colorCount, technique: printTechnique 
+            }) });
+            const data = await res.json();
+            if (data.success && data.image) setGeneratedPattern(data.image);
+            else throw new Error(data.error || "A IA não conseguiu gerar.");
+        } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
     };
 
-    const triggerTransfer = (targetModule: string, imageData: string) => {
-        if (targetModule === 'MOCKUP') {
-            localStorage.setItem('vingi_mockup_pattern', imageData);
-            onNavigateToMockup();
-        } else if (targetModule === 'LAYER_STUDIO') {
-            onNavigateToLayerStudio();
-        }
+    const handleProductionDownload = async () => {
+        if (!generatedPattern) return;
+        setIsUpscaling(true);
+        setShowDownloadMenu(false);
+        try {
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ action: 'PREPARE_PRODUCTION', mainImageBase64: generatedPattern, targetSize: targetSize || "140cm Standard", technique: printTechnique }) 
+            });
+            const data = await res.json();
+            if (data.success && data.image) {
+                const l = document.createElement('a'); l.download = `VINGI_PRO_PRODUCTION_${targetSize || 'RAW'}.png`; l.href = data.image; l.click();
+            } else throw new Error("Falha no motor de produção.");
+        } catch (e: any) { alert(e.message || "Erro ao gerar arquivo de produção."); } 
+        finally { setIsUpscaling(false); }
+    };
+
+    const getCurrentTextureStyle = () => {
+        if (activeTexture === 'CUSTOM_AI' && generatedTextureUrl) return { backgroundImage: `url(${generatedTextureUrl})`, backgroundSize: `${50 * textureScale}%`, opacity: textureOpacity, mixBlendMode: 'multiply' as any };
+        const preset = TEXTURE_PRESETS.find(t => t.id === activeTexture);
+        if (preset && preset.id !== 'NONE') return { background: preset.css, backgroundSize: `${20 * textureScale}px ${20 * textureScale}px`, opacity: textureOpacity, mixBlendMode: 'multiply' as any };
+        return { display: 'none' };
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#f8fafc] overflow-y-auto relative custom-scrollbar">
-            <ModuleHeader 
-                icon={Palette} 
-                title="Estúdio de Criação" 
-                subtitle="Design Generativo de Superfície"
-                onAction={referenceImage ? () => { setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setCustomInstruction(''); setColors([]); } : undefined}
-                actionLabel="Novo Projeto"
-                referenceImage={referenceImage}
-            />
-
-            <div className="flex-1 p-4 md:p-8 max-w-[1600px] mx-auto w-full">
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-
-                {!referenceImage && !generatedPattern && !isProcessing && (
-                    <ModuleLandingPage 
-                        icon={Palette}
-                        title="Atelier Digital AI"
-                        description="Suite industrial de criação de estampas. Gere variantes vetoriais de alta fidelidade a partir de referências visuais ou prompts técnicos."
-                        primaryActionLabel="Subir Referência"
-                        onPrimaryAction={() => fileInputRef.current?.click()}
-                        features={["Evolução Estética SAM-X", "Separação de Cores Pantone", "Engenharia de Repetição", "Exportação 4K"]}
-                        partners={["VINGI AI ENGINE", "PANTONE TCX", "WGSN", "ADOBE"]}
-                    />
-                )}
-
-                {(referenceImage || generatedPattern || isProcessing) && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
-                        {/* Editor Controls */}
-                        <div className="lg:col-span-4 space-y-6">
-                            <div className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100/50">
-                                <div className="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
-                                    <Settings2 size={16} className="text-vingi-600"/>
-                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Painel de Engenharia</h3>
-                                </div>
-                                
-                                <div className="space-y-6">
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                            <BrainCircuit size={12}/> Técnica de Impressão
-                                        </label>
-                                        <div className="flex bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
-                                            <button 
-                                                onClick={() => setPrintTechnique('DIGITAL')}
-                                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${printTechnique === 'DIGITAL' ? 'bg-vingi-900 text-white shadow-lg' : 'text-gray-400 hover:text-gray-600'}`}
-                                            >
-                                                Digital Pro
-                                            </button>
-                                            <button 
-                                                onClick={() => setPrintTechnique('CYLINDER')}
-                                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${printTechnique === 'CYLINDER' ? 'bg-vingi-900 text-white shadow-lg' : 'text-gray-400 hover:text-gray-600'}`}
-                                            >
-                                                Rotativa
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Diretiva Criativa (Prompt)</label>
-                                        <textarea 
-                                            value={customInstruction}
-                                            onChange={(e) => setCustomInstruction(e.target.value)}
-                                            placeholder="Descreva as alterações ou o estilo desejado..."
-                                            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-medium outline-none focus:border-vingi-500 focus:bg-white h-32 resize-none transition-all shadow-inner"
-                                        />
-                                    </div>
-
-                                    {colors.length > 0 && (
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paleta Detectada (Pantone)</label>
-                                            <div className="grid grid-cols-5 gap-2">
-                                                {colors.slice(0, 10).map((c, i) => (
-                                                    <div key={i} className="group relative">
-                                                        <div className="w-full aspect-square rounded-lg border border-gray-100 shadow-sm transition-transform group-hover:scale-110" style={{ backgroundColor: c.hex }} />
-                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[8px] font-mono rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                                                            {c.code}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <button 
-                                        onClick={handleGenerate}
-                                        disabled={isProcessing}
-                                        className="w-full py-5 bg-vingi-900 text-white rounded-2xl font-black text-xs shadow-2xl hover:bg-black transition-all transform active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 uppercase tracking-[0.2em]"
-                                    >
-                                        {isProcessing ? <Loader2 size={18} className="animate-spin"/> : <Sparkles size={18} className="text-vingi-400"/>}
-                                        {generatedPattern ? 'Gerar Evolução' : 'Iniciar Renderização'}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Preview Area */}
-                        <div className="lg:col-span-8 space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Input Reference */}
-                                <div className="space-y-3">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><Archive size={12}/> Entrada Têxtil</h4>
-                                    <div className="aspect-square bg-white rounded-[32px] border border-gray-100 overflow-hidden shadow-xl group relative">
-                                        {referenceImage ? (
-                                            <SmartImageViewer src={referenceImage} className="w-full h-full" />
-                                        ) : (
-                                            <div onClick={() => fileInputRef.current?.click()} className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
-                                                <UploadCloud size={48} className="text-gray-200 mb-4"/>
-                                                <p className="text-[10px] font-black text-gray-300 uppercase">Subir Arquivo</p>
-                                            </div>
-                                        )}
-                                        {referenceImage && (
-                                            <button onClick={() => fileInputRef.current?.click()} className="absolute top-4 right-4 p-3 bg-white/90 backdrop-blur rounded-full shadow-lg text-gray-400 hover:text-vingi-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <RefreshCw size={16}/>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Output Result */}
-                                <div className="space-y-3">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><Sparkles size={12}/> Saída Renderizada</h4>
-                                    <div className="aspect-square bg-white rounded-[32px] border border-gray-100 overflow-hidden shadow-2xl relative flex items-center justify-center group">
-                                        {generatedPattern ? (
-                                            <>
-                                                <SmartImageViewer src={generatedPattern} className="w-full h-full" />
-                                                <div className="absolute bottom-6 right-6 flex gap-3 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">
-                                                    <button onClick={() => triggerTransfer('MOCKUP', generatedPattern)} className="bg-white text-vingi-900 px-4 py-3 rounded-2xl shadow-2xl hover:bg-vingi-50 transition-all border border-gray-100 flex items-center gap-2 text-[10px] font-black uppercase">
-                                                        <Shirt size={16}/> Provador
-                                                    </button>
-                                                    <button onClick={() => triggerTransfer('LAYER_STUDIO', generatedPattern)} className="bg-white text-vingi-900 px-4 py-3 rounded-2xl shadow-2xl hover:bg-vingi-50 transition-all border border-gray-100 flex items-center gap-2 text-[10px] font-black uppercase">
-                                                        <Layers size={16}/> Editor
-                                                    </button>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="text-center p-8 w-full h-full flex items-center justify-center bg-gray-50/50">
-                                                {isProcessing ? (
-                                                    <div className="space-y-6">
-                                                        <div className="relative">
-                                                            <div className="absolute inset-0 bg-vingi-500 blur-2xl opacity-20 animate-pulse"></div>
-                                                            <Loader2 size={48} className="animate-spin text-vingi-500 mx-auto relative z-10" />
-                                                        </div>
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">{statusMessage}</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="opacity-10">
-                                                        <ImageIcon size={80} className="mx-auto mb-4"/>
-                                                        <p className="text-sm font-black uppercase tracking-widest">Aguardando IA</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {error && (
-                                <div className="p-6 bg-red-50 border border-red-100 rounded-[24px] flex items-center gap-4 text-red-600 text-xs font-bold animate-slide-up shadow-sm">
-                                    <div className="bg-red-100 p-2 rounded-full"><AlertCircle size={20}/></div>
-                                    <div>
-                                        <p className="text-[10px] uppercase font-black mb-0.5">Falha no Processamento</p>
-                                        <p>{error}</p>
+        <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
+            <div className="bg-[#111111] px-4 py-2 flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-14">
+                <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
+                <div className="flex gap-2 relative">
+                    {hasActiveSession && <button onClick={resetSession} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium border border-gray-700">Novo</button>}
+                    {generatedPattern && (
+                        <div className="flex gap-1">
+                            <button onClick={() => handleTransfer('MOCKUP')} className="text-[10px] bg-vingi-900 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-800 flex items-center gap-1 border border-vingi-700"><Settings2 size={12}/> Provar</button>
+                            <button onClick={() => setShowDownloadMenu(!showDownloadMenu)} className="text-[10px] bg-green-900 text-white px-3 py-1.5 rounded font-bold hover:bg-green-800 flex items-center gap-1 border border-green-700 relative"><Download size={12}/> Baixar</button>
+                            {showDownloadMenu && (
+                                <div className="absolute top-full right-0 mt-2 w-56 bg-[#1a1a1a] border border-gray-700 rounded-xl shadow-2xl z-[60] overflow-hidden animate-slide-down">
+                                    <div className="p-2 space-y-1">
+                                        <button onClick={() => { const l=document.createElement('a'); l.download='vingi-draft.png'; l.href=generatedPattern; l.click(); setShowDownloadMenu(false); }} className="w-full text-left px-3 py-2 hover:bg-gray-800 rounded-lg flex items-center gap-3 group"><div className="p-1.5 bg-gray-700 rounded-md group-hover:bg-gray-600"><FileCheck size={14} className="text-gray-300"/></div><div><span className="block text-xs font-bold text-white">Rascunho (Rápido)</span><span className="block text-[9px] text-gray-500">Preview JPG</span></div></button>
+                                        <div className="h-px bg-gray-800 my-1"></div>
+                                        <button onClick={handleProductionDownload} className="w-full text-left px-3 py-2 hover:bg-vingi-900/50 rounded-lg flex items-center gap-3 group"><div className="p-1.5 bg-blue-900/50 rounded-md group-hover:bg-blue-800"><HardDrive size={14} className="text-blue-400"/></div><div><span className="block text-xs font-bold text-white">Produção (Final)</span><span className="block text-[9px] text-blue-300">Upscale, Nitidez & Dimensões</span></div></button>
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                            {generatedPattern && !isProcessing && (
-                                <div className="p-8 bg-blue-600 rounded-[40px] text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-blue-500/20">
-                                    <div className="flex items-center gap-6">
-                                        <div className="w-16 h-16 bg-white/10 rounded-[24px] flex items-center justify-center backdrop-blur-md">
-                                            <Sparkles size={32} className="text-blue-200"/>
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black uppercase tracking-tighter">Estampa Finalizada</h3>
-                                            <p className="text-blue-100 text-xs font-medium opacity-80">Pronta para aplicação técnica ou exportação industrial.</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <button className="px-8 py-4 bg-white text-blue-600 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Exportar 4K</button>
-                                    </div>
+            {!hasActiveSession ? (
+                <div className="flex-1 bg-[#050505] overflow-y-auto">
+                    <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onload=(ev)=>handleReferenceUpload(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
+                    <ModuleLandingPage 
+                        icon={Palette} title="Atelier Generativo" description="Crie estampas exclusivas a partir de referências visuais. Combine estilos artísticos, layouts de lenço e paletas Pantone." primaryActionLabel="Criar Estampa" onPrimaryAction={() => fileInputRef.current?.click()} features={["Vetorial & Digital", "Variação de Estilo", "Layouts de Lenço", "Pantone TCX"]}
+                        customContent={
+                            <div className="flex flex-col gap-6 mt-8 w-full max-w-2xl mx-auto">
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest text-center">Escolha a Tecnologia de Impressão</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button onClick={() => { setPrintTechnique('CYLINDER'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-vingi-500 transition-all flex flex-col items-center gap-3 group text-center shadow-lg"><div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-vingi-900 transition-colors"><Cylinder size={24} className="text-gray-400 group-hover:text-vingi-400"/></div><div><h3 className="text-lg font-bold text-white">Cilindro (Vetorial)</h3><p className="text-xs text-gray-500 mt-1">Cores chapadas, separação nítida.</p></div></button>
+                                    <button onClick={() => { setPrintTechnique('DIGITAL'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-purple-500 transition-all flex flex-col items-center gap-3 group text-center shadow-lg"><div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-purple-900 transition-colors"><Printer size={24} className="text-gray-400 group-hover:text-purple-400"/></div><div><h3 className="text-lg font-bold text-white">Digital (Senior Duo)</h3><p className="text-xs text-gray-500 mt-1">Alta costura, volume e luz profissional.</p></div></button>
                                 </div>
+                            </div>
+                        }
+                    />
+                </div>
+            ) : (
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 bg-black">
+                    <div className="flex-1 bg-[#050505] relative flex items-center justify-center p-0 md:p-4 min-h-[40vh] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0">
+                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                        {isProcessing || isUpscaling ? (
+                            <div className="text-center relative z-10 animate-fade-in flex flex-col items-center"><div className="relative"><div className="absolute inset-0 bg-vingi-500 blur-xl opacity-20 animate-pulse rounded-full"></div><Loader2 size={48} className="text-vingi-400 animate-spin relative z-10 mb-6"/></div><h2 className="text-white font-bold text-xl tracking-tight">{isUpscaling ? "Motor de Produção" : statusMessage}</h2><p className="text-gray-500 text-xs mt-2 font-mono uppercase tracking-widest">{isUpscaling ? "Refinando Detalhes & Cor..." : "Processando IA..."}</p></div>
+                        ) : generatedPattern ? (
+                            <div className="relative w-full h-full flex items-center justify-center animate-fade-in group overflow-hidden"><div className="relative w-full h-full"><SmartImageViewer src={generatedPattern} /><div className="absolute inset-0 pointer-events-none" style={getCurrentTextureStyle()}></div></div></div>
+                        ) : (
+                            <div className="relative w-full h-full flex flex-col items-center justify-center p-8 text-center gap-6"><div className="border-2 border-dashed border-gray-800 rounded-xl p-12 opacity-50"><Grid3X3 size={48} className="text-gray-700"/></div><div><h3 className="text-gray-300 font-bold text-lg mb-1">Área de Visualização</h3><p className="text-gray-500 text-sm max-w-xs mx-auto">Sua estampa aparecerá aqui.</p></div>{colors.length > 0 && <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-vingi-900/80 backdrop-blur border border-vingi-500/30 px-6 py-3 rounded-full animate-slide-down flex items-center gap-3 shadow-lg z-20"><Check size={14} className="bg-vingi-500 text-black rounded-full p-0.5"/><span className="text-xs font-bold text-gray-200">Análise Concluída</span></div>}</div>
+                        )}
+                        {error && <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-900/90 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-700 max-w-md backdrop-blur"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div>}
+                        {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20 hover:scale-150 transition-transform origin-bottom-left"><img src={referenceImage} className="w-full h-full object-cover opacity-100" /></div>}
+                    </div>
+
+                    <div className="w-full md:w-[400px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-[55vh] md:h-full shrink-0 relative transition-all duration-500">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-24">
+                            {!isAnalysisComplete && !generatedPattern && <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-10 gap-4"><Lock size={32} className="text-gray-600"/><p className="text-gray-500 text-xs uppercase tracking-widest font-bold">Ferramentas Bloqueadas</p><p className="text-gray-600 text-xs max-w-[200px]">Aguarde a IA analisar a referência e extrair as cores.</p></div>}
+                            {(isAnalysisComplete || generatedPattern) && (
+                                <>
+                                    <div className="space-y-2 animate-slide-up"><div className="flex items-center justify-between"><h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa</h3></div><div className="relative group"><textarea value={customInstruction} onChange={(e) => setCustomInstruction(e.target.value)} className="w-full h-20 p-3 bg-[#1a1a1a] border border-gray-800 rounded-xl text-xs resize-none focus:border-vingi-500 outline-none text-white placeholder-gray-600 transition-all focus:bg-black" placeholder="Descreva alterações (ex: 'Mais tons terrosos', 'Aumentar flores')..." /></div></div>
+                                    <div className="space-y-2 animate-slide-up" style={{animationDelay: '0.1s'}}><div className="flex justify-between items-center"><h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12}/> Paleta Detectada</h3><span className="text-[9px] text-gray-600">{colors.length} Cores</span></div><div className="grid grid-cols-6 gap-1.5">{colors.map((c, i) => ( <PantoneChip key={i} color={c} onDelete={() => setColors(prev => prev.filter((_, idx) => idx !== i))} /> ))}</div></div>
+                                    <div className="space-y-3 animate-slide-up" style={{animationDelay: '0.2s'}}><h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3><div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">{LAYOUT_OPTIONS.map(opt => (<button key={opt.id} onClick={() => setTargetLayout(opt.id)} className={`flex flex-col items-center justify-center min-w-[64px] h-[64px] p-1 rounded-lg border transition-all ${targetLayout === opt.id ? 'bg-vingi-900 border-vingi-500 text-white shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}><opt.icon size={20} strokeWidth={1.5} className="mb-1.5"/><span className="text-[9px] font-bold">{opt.label}</span></button>))}</div>
+                                        {SUB_LAYOUT_CONFIG[targetLayout] && <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down"><div className="grid grid-cols-2 gap-2">{SUB_LAYOUT_CONFIG[targetLayout].map(sub => (<button key={sub.id} onClick={() => setSubLayout(sub.id)} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold transition-all ${subLayout === sub.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}><sub.icon size={12} /> {sub.label}</button>))}</div></div>}
+                                        <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down"><p className="text-[9px] font-bold text-gray-500 mb-2 uppercase flex items-center gap-1"><Ruler size={10}/> Dimensões</p><div className="grid grid-cols-2 gap-2">{SIZE_OPTIONS[targetLayout]?.map((sizeStr, idx) => (<button key={idx} onClick={() => { setTargetSize(sizeStr); setIsCustomSize(false); }} className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[9px] font-bold transition-all ${targetSize === sizeStr && !isCustomSize ? 'bg-blue-900 border-blue-500 text-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}>{sizeStr}</button>))}<button onClick={() => setIsCustomSize(true)} className={`flex items-center justify-center px-2 py-2 rounded-lg border text-[9px] font-bold transition-all ${isCustomSize ? 'bg-vingi-900 border-vingi-500 text-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}><SlidersHorizontal size={12} className="mr-1"/> Personalizado</button></div>{isCustomSize && <div className="flex gap-2 mt-2 animate-fade-in"><div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2"><span className="text-[9px] text-gray-500 font-bold mr-1">L:</span><input type="text" placeholder="Largura" value={customW} onChange={e => setCustomW(e.target.value)} className="w-full bg-transparent text-white text-[10px] py-2 outline-none"/></div><div className="flex-1 bg-black rounded-lg border border-gray-700 flex items-center px-2"><span className="text-[9px] text-gray-500 font-bold mr-1">A:</span><input type="text" placeholder="Altura" value={customH} onChange={e => setCustomH(e.target.value)} className="w-full bg-transparent text-white text-[10px] py-2 outline-none"/></div></div>}</div>
+                                    </div>
+                                    <div className="space-y-3 pb-4 animate-slide-up" style={{animationDelay: '0.3s'}}><h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Brush size={12}/> Estilo Artístico</h3><div className="grid grid-cols-4 gap-2">{ART_STYLES.map(style => (<button key={style.id} onClick={() => setArtStyle(style.id)} className={`flex flex-col items-center justify-center h-16 p-1 rounded-lg border transition-all ${artStyle === style.id ? 'bg-purple-900/50 border-purple-500 text-purple-200 shadow-sm' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:bg-gray-800'}`}><style.icon size={18} strokeWidth={1.5} className="mb-1"/><span className="text-[9px] font-bold text-center leading-none">{style.label}</span></button>))}</div>{artStyle === 'CUSTOM' && <div className="animate-fade-in mt-2"><input type="text" value={customStyleText} onChange={(e) => setCustomStyleText(e.target.value)} placeholder="Ex: Art Deco, Pop Art..." className="w-full bg-black border border-gray-700 rounded-lg p-3 text-xs text-white outline-none focus:border-vingi-500" /></div>}</div>
+                                    <div className="pt-4 border-t border-white/5 animate-slide-up" style={{animationDelay: '0.4s'}}>{!isProcessing && !isUpscaling && <button onClick={handleGenerate} className={`w-full py-5 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-3 text-white transition-all active:scale-95 text-base relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110 shadow-purple-900/20' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110 shadow-vingi-900/20'}`}>{!generatedPattern && <span className="absolute inset-0 bg-white/20 animate-pulse rounded-xl"></span>}<div className="relative flex items-center gap-2">{generatedPattern ? <RefreshCw size={20}/> : <Play size={20} fill="currentColor" className="animate-pulse"/>}{generatedPattern ? "Regerar Variação" : "CRIAR ESTAMPA"}</div></button>}</div>
+                                    {generatedPattern && <div className="space-y-3 pb-4 border-t border-white/5 pt-4 animate-slide-up" style={{animationDelay: '0.1s'}}><h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Grid size={12}/> Acabamento & Textura (Overlay)</h3><div className="grid grid-cols-3 gap-2">{TEXTURE_PRESETS.map(tex => (<button key={tex.id} onClick={() => { setActiveTexture(tex.id); if(tex.id === 'NONE') setGeneratedTextureUrl(null); }} className={`px-3 py-2 rounded-lg text-[10px] font-bold border transition-all ${activeTexture === tex.id ? 'bg-white text-black border-white' : 'bg-transparent border-gray-700 text-gray-400 hover:bg-gray-800'}`}>{tex.label}</button>))}</div>{activeTexture === 'CUSTOM_AI' && <div className="flex gap-2 animate-fade-in"><input type="text" value={customTexturePrompt} onChange={(e) => setCustomTexturePrompt(e.target.value)} placeholder="Ex: Seda, Crepe..." className="flex-1 bg-[#1a1a1a] border border-gray-700 rounded-lg px-3 py-2 text-xs outline-none focus:border-vingi-500" /><button onClick={handleGenerateTexture} disabled={isGeneratingTexture} className="bg-vingi-900 border border-vingi-700 text-white rounded-lg px-3 flex items-center justify-center hover:bg-vingi-800">{isGeneratingTexture ? <Loader2 size={14} className="animate-spin"/> : <Wand2 size={14}/>}</button></div>}{activeTexture !== 'NONE' && <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 space-y-3 animate-slide-down"><div className="flex items-center gap-3"><span className="text-[9px] font-bold text-gray-500 uppercase w-12">Intensidade</span><input type="range" min="0.1" max="1" step="0.1" value={textureOpacity} onChange={(e) => setTextureOpacity(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/></div><div className="flex items-center gap-3"><span className="text-[9px] font-bold text-gray-500 uppercase w-12">Densidade</span><input type="range" min="0.5" max="3" step="0.1" value={textureScale} onChange={(e) => setTextureScale(parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-white"/></div></div>}</div>}
+                                </>
                             )}
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
