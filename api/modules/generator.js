@@ -6,34 +6,35 @@ import { GoogleGenAI } from "@google/genai";
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
     const ai = new GoogleGenAI({ apiKey });
 
-    // 1. Contexto de Cor
+    // 1. Contexto de Cor - Enriquecimento para o modo Digital
     const colorContext = (colors && colors.length > 0) 
-        ? `PALETTE GUIDANCE: Use these tones: ${colors.map(c => c.name).join(', ')}.` 
-        : "Use colors that match the requested theme.";
+        ? `PALETTE GUIDANCE: Use these tones as base: ${colors.map(c => c.name).join(', ')}. Create sophisticated variations including tints, shades, and professional tone-on-tone transitions.` 
+        : "Use an infinite, professionally balanced color spectrum with high luminous contrast.";
 
     // 2. LÓGICA BIFURCADA: DIGITAL vs CILINDRO
     let TECHNIQUE_PROMPT = "";
     let NEGATIVE_PROMPT = "";
 
     if (technique === 'DIGITAL') {
-        // --- MODO DIGITAL (RICHEZA, PROFUNDIDADE, DEGRADÊ) ---
+        // --- MODO DIGITAL (SENIOR COLORIST & LUXURY FINISH) ---
         TECHNIQUE_PROMPT = `
-        MODE: DIGITAL PRINTING (Sublimation/Direct-to-Fabric).
+        MODE: HIGH-END DIGITAL TEXTILE MASTERPIECE.
+        ACT AS: Senior Textile Colorist & Digital Illustrator for Luxury Fashion.
         
-        VISUAL STYLE:
-        - HIGH FIDELITY ARTWORK.
-        - RICH DETAILS: Allow complex gradients, soft shadows, depth, lighting effects, and tone-on-tone nuances.
-        - COLOR: Unlimited color palette. Blends, watercolors, and photographic details are allowed.
-        - FINISH: The file should look like a high-end digital artwork (Photoshop/Procreate finish).
+        VISUAL STRATEGY:
+        - ULTRA-RICH FIDELITY: Even if the theme is simple, render it with extraordinary complexity and artistic depth.
+        - VOLUME & DEPTH: Use advanced chiaroscuro. Motifs must have 3D-like volume, realistic soft shadows, and overlapping layers that create a sense of physical space.
+        - COLOR SOPHISTICATION: Implement intricate tone-on-tone layering, silky gradients, and atmospheric translucency (transparency effects).
+        - PERSPECTIVE: Use atmospheric perspective to create depth between background and foreground elements.
+        - MICRO-DETAILS: Every motif should have internal textures, fine veins, or subtle light reflections.
+        - FINISH: The final file must look like a high-definition painting from a premier Italian design studio.
         `;
         
-        // No modo digital, proibimos apenas a TRAMA DO TECIDO (o fio), mas permitimos textura ARTÍSTICA (papel, pincelada)
         NEGATIVE_PROMPT = `
         NEGATIVE PROMPT (DO NOT INCLUDE):
-        - Fabric weave threads (linen texture, canvas grain) -> Unless it's part of the art.
-        - Low resolution, jagged lines.
-        - Flat vector look (unless requested).
-        - Color banding.
+        - Flat vector look, simple blocks of color, jagged edges, low resolution.
+        - Hard outlines (unless requested), cartoonish styles, lack of shading.
+        - Muddy colors, poor contrast, 2D appearance.
         `;
 
     } else {
@@ -60,43 +61,43 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     // 3. Contexto de Estilo (Adaptado à técnica)
     let artStyleInstruction = "";
     if (artStyle === 'CUSTOM' && customStyle) {
-        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}.`;
+        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Apply this style with professional artistic rigor.`;
     } else {
         switch (artStyle) {
             case 'WATERCOLOR': 
                 artStyleInstruction = technique === 'DIGITAL' 
-                    ? "ART STYLE: Realistic Watercolor. Wet-on-wet bleeds, translucency, paper grain effect allowed in art."
+                    ? "ART STYLE: Hyper-realistic Digital Watercolor. Wet-on-wet bleeds, realistic pigment drying edges, and translucent layering."
                     : "ART STYLE: Vector Watercolor. Imitation of watercolor using solid flat shapes (posterization).";
                 break;
             case 'GIZ': 
-                artStyleInstruction = "ART STYLE: Pastel/Chalk texture."; 
+                artStyleInstruction = "ART STYLE: Artistic Pastel/Chalk with visible grain and blended transitions."; 
                 break;
             case 'ACRILICA': 
                 artStyleInstruction = technique === 'DIGITAL'
-                    ? "ART STYLE: Oil/Acrylic Painting. Visible brush strokes, impasto depth."
+                    ? "ART STYLE: Impasto Oil/Acrylic Painting. Visible 3D brush strokes, thick paint texture, and dramatic lighting."
                     : "ART STYLE: Vector Painting. Clean shapes mimicking brush strokes.";
                 break;
             case 'VETOR': 
-                artStyleInstruction = "ART STYLE: Clean Vector Illustration. Geometric, sharp."; 
+                artStyleInstruction = "ART STYLE: High-end Vector Illustration. Sharp, geometric, yet sophisticated in composition."; 
                 break;
             case 'BORDADO': 
                 artStyleInstruction = technique === 'DIGITAL'
-                    ? "ART STYLE: Realistic Embroidery. Satin stitch shine, thread depth."
+                    ? "ART STYLE: Photorealistic Embroidery. Visible thread shine (satin stitch), physical thread depth, and realistic fabric puckering."
                     : "ART STYLE: Flat Embroidery Vector. Simplified stitch simulation.";
                 break;
-            default: artStyleInstruction = "ART STYLE: High quality textile design."; break;
+            default: artStyleInstruction = "ART STYLE: Professional high-quality textile design with premium aesthetic standards."; break;
         }
     }
 
     // 4. Layout
     let layoutInstruction = "Seamless repeat pattern (All-over).";
-    if (layoutStyle === 'BARRADO') layoutInstruction = "LAYOUT: BORDER PRINT. Heavy motifs at bottom, fading/empty at top.";
-    if (layoutStyle === 'LENCO') layoutInstruction = "LAYOUT: ENGINEERED SCARF (Square). Symmetrical/Framed composition.";
-    if (layoutStyle === 'PAREO') layoutInstruction = "LAYOUT: PAREO PANEL (Rectangular Vertical).";
+    if (layoutStyle === 'BARRADO') layoutInstruction = "LAYOUT: ENGINEERED BORDER PRINT. Richly detailed motifs at the selvedge, creating a luxurious fading or transition towards the top.";
+    if (layoutStyle === 'LENCO') layoutInstruction = "LAYOUT: LUXURY ENGINEERED SCARF (Square). Intricate border framing and central masterpiece motif.";
+    if (layoutStyle === 'PAREO') layoutInstruction = "LAYOUT: VERTICAL PAREO PANEL. Composition designed for fluid drape and high visual impact.";
 
     // 5. Prompt Final
     const FULL_PROMPT = `
-    GENERATE A TEXTILE PRINT DESIGN FILE.
+    GENERATE A PROFESSIONAL TEXTILE PRINT DESIGN.
     
     THEME: ${prompt}.
     
@@ -136,7 +137,7 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     }
 };
 
-// NOVO: GERADOR DE TEXTURA DEDICADO
+// GERADOR DE TEXTURA DEDICADO
 export const generateTextureLayer = async (apiKey, textureType, prompt) => {
     const ai = new GoogleGenAI({ apiKey });
     
@@ -150,11 +151,6 @@ export const generateTextureLayer = async (apiKey, textureType, prompt) => {
     2. SEAMLESS: Must tile perfectly.
     3. VIEW: Macro close-up top down.
     4. NO OBJECTS: Only the surface grain/structure.
-    
-    Examples:
-    - "Linen": Crosshatch thread pattern.
-    - "Canvas": Heavy woven fabric.
-    - "Paper": Fibrous pulp noise.
     `;
 
     try {
