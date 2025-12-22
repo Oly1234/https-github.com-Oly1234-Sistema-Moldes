@@ -4,101 +4,85 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-    // 1. Contexto de Cor
+    // 1. Colorista Sênior: Fidelidade Absoluta ao Fundo e Elementos
     const colorContext = (colors && colors.length > 0) 
-        ? `PALETTE GUIDANCE: Use these tones: ${colors.map(c => c.name).join(', ')}.` 
-        : "Use colors that match the requested theme.";
+        ? `STRICT COLOR FIDELITY: Use the EXACT background color and motifs colors from the reference analysis. 
+           Palette: [${colors.map(c => c.name).join(', ')}]. 
+           The BACKGROUND tone must be identical to the reference. 
+           Avoid oversaturated RGB; use professional textile ink tones.` 
+        : "COLOR MASTER DIRECTIVE: Sophisticated high-end fashion palette, faithful to original reference background.";
 
-    // 2. LÓGICA BIFURCADA: DIGITAL vs CILINDRO
+    // 2. Lógica de Técnica: "Mentalidade de Estúdio de Moda" (Modo Digital vs Cilindro)
     let TECHNIQUE_PROMPT = "";
     let NEGATIVE_PROMPT = "";
 
     if (technique === 'DIGITAL') {
-        // --- MODO DIGITAL (RICHEZA, PROFUNDIDADE, DEGRADÊ) ---
+        // --- MODO DIGITAL (Estúdio de Moda Autoral / Photoshop Style) ---
         TECHNIQUE_PROMPT = `
-        MODE: DIGITAL PRINTING (Sublimation/Direct-to-Fabric).
+        MODE: SUPREME DIGITAL TEXTILE MASTERPIECE (Estúdio de Estamparia Autoral).
+        STYLE: This MUST look like it was manually created by a designer in Photoshop or a traditional atelier (Farm Rio style).
         
-        VISUAL STYLE:
-        - HIGH FIDELITY ARTWORK.
-        - RICH DETAILS: Allow complex gradients, soft shadows, depth, lighting effects, and tone-on-tone nuances.
-        - COLOR: Unlimited color palette. Blends, watercolors, and photographic details are allowed.
-        - FINISH: The file should look like a high-end digital artwork (Photoshop/Procreate finish).
+        VISUAL RULES:
+        - DESIGNER WORKFLOW: Apply high chromatic richness, tone-on-tone variations, organic gradients, and layered depth.
+        - NO GENERIC AI ART: Avoid glowing edges, plastic looks, or cinematic 3D lighting. 
+        - TEXTURE: Visible manual brush strokes, hand-painted gouache effects, and professional stippling.
+        - BACKGROUND: Treat the background as an active part of the composition with subtle depth and textile texture.
+        - FINISH: 2D technical layout for high-end feminine fashion production.
+        - COMPOSITION: Elements must have visual volume, clear reading, and organic integration.
         `;
         
-        // No modo digital, proibimos apenas a TRAMA DO TECIDO (o fio), mas permitimos textura ARTÍSTICA (papel, pincelada)
         NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT (DO NOT INCLUDE):
-        - Fabric weave threads (linen texture, canvas grain) -> Unless it's part of the art.
-        - Low resolution, jagged lines.
-        - Flat vector look (unless requested).
-        - Color banding.
+        NEGATIVE PROMPT: generic AI look, 3D render, cinematic lighting, neon glow, photorealistic humans, blurry backgrounds, stock photo style, amateur illustration, plastic texture, flat dead colors.
         `;
-
     } else {
-        // --- MODO CILINDRO (VETORIAL, CHAPADO, SEPARAÇÃO) ---
+        // --- MODO CILINDRO (Vetorial/Chapado) ---
         TECHNIQUE_PROMPT = `
-        MODE: ROTARY SCREEN PRINTING (Cylinder/Separated Colors).
-        
-        VISUAL STYLE:
-        - FLAT VECTOR ARTWORK (Adobe Illustrator style).
-        - SOLID COLORS ONLY: No gradients, no opacity, no blurs, no soft shadows.
-        - HARD EDGES: Distinct separation between colors.
-        - COMPOSITION: 2D Flat view. No perspective.
+        MODE: ROTARY SCREEN PRINTING (Cylinder Engineering).
+        STYLE: Solid Flat Shapes, Sharp Edges, Hard Color Blocking.
+        RULES: No gradients, no shadows, no transparency. Sharp technical edges.
+        LIMIT: Optimized for ${colorCount > 0 ? colorCount : '8'} technical screens.
         `;
 
         NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT (DO NOT INCLUDE):
-        - Gradients, Shadows, Lighting effects, 3D depth.
-        - Fabric texture, noise, grain.
-        - Blur, glow, transparency.
-        - Realistic photo elements.
+        NEGATIVE PROMPT: Gradients, Shadows, Light effects, 3D volume, textures, blur, transparency, realistic photo.
         `;
     }
 
-    // 3. Contexto de Estilo (Adaptado à técnica)
-    let artStyleInstruction = "";
+    // 3. Estilo Artístico (Adaptado à técnica)
+    let artStyleInstruction = "STYLE: Technical high-end fashion print.";
     if (artStyle === 'CUSTOM' && customStyle) {
-        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}.`;
+        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Interpret with manual designer precision.`;
     } else {
         switch (artStyle) {
             case 'WATERCOLOR': 
                 artStyleInstruction = technique === 'DIGITAL' 
-                    ? "ART STYLE: Realistic Watercolor. Wet-on-wet bleeds, translucency, paper grain effect allowed in art."
-                    : "ART STYLE: Vector Watercolor. Imitation of watercolor using solid flat shapes (posterization).";
-                break;
-            case 'GIZ': 
-                artStyleInstruction = "ART STYLE: Pastel/Chalk texture."; 
+                    ? "ART STYLE: Manual Atelier Watercolor. Wet-on-wet edges and realistic pigment drying rings on fabric."
+                    : "ART STYLE: Vector Watercolor simulation using flat solid shapes.";
                 break;
             case 'ACRILICA': 
                 artStyleInstruction = technique === 'DIGITAL'
-                    ? "ART STYLE: Oil/Acrylic Painting. Visible brush strokes, impasto depth."
-                    : "ART STYLE: Vector Painting. Clean shapes mimicking brush strokes.";
+                    ? "ART STYLE: Hand-painted Acrylic. Visible brush strokes, impasto depth, and manual paint layering."
+                    : "ART STYLE: Flat Acrylic vector look.";
                 break;
             case 'VETOR': 
-                artStyleInstruction = "ART STYLE: Clean Vector Illustration. Geometric, sharp."; 
+                artStyleInstruction = "ART STYLE: Clean technical vector illustration (Illustrator Style)."; 
                 break;
-            case 'BORDADO': 
-                artStyleInstruction = technique === 'DIGITAL'
-                    ? "ART STYLE: Realistic Embroidery. Satin stitch shine, thread depth."
-                    : "ART STYLE: Flat Embroidery Vector. Simplified stitch simulation.";
-                break;
-            default: artStyleInstruction = "ART STYLE: High quality textile design."; break;
+            default: artStyleInstruction = "ART STYLE: High quality textile print studio finish."; break;
         }
     }
 
     // 4. Layout
-    let layoutInstruction = "Seamless repeat pattern (All-over).";
-    if (layoutStyle === 'BARRADO') layoutInstruction = "LAYOUT: BORDER PRINT. Heavy motifs at bottom, fading/empty at top.";
-    if (layoutStyle === 'LENCO') layoutInstruction = "LAYOUT: ENGINEERED SCARF (Square). Symmetrical/Framed composition.";
-    if (layoutStyle === 'PAREO') layoutInstruction = "LAYOUT: PAREO PANEL (Rectangular Vertical).";
+    let layoutInstruction = "Seamless repeat pattern.";
+    if (layoutStyle === 'BARRADO') layoutInstruction = "LAYOUT: ENGINEERED BORDER (BARRADO). Heavy motifs at selvedge, fading elegantly.";
+    if (layoutStyle === 'LENCO') layoutInstruction = "LAYOUT: PLACEMENT SCARF / LENÇO with technical frame borders.";
 
-    // 5. Prompt Final
+    // 5. Prompt Final Consolidado
     const FULL_PROMPT = `
-    GENERATE A TEXTILE PRINT DESIGN FILE.
+    PRODUCTION DIRECTIVE: CREATE A TECHNICAL TEXTILE MASTERPIECE.
     
-    THEME: ${prompt}.
+    REFERENCE DNA: ${prompt}.
     
     ${TECHNIQUE_PROMPT}
     ${layoutInstruction}
@@ -126,56 +110,25 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
                 }
             }
         }
-
-        if (!imageUrl) throw new Error("A IA não gerou a imagem.");
+        if (!imageUrl) throw new Error("A IA falhou na renderização têxtil.");
         return imageUrl;
-
-    } catch (e) {
-        console.error("Generator Error:", e);
-        throw e;
-    }
+    } catch (e) { throw e; }
 };
 
-// NOVO: GERADOR DE TEXTURA DEDICADO
 export const generateTextureLayer = async (apiKey, textureType, prompt) => {
-    const ai = new GoogleGenAI({ apiKey });
-    
-    const TEXTURE_PROMPT = `
-    GENERATE A SEAMLESS TEXTURE MASK (Grayscale Heightmap).
-    
-    TYPE: ${textureType} (${prompt}).
-    
-    VISUAL RULES:
-    1. GRAYSCALE ONLY: White = High, Black = Low.
-    2. SEAMLESS: Must tile perfectly.
-    3. VIEW: Macro close-up top down.
-    4. NO OBJECTS: Only the surface grain/structure.
-    
-    Examples:
-    - "Linen": Crosshatch thread pattern.
-    - "Canvas": Heavy woven fabric.
-    - "Paper": Fibrous pulp noise.
-    `;
-
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const TEXTURE_PROMPT = `GENERATE A SEAMLESS TEXTURE MASK: ${textureType} (${prompt}). Grayscale, 4K, technical tile.`;
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: TEXTURE_PROMPT }] },
-            config: { imageConfig: { aspectRatio: "1:1" } }
+            contents: { parts: [{ text: TEXTURE_PROMPT }] }
         });
-
         let imageUrl = null;
         if (response.candidates?.[0]?.content?.parts) {
             for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                    break;
-                }
+                if (part.inlineData) { imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`; break; }
             }
         }
         return imageUrl;
-    } catch (e) {
-        console.error("Texture Gen Error:", e);
-        return null;
-    }
+    } catch (e) { return null; }
 };
