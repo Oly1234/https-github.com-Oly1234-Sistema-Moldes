@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity } from 'lucide-react';
 import { PantoneColor } from '../types';
@@ -215,7 +216,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
     const handleGenerate = async () => {
         if (!userPrompt.trim()) { setError("Aguarde a análise da referência ou digite um prompt."); return; }
         const finalPrompt = customInstruction ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` : userPrompt;
-        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Engine Senior Colorist (4K)..." : "Gerando Vetores Chapados...");
+        setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Engine Senior Duo (4K)..." : "Gerando Vetores Chapados...");
         setGeneratedPattern(null); setError(null); setShowDownloadMenu(false);
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
@@ -286,7 +287,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest text-center">Escolha a Tecnologia de Impressão</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <button onClick={() => { setPrintTechnique('CYLINDER'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-vingi-500 transition-all flex flex-col items-center gap-3 group text-center shadow-lg"><div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-vingi-900 transition-colors"><Cylinder size={24} className="text-gray-400 group-hover:text-vingi-400"/></div><div><h3 className="text-lg font-bold text-white">Cilindro (Vetorial)</h3><p className="text-xs text-gray-500 mt-1">Cores chapadas, separação nítida.</p></div></button>
-                                    <button onClick={() => { setPrintTechnique('DIGITAL'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-purple-500 transition-all flex flex-col items-center gap-3 group text-center shadow-lg"><div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-purple-900 transition-colors"><Printer size={24} className="text-gray-400 group-hover:text-purple-400"/></div><div><h3 className="text-lg font-bold text-white">Digital (Senior Colorist)</h3><p className="text-xs text-gray-500 mt-1">Volume, degradês e profundidade real.</p></div></button>
+                                    <button onClick={() => { setPrintTechnique('DIGITAL'); fileInputRef.current?.click(); }} className="bg-[#111] border border-gray-800 p-6 rounded-2xl hover:border-purple-500 transition-all flex flex-col items-center gap-3 group text-center shadow-lg"><div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center group-hover:bg-purple-900 transition-colors"><Printer size={24} className="text-gray-400 group-hover:text-purple-400"/></div><div><h3 className="text-lg font-bold text-white">Digital (Senior Duo)</h3><p className="text-xs text-gray-500 mt-1">Alta costura, volume e luz profissional.</p></div></button>
                                 </div>
                             </div>
                         }
