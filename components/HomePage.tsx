@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, Layers, Camera, ArrowUpRight, Fingerprint, FileText } from 'lucide-react';
+import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, Layers, Camera, ArrowUpRight, Fingerprint } from 'lucide-react';
 import { ViewState } from '../types';
 import { AIVoiceAgent } from './AIVoiceAgent';
 
@@ -68,13 +68,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     <div className="text-center md:text-left z-10 flex-1">
                         <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                             <div className="bg-vingi-900/5 p-1 rounded-md"><Sparkles size={12} className="text-vingi-600"/></div>
-                            <span className="text-[10px] font-bold tracking-widest text-vingi-900 uppercase">Vingi OS 7.0</span>
+                            <span className="text-[10px] font-bold tracking-widest text-vingi-900 uppercase">Vingi OS 6.5</span>
                         </div>
                         <h1 className="text-2xl md:text-4xl font-black text-gray-900 leading-tight tracking-tight">
                             Engenharia <span className="text-transparent bg-clip-text bg-gradient-to-r from-vingi-700 to-purple-700">Têxtil AI</span>
                         </h1>
                         <p className="text-xs md:text-sm text-gray-500 mt-2 font-medium max-w-lg mx-auto md:mx-0">
-                            Suite industrial completa: Reconhecimento de moldes, criação de estampas, engenharia de corte e documentação técnica avançada.
+                            Suite industrial completa: Reconhecimento de moldes, criação de estampas, engenharia de corte e simulação 3D realista.
                         </p>
                     </div>
 
@@ -120,15 +120,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                         colorClass="from-indigo-600 to-violet-500"
                         onClick={() => onNavigate('LAYER_STUDIO')}
                         stats="Editor"
-                    />
-
-                    <ModuleCard 
-                        title="Fichas Técnicas"
-                        description="Documentação industrial Pro para tinturaria, estamparia e cozinha."
-                        icon={<FileText size={20} />}
-                        colorClass="from-slate-900 to-slate-700"
-                        onClick={() => onNavigate('TECHNICAL_HUB')}
-                        stats="Industrial"
                     />
 
                     <ModuleCard 
@@ -178,7 +169,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                 {/* VERSION TAG */}
                 <div className="text-center pt-4 opacity-30 flex items-center justify-center gap-2">
                     <Fingerprint size={12}/>
-                    <span className="text-[9px] font-mono">VINGI SYSTEM ID: 294-X // BUILD 7.0.0</span>
+                    <span className="text-[9px] font-mono">VINGI SYSTEM ID: 294-X // BUILD 6.5.0</span>
                 </div>
 
             </div>
