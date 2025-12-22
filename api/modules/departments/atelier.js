@@ -3,28 +3,32 @@
 // DEPARTAMENTO: ANÁLISE DE REFERÊNCIA (Vision to Prompt)
 import { GoogleGenAI } from "@google/genai";
 
-// Análise Visual para extrair Prompt da Imagem com foco em Estúdio de Moda Profissional
+// Análise Visual para extrair Prompt da Imagem
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
 
     const SYSTEM_PROMPT = `
-    ACT AS: Senior Textile Art Director & Fashion Forensic Specialist (Estúdio de Moda Autoral).
+    Act as a Senior Textile Art Director specializing in VECTOR RESTORATION.
     
-    TASK: Perform a high-fidelity technical "Semantic Decomposition" of the textile design.
+    TASK: Analyze this image to create a prompt for a DIGITAL REPRODUCTION.
     
-    CRITICAL INSTRUCTIONS:
-    1. IGNORE HUMAN MODELS: If a person is wearing the garment, ignore skin, face, and body. Focus ONLY on the flat artwork of the fabric as if it were a digital file.
-    2. BACKGROUND FIDELITY: Identify the EXACT background color (hex-like precision or technical names like "warm ivory", "muted sage", "vintage navy"). This background MUST be preserved.
-    3. DESIGNER TECHNIQUE: Detect if the art looks manually painted (watercolor, gouache, acrylic), drawn in Photoshop (professional brush textures, stippling, layering), or clean vector.
-    4. MOTIF ANATOMY: Identify the rhythm, hierarchy of elements, and specific botanical/geometric species.
-    5. PROFESSIONAL FINISH: Describe how a Photoshop designer would layer this (transparencies, multiply modes, hand-stippled edges).
-
-    OUTPUT: A technical English prompt that enforces: "KEEP THE EXACT [Color] BACKGROUND AND [Color] MOTIFS. Photoshop Designer / Manual Studio Style. Professional high-end feminine fashion print."
+    CRITICAL INSTRUCTION - IGNORE MATERIALITY:
+    1. IGNORE the fabric weave (linen threads, twill lines, canvas grain). These are physical defects, not art.
+    2. IGNORE lighting, folds, wrinkles, and shadows.
+    3. IGNORE print distress, vintage fading, or screen print noise.
+    
+    FOCUS ONLY ON:
+    - The graphic motifs (shapes, flowers, geometrics).
+    - The intended solid colors (color blocking).
+    - The artistic style (Bauhaus, Art Deco, Watercolor).
+    
+    OUTPUT: A single, detailed prompt description to recreate the GRAPHIC ARTWORK as a pristine digital file.
+    Start with: "Flat digital pattern design..."
     `;
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-2.5-flash',
             contents: {
                 parts: [
                     { text: SYSTEM_PROMPT },
@@ -33,13 +37,13 @@ export const refineDesignPrompt = async (apiKey, imageBase64) => {
             }
         });
 
-        const text = response.text;
-        return text ? text.trim() : "Technical high-end fashion textile design, designer studio quality.";
+        const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        return text ? text.trim() : "Estampa vetorial limpa.";
 
     } catch (e) {
         console.error("Atelier Analysis Error:", e);
-        return "Professional technical print design faithful to reference.";
+        return "Estampa têxtil padronizada.";
     }
 };
 
-export const createTextileDesign = async () => null;
+export const createTextileDesign = async () => null; // Stub
