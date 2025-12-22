@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera, Scissors } from 'lucide-react';
+import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera, Scissors, FileText } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -63,6 +63,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onViewChange('LAYER_STUDIO')}
             tooltip="Lab de Imagem"
           />
+          <NavItem 
+            icon={<FileText size={24} />} 
+            active={currentView === 'TECHNICAL_HUB'} 
+            onClick={() => onViewChange('TECHNICAL_HUB')}
+            tooltip="Fichas Técnicas"
+          />
           
           <div className="w-10 h-[1px] bg-vingi-700 my-1"></div>
 
@@ -90,52 +96,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Mobile Nav - Otimizado para 7+ itens com Scroll */}
+      {/* Mobile Nav - Otimizado */}
       <div className="flex md:hidden w-full justify-start items-center overflow-x-auto no-scrollbar gap-2 px-4">
-          <NavItem 
-            icon={<LayoutGrid size={20} />} 
-            active={currentView === 'HOME'} 
-            onClick={() => onViewChange('HOME')}
-            isMobile
-          />
+          <NavItem icon={<LayoutGrid size={20} />} active={currentView === 'HOME'} onClick={() => onViewChange('HOME')} isMobile />
           <div className="w-[1px] h-6 bg-vingi-700 flex-shrink-0"></div>
-          <NavItem 
-            icon={<ScanLine size={20} />} 
-            active={currentView === 'SCANNER'} 
-            onClick={() => onViewChange('SCANNER')}
-            isMobile
-          />
-          <NavItem 
-            icon={<Globe size={20} />} 
-            active={currentView === 'CREATOR'} 
-            onClick={() => onViewChange('CREATOR')}
-            isMobile
-          />
-          <NavItem 
-            icon={<Palette size={20} />} 
-            active={currentView === 'ATELIER'} 
-            onClick={() => onViewChange('ATELIER')}
-            isMobile
-          />
-           <NavItem 
-            icon={<Layers size={20} />} 
-            active={currentView === 'LAYER_STUDIO'} 
-            onClick={() => onViewChange('LAYER_STUDIO')}
-            isMobile
-          />
+          <NavItem icon={<ScanLine size={20} />} active={currentView === 'SCANNER'} onClick={() => onViewChange('SCANNER')} isMobile />
+          <NavItem icon={<Globe size={20} />} active={currentView === 'CREATOR'} onClick={() => onViewChange('CREATOR')} isMobile />
+          <NavItem icon={<Palette size={20} />} active={currentView === 'ATELIER'} onClick={() => onViewChange('ATELIER')} isMobile />
+          <NavItem icon={<FileText size={20} />} active={currentView === 'TECHNICAL_HUB'} onClick={() => onViewChange('TECHNICAL_HUB')} isMobile />
           <div className="w-[1px] h-6 bg-vingi-700 flex-shrink-0"></div>
-          <NavItem 
-            icon={<Shirt size={20} />} 
-            active={currentView === 'MOCKUP'} 
-            onClick={() => onViewChange('MOCKUP')}
-            isMobile
-          />
-          <NavItem 
-            icon={<Camera size={20} />} 
-            active={currentView === 'RUNWAY'} 
-            onClick={() => onViewChange('RUNWAY')}
-            isMobile
-          />
+          <NavItem icon={<Shirt size={20} />} active={currentView === 'MOCKUP'} onClick={() => onViewChange('MOCKUP')} isMobile />
+          <NavItem icon={<Camera size={20} />} active={currentView === 'RUNWAY'} onClick={() => onViewChange('RUNWAY')} isMobile />
       </div>
 
       {/* Bottom Actions (Desktop) */}

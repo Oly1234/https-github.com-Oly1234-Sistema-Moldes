@@ -7,7 +7,7 @@ interface AIVoiceAgentProps {
     onNavigate: (view: ViewState, contextMessage: string) => void;
 }
 
-const VALID_VIEWS: ViewState[] = ['HOME', 'SCANNER', 'HISTORY', 'MOCKUP', 'CREATOR', 'ATELIER', 'LAYER_STUDIO', 'RUNWAY'];
+const VALID_VIEWS: ViewState[] = ['HOME', 'SCANNER', 'HISTORY', 'MOCKUP', 'CREATOR', 'ATELIER', 'LAYER_STUDIO', 'RUNWAY', 'TECHNICAL_HUB'];
 
 export const AIVoiceAgent: React.FC<AIVoiceAgentProps> = ({ onNavigate }) => {
     const [status, setStatus] = useState<'IDLE' | 'LISTENING' | 'PROCESSING' | 'SPEAKING'>('IDLE');
@@ -72,6 +72,7 @@ export const AIVoiceAgent: React.FC<AIVoiceAgentProps> = ({ onNavigate }) => {
                     else if (rawView.includes('CREATE') || rawView.includes('GENERATE')) safeView = 'ATELIER';
                     else if (rawView.includes('LAYER')) safeView = 'LAYER_STUDIO';
                     else if (rawView.includes('FIT') || rawView.includes('RUNWAY')) safeView = 'RUNWAY';
+                    else if (rawView.includes('FICHA') || rawView.includes('TECH') || rawView.includes('HUB') || rawView.includes('TECNIC')) safeView = 'TECHNICAL_HUB';
                 }
 
                 if (navigator.vibrate) navigator.vibrate([30, 50, 30]); 
