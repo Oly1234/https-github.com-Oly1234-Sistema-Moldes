@@ -3,25 +3,24 @@
 // DEPARTAMENTO: ANÁLISE DE REFERÊNCIA (Vision to Prompt)
 import { GoogleGenAI } from "@google/genai";
 
-// Análise Visual Ultra-Precisa para extrair o DNA da Estampa
+// Análise Visual para extrair Prompt da Imagem com foco em fidelidade técnica
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const SYSTEM_PROMPT = `
-    ACT AS: Senior Textile Art Director & Botanical Illustrator (Forensic Specialist).
+    ACT AS: Senior Textile Art Director & Forensic Pattern Specialist.
     
-    TASK: Perform a technical "Semantic Decomposition" of this image to guide a PRECISE LUXURY DIGITAL REPRODUCTION.
+    TASK: Perform a technical "Semantic Decomposition" of the textile design in this image.
     
-    ANALYSIS PROTOCOL:
-    1. MOTIF IDENTIFICATION (Species & Form): Do not just say "flower" or "leaf". Identify the exact species if possible (e.g., "Hibiscus rosa-sinensis", "Monstera deliciosa") or describe the specific anatomy (e.g., "serrated edges", "tubular petals", "veined foliage").
-    2. STROKE & LINEAGE: Analyze how the art was drawn. Is it a "0.1mm technical pen", a "textured dry-brush stroke", "bleeding watercolor edges", or "clean vector bezier curves"?
-    3. BACKGROUND ARCHITECTURE: Identify if the background is a "flat solid color", a "multi-tonal watercolor wash", "recycled paper grain", or "atmospheric gradient with soft bokeh".
-    4. SHADING & LIGHTING: Map the light source. Are there "directional highlights", "soft drop shadows creating 3D lift", or "inner glows"?
-    5. ARTISTIC TECHNIQUE: Define the style precisely: "Art Nouveau illustration", "Impasto Oil Painting", "Photorealistic Digital Collage", "Minimalist Japanese Line Art".
-    6. COLOR ATMOSPHERE: Describe transitions like "velvety tone-on-tone gradients" or "high-contrast vibrant accents".
+    CRITICAL INSTRUCTIONS:
+    1. IGNORE MODELS: If a person is wearing the garment, ignore skin, face, and body. Focus ONLY on the flat artwork of the fabric.
+    2. BACKGROUND COLOR: Identify the EXACT background color (e.g., "warm off-white", "deep emerald green", "muted sandy beige"). This color is mandatory.
+    3. MOTIF ANALYSIS: Identify specific elements (botanical species, geometric types) and their exact colors.
+    4. TECHNIQUE DETECTION: Determine if it looks manually painted (watercolor/gouache), drawn with professional Photoshop brushes (stippled, textured), or vector.
+    5. DESIGNER STYLE: Describe it as a "technical print file for high-end fashion" (moda feminina).
 
-    OUTPUT: A technical, extremely rich narrative prompt (in English) that describes every layer of this artwork as if explaining it to a master painter.
-    Start directly with the technical breakdown.
+    OUTPUT: A technical English description. 
+    Enforce: "Keep the EXACT [Color] background and [Color] motifs from the reference. Professional Photoshop designer style with manual-looking textures."
     `;
 
     try {
@@ -36,12 +35,12 @@ export const refineDesignPrompt = async (apiKey, imageBase64) => {
         });
 
         const text = response.text;
-        return text ? text.trim() : "Clean high-end digital textile pattern with sophisticated motifs.";
+        return text ? text.trim() : "Technical textile print design, professional studio quality.";
 
     } catch (e) {
         console.error("Atelier Analysis Error:", e);
-        return "Professional high-fidelity textile print design.";
+        return "Professional high-fidelity textile pattern elevation.";
     }
 };
 
-export const createTextileDesign = async () => null; // Stub
+export const createTextileDesign = async () => null;
