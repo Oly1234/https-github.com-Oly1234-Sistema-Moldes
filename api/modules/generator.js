@@ -18,23 +18,21 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     if (technique === 'DIGITAL') {
         // --- MODO DIGITAL: O DUO SÊNIOR (DESIGNER + COLORISTA) ---
         TECHNIQUE_PROMPT = `
-        MODE: SUPREME DIGITAL TEXTILE MASTERPIECE (4K RESOLUTION).
-        
+        MODE: SUPREME DIGITAL TEXTILE MASTERPIECE.
         PERSONA 1 (SENIOR TEXTILE DESIGNER):
-        - FIDELITY: Follow the forensic analysis details exactly. If a specific species or stroke type is mentioned, render it with hyper-precision.
         - ARTISTIC DEPTH: Create 3D volume using chiaroscuro. Motifs must feel tangible with soft realistic shadows and sharp highlights.
         - ATMOSPHERIC PERSPECTIVE: Layer elements to create foreground, midground, and background depth. Use subtle blurs and translucency.
-        - MICRO-TEXTURES: Inlay motifs with realistic fabric grains, organic veins, or fine brush-stroke textures.
+        - MICRO-TEXTURES: Inlay motifs with realistic fabric grains, organic veins (for florals), or fine brush-stroke textures.
         - LIGHTING: Apply a "Studio Lighting" effect. Dramatic directional light that enhances shape and texture.
         
         PERSONA 2 (MASTER COLORIST):
-        - CHROMATIC RICHNESS: Enrich the design with infinite color gradations and subtle transitions.
+        - CHROMATIC RICHNESS: Even if the reference is simple, enrich it with infinite color gradations.
         - ACCENT STRATEGY: Use vibrant accent colors in tiny, strategic details to catch the eye and elevate the design.
-        - LUXURY FINISH: The overall look must be "High-Fashion Editorial" – expensive, intricate, and visually superior to the input reference.
+        - FINISH: The overall look must be "High-Fashion Editorial" – expensive, intricate, and visually superior to the input reference.
         `;
         
         NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT: Flat 2D look, simple fill colors, cartoon style, muddy/dirty colors, low contrast, basic vector shapes, jagged edges, pixelated noise, boring layout, blurry textures.
+        NEGATIVE PROMPT: Flat 2D look, simple fill colors, cartoon style, muddy/dirty colors, low contrast, basic vector shapes, jagged edges, pixelated noise, boring layout.
         `;
 
     } else {
@@ -83,9 +81,9 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
 
     // 5. Prompt Final
     const FULL_PROMPT = `
-    MASTER DIRECTIVE: RE-IMAGINE THIS PRINT WITH SUPREME LUXURY QUALITY.
+    MASTER DIRECTIVE: RE-IMAGINE THIS PRINT WITH LUXURY QUALITY.
     
-    TECHNICAL ANALYSIS TO FOLLOW: ${prompt}.
+    THEME: ${prompt}.
     
     ${TECHNIQUE_PROMPT}
     ${layoutInstruction}
