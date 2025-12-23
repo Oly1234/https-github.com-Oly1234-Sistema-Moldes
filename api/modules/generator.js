@@ -4,7 +4,8 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // FIX: Usa a apiKey passada pelo argumento, garantindo autenticação correta
+    const ai = new GoogleGenAI({ apiKey: apiKey });
 
     // 1. Fidelidade Cromática de Estúdio
     const colorContext = (colors && colors.length > 0) 
@@ -102,7 +103,8 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
 };
 
 export const generateTextureLayer = async (apiKey, textureType, prompt) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // FIX: Usa a apiKey passada pelo argumento
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     const TEXTURE_PROMPT = `GENERATE A SEAMLESS TEXTURE MASK: ${textureType} (${prompt}). Grayscale heightmap, high fidelity.`;
     try {
         const response = await ai.models.generateContent({

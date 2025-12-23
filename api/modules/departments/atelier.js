@@ -5,7 +5,8 @@ import { GoogleGenAI } from "@google/genai";
 
 // Análise Visual para extrair Prompt da Imagem com foco em Estúdio de Moda Profissional
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // FIX: Usa a apiKey passada pelo argumento, garantindo que venha do analyze.js
+    const ai = new GoogleGenAI({ apiKey: apiKey });
 
     const SYSTEM_PROMPT = `
     ACT AS: Senior Textile Art Director & Fashion Forensic Specialist (Estúdio de Moda Autoral).
