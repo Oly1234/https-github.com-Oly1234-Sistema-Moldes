@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus, Globe, Cpu, Database, Network, Check, Eye, EyeOff, Maximize2, Minus } from 'lucide-react';
+import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus, Globe, Cpu, Database, Network, Check, Eye, EyeOff, Maximize2, Minus, GripHorizontal } from 'lucide-react';
 
 // --- VISUALIZADOR INTELIGENTE (ZOOM/PAN) ---
 export const SmartImageViewer: React.FC<{ src: string, className?: string, style?: React.CSSProperties }> = ({ src, className = "", style }) => {
@@ -294,13 +294,15 @@ export const ModuleLandingPage: React.FC<ModuleLandingPageProps> = ({
 
 // --- MODAL FLUTUANTE DE COMPARAÇÃO "HUD PRO" ---
 export const FloatingReference: React.FC<{ image: string, label?: string }> = ({ image, label = "Ref. Original" }) => {
-    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 320 }); 
-    const [size, setSize] = useState(220);
+    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 350 }); 
+    const [size, setSize] = useState({ w: 220, h: 280 }); // Estado para largura e altura
     const [isMinimized, setIsMinimized] = useState(false);
     const [opacity, setOpacity] = useState(1);
     
     const dragOffset = useRef({ x: 0, y: 0 });
     const isDragging = useRef(false);
+    
+    const resizeStart = useRef<{x:number, y:number, w:number, h:number} | null>(null);
 
     const handlePointerDown = (e: React.PointerEvent) => {
         // Prevent drag if clicking controls
@@ -316,13 +318,35 @@ export const FloatingReference: React.FC<{ image: string, label?: string }> = ({
         const newX = e.clientX - dragOffset.current.x;
         const newY = e.clientY - dragOffset.current.y;
         setPosition({
-            x: Math.max(0, Math.min(newX, window.innerWidth - size)),
+            x: Math.max(0, Math.min(newX, window.innerWidth - size.w)),
             y: Math.max(0, Math.min(newY, window.innerHeight - 50))
         });
     };
 
     const handlePointerUp = (e: React.PointerEvent) => {
         isDragging.current = false;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+    
+    // Resize Logic
+    const handleResizeStart = (e: React.PointerEvent) => {
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        resizeStart.current = { x: e.clientX, y: e.clientY, w: size.w, h: size.h };
+    };
+    
+    const handleResizeMove = (e: React.PointerEvent) => {
+        if (!resizeStart.current) return;
+        const dx = e.clientX - resizeStart.current.x;
+        const dy = e.clientY - resizeStart.current.y;
+        setSize({
+            w: Math.max(200, Math.min(600, resizeStart.current.w + dx)),
+            h: Math.max(200, Math.min(800, resizeStart.current.h + dy))
+        });
+    };
+    
+    const handleResizeEnd = (e: React.PointerEvent) => {
+        resizeStart.current = null;
         e.currentTarget.releasePointerCapture(e.pointerId);
     };
 
@@ -347,11 +371,11 @@ export const FloatingReference: React.FC<{ image: string, label?: string }> = ({
     return (
         <div 
             className="fixed z-[90] bg-[#1a1a1a] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] border border-white/10 overflow-hidden flex flex-col transition-all duration-75"
-            style={{ left: position.x, top: position.y, width: size, opacity: Math.max(0.2, opacity) }}
+            style={{ left: position.x, top: position.y, width: size.w, height: size.h, opacity: Math.max(0.2, opacity) }}
         >
             {/* Header / Drag Handle */}
             <div 
-                className="bg-black/90 h-8 flex items-center justify-between px-3 cursor-grab active:cursor-grabbing select-none border-b border-white/5"
+                className="bg-black/90 h-8 flex items-center justify-between px-3 cursor-grab active:cursor-grabbing select-none border-b border-white/5 shrink-0"
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -361,18 +385,18 @@ export const FloatingReference: React.FC<{ image: string, label?: string }> = ({
                     <Move size={10} className="text-vingi-500"/> {label}
                 </span>
                 <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
-                    <button onClick={() => setSize(s => Math.min(500, s + 50))} className="text-gray-500 hover:text-white p-1 transition-colors"><Maximize2 size={10}/></button>
+                    <button onClick={() => setSize(s => ({...s, w: Math.min(600, s.w + 50), h: Math.min(800, s.h + 50)}))} className="text-gray-500 hover:text-white p-1 transition-colors"><Maximize2 size={10}/></button>
                     <button onClick={() => setIsMinimized(true)} className="text-gray-500 hover:text-white p-1 transition-colors"><Minimize2 size={10}/></button>
                 </div>
             </div>
 
             {/* Image Viewer (Zoomable) */}
-            <div className="relative bg-[#050505] group border-b border-white/5 h-64 overflow-hidden">
+            <div className="relative bg-[#050505] group border-b border-white/5 flex-1 overflow-hidden">
                 <SmartImageViewer src={image} className="bg-transparent" style={{ height: '100%' }} />
             </div>
 
             {/* Footer / Controls */}
-            <div className="bg-[#111] p-2 flex items-center gap-3">
+            <div className="bg-[#111] p-2 flex items-center gap-3 shrink-0 relative">
                 <div className="flex items-center gap-2 flex-1">
                     {opacity < 1 ? <EyeOff size={12} className="text-vingi-500"/> : <Eye size={12} className="text-gray-500"/>}
                     <input 
@@ -385,6 +409,17 @@ export const FloatingReference: React.FC<{ image: string, label?: string }> = ({
                 </div>
                 <div className="text-[9px] font-mono text-gray-500 w-8 text-right">
                     {Math.round(opacity * 100)}%
+                </div>
+                
+                {/* Resize Handle */}
+                <div 
+                    className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-end justify-end p-0.5 opacity-50 hover:opacity-100"
+                    onPointerDown={handleResizeStart}
+                    onPointerMove={handleResizeMove}
+                    onPointerUp={handleResizeEnd}
+                    onPointerCancel={handleResizeEnd}
+                >
+                    <div className="w-0 h-0 border-b-[6px] border-r-[6px] border-b-transparent border-r-gray-400 transform translate-x-[-2px] translate-y-[-2px]"></div>
                 </div>
             </div>
         </div>
