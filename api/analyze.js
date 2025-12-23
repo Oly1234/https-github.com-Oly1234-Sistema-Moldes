@@ -92,7 +92,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'PREPARE_PRODUCTION') {
-        const enhancedImage = await generateHighResProductionFile(apiKey, mainImageBase64, targetSize, technique);
+        // FIX: Passa layoutStyle para garantir aspect ratio correto (ex: Pareo vs Quadrado)
+        const enhancedImage = await generateHighResProductionFile(apiKey, mainImageBase64, targetSize, technique, layoutStyle);
         return res.status(200).json({ success: true, image: enhancedImage });
     }
 

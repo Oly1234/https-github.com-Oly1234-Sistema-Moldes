@@ -2,72 +2,84 @@
 // api/modules/departments/qualityControl.js
 // DEPARTAMENTO: CONTROLE DE QUALIDADE & REFINAMENTO
 // Responsabilidade: Upscaling e Finalização de Arquivo.
+import { GoogleGenAI } from "@google/genai";
 
 // NOVO: MOTOR DE PRODUÇÃO DEDICADO (CORRIGIDO)
-export const generateHighResProductionFile = async (apiKey, imageBase64, targetSize, technique) => {
-    // Usamos um modelo de visão capaz de Image-to-Image com alta fidelidade
-    const MODEL_NAME = 'gemini-2.5-flash-image'; 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+export const generateHighResProductionFile = async (apiKey, imageBase64, targetSize, technique, layoutStyle = 'ORIGINAL') => {
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+    
+    // Upgrade para Gemini 3 Pro (Suporte a 4K e melhor fidelidade)
+    const MODEL_NAME = 'gemini-3-pro-image-preview'; 
+
+    // FIX CRÍTICO: Limpa o cabeçalho "data:image..." se existir, pois a API espera apenas o hash base64
+    const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
 
     const TECH_SPEC = technique === 'CYLINDER' 
-        ? "Style: Vector Graphic. Flat solid colors. Sharp edges." 
-        : "Style: High-End Digital Print. Rich details, perfect gradients, sharp focus.";
+        ? "MODE: VECTOR TRACING LOOK. Flat solid colors, extremely sharp edges, no anti-aliasing blurring. Ready for screen engraving." 
+        : "MODE: 4K UPSCALING. Photorealistic texture enhancement, maintain organic details, remove noise.";
 
-    // PROMPT REVISADO: "RE-IMAGINE" em vez de "RESTAURE"
-    // Isso evita que o modelo recuse a imagem por achar que não pode editar o original.
-    // Pedimos para ele criar uma "Variante em Alta Definição" baseada na entrada.
+    // PROMPT DE FIDELIDADE ESTRITA (UPSCALING PURO)
     const PRODUCTION_PROMPT = `
-    TASK: Generate a High-Definition version of this textile pattern.
+    ACT AS: Industrial AI Upscaler (Super-Resolution Engine).
     
-    INSTRUCTIONS:
-    1. Use the provided image as the REFERENCE for composition, colors, and motifs.
-    2. OUTPUT: A pristine, high-resolution digital asset (4K quality).
-    3. FIX: Remove any blur, compression artifacts, or noise from the reference.
-    4. ACCURACY: Keep the design identical, just upgrade the quality.
+    TASK: Upscale this specific textile pattern to 4K resolution for industrial printing.
+    
+    CRITICAL FIDELITY RULES (ZERO TOLERANCE FOR CHANGE):
+    1. DO NOT CHANGE THE DESIGN: The motifs, positioning, composition, and palette must remain EXACTLY identical to the reference image.
+    2. NO CREATIVE HALLUCINATIONS: Do not add new flowers, objects, or details that do not exist in the source.
+    3. TARGET: Remove JPEG artifacts, blur, and noise. Sharpen lines and define textures.
+    4. OUTPUT: A pristine 4K High-Res asset.
     
     ${TECH_SPEC}
-    Target Output: Flat 2D Print File.
+    
+    Target Output: 2D Flat Pattern File (4096x4096px).
     `;
 
-    const payload = {
-        contents: [{ 
-            parts: [
-                { text: PRODUCTION_PROMPT },
-                { inline_data: { mime_type: "image/png", data: imageBase64 } }
-            ] 
-        }]
-    };
+    // Define Aspect Ratio baseado no layout original para evitar distorção
+    const isPareo = layoutStyle === 'PAREO';
+    const aspectRatio = isPareo ? "9:16" : "1:1";
 
     try {
-        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`API Error ${response.status}: ${errText}`);
-        }
+        const response = await ai.models.generateContent({
+            model: MODEL_NAME,
+            contents: { 
+                parts: [
+                    { text: PRODUCTION_PROMPT },
+                    { inlineData: { mimeType: "image/png", data: cleanBase64 } }
+                ] 
+            },
+            config: {
+                imageConfig: {
+                    imageSize: "4K", // Força resolução máxima permitida pelo modelo
+                    aspectRatio: aspectRatio // Respeita se é Pareô ou Quadrado
+                }
+            }
+        });
 
-        const data = await response.json();
-        
-        // Verifica se houve recusa (safety ratings ou finishReason)
-        if (data.candidates?.[0]?.finishReason === 'SAFETY') {
-            throw new Error("A IA recusou a imagem por motivos de segurança. Tente uma estampa diferente.");
+        // Loop de busca seguro pela parte de imagem
+        let imagePart = null;
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    imagePart = part;
+                    break;
+                }
+            }
         }
-
-        const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inline_data);
         
         if (imagePart) {
-            return `data:${imagePart.inline_data.mime_type};base64,${imagePart.inline_data.data}`;
+            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
         }
         
-        throw new Error("O motor de produção não retornou uma imagem válida.");
+        throw new Error("O motor de produção 4K não retornou uma imagem válida.");
 
     } catch (e) {
         console.error("Production Engine Error:", e);
-        throw e;
+        throw new Error("Erro no processamento de alta definição: " + e.message);
     }
 };
 
 export const enhancePatternQuality = async (apiKey, imageBase64, contextPrompt) => {
-    // Mantido para compatibilidade, mas pode usar lógica similar
-    return generateHighResProductionFile(apiKey, imageBase64, "Preview", "DIGITAL");
+    // Mantido para compatibilidade, mas redireciona para o motor Pro
+    return generateHighResProductionFile(apiKey, imageBase64, "Preview", "DIGITAL", "ORIGINAL");
 };
