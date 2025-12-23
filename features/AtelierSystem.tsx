@@ -1,11 +1,9 @@
 
-// ... (imports mantidos)
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
-// ... (componentes auxiliares mantidos: PantoneChip, XCircle, triggerTransfer, compressImage)
 const PantoneChip: React.FC<{ color: PantoneColor, onDelete?: () => void }> = ({ color, onDelete }) => {
     const [showMenu, setShowMenu] = useState(false);
     const handleCopy = (e: React.MouseEvent) => {
@@ -55,7 +53,6 @@ interface AtelierSystemProps {
     onNavigateToLayerStudio?: () => void;
 }
 
-// ... (Configurações de Layout e Estilo mantidas)
 const LAYOUT_OPTIONS = [
     { id: 'ORIGINAL', label: 'Original', icon: ImageIcon },
     { id: 'CORRIDA', label: 'Corrida', icon: Layers },
@@ -84,7 +81,6 @@ const SUB_LAYOUT_CONFIG: Record<string, { id: string, label: string, icon: any }
     ]
 };
 
-// MAPA DE TAMANHOS POR LAYOUT
 const SIZE_OPTIONS: Record<string, string[]> = {
     'LENCO': ['60x60cm (Bandana)', '90x90cm (Carré)', '110x110cm (Xale)', '140x140cm (Maxi)'],
     'PAREO': ['100x140cm (Standard)', '115x145cm (Maxi Pareo)', '100x180cm (Canga)'],
@@ -102,10 +98,9 @@ const ART_STYLES = [
     { id: 'BORDADO', label: 'Bordado', icon: Scissors },
     { id: 'LINHA', label: 'Line Art', icon: PenTool },
     { id: 'ORNAMENTAL', label: 'Barroco', icon: Feather },
-    { id: 'CUSTOM', label: 'Outro', icon: Edit3 }, // Opção Personalizada
+    { id: 'CUSTOM', label: 'Outro', icon: Edit3 },
 ];
 
-// TEXTURE PRESETS (CSS BACKGROUNDS)
 const TEXTURE_PRESETS = [
     { id: 'NONE', label: 'Lisa', css: 'none' },
     { id: 'LINEN', label: 'Linho', css: `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 3px), repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 3px)` },
@@ -116,38 +111,44 @@ const TEXTURE_PRESETS = [
 ];
 
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
-    // ... (Estados mantidos)
     const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT'>('IMAGE');
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
+    
     const [userPrompt, setUserPrompt] = useState<string>(''); 
     const [customInstruction, setCustomInstruction] = useState<string>(''); 
+
     const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
     const [colorCount, setColorCount] = useState<number>(0); 
+    
     const [targetLayout, setTargetLayout] = useState<string>('ORIGINAL');
     const [subLayout, setSubLayout] = useState<string>(''); 
     const [artStyle, setArtStyle] = useState<string>('ORIGINAL');
     const [customStyleText, setCustomStyleText] = useState<string>(''); 
+    
     const [targetSize, setTargetSize] = useState<string>('');
     const [isCustomSize, setIsCustomSize] = useState(false);
     const [customW, setCustomW] = useState('');
     const [customH, setCustomH] = useState('');
+
     const [activeTexture, setActiveTexture] = useState('NONE');
     const [textureScale, setTextureScale] = useState(1);
     const [textureOpacity, setTextureOpacity] = useState(0.3);
     const [customTexturePrompt, setCustomTexturePrompt] = useState('');
     const [generatedTextureUrl, setGeneratedTextureUrl] = useState<string | null>(null);
     const [isGeneratingTexture, setIsGeneratingTexture] = useState(false);
+
     const [customColorInput, setCustomColorInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
+    
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const [isUpscaling, setIsUpscaling] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // ... (Effects mantidos)
     useEffect(() => {
         const transferImage = localStorage.getItem('vingi_transfer_image');
         if (transferImage) {
@@ -169,7 +170,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         }
     }, [customW, customH, isCustomSize]);
 
-    // ... (Helper functions mantidos)
     const resetSession = () => {
         setReferenceImage(null); setGeneratedPattern(null); setUserPrompt(''); setCustomInstruction(''); setColors([]); setError(null); setCreationMode('IMAGE');
         setTargetLayout('ORIGINAL'); setSubLayout(''); setTargetSize(''); setArtStyle('ORIGINAL'); setColorCount(0); setIsCustomSize(false);
@@ -255,13 +255,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
     };
 
-    // --- PRODUCTION ENGINE DOWNLOAD ---
     const handleProductionDownload = async () => {
         if (!generatedPattern) return;
         setIsUpscaling(true);
         setShowDownloadMenu(false);
         try {
-            const cleanBase64 = generatedPattern.split(',')[1]; // Limpa o header data:image para enviar
+            const cleanBase64 = generatedPattern.split(',')[1];
             const res = await fetch('/api/analyze', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
@@ -270,7 +269,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     mainImageBase64: cleanBase64,
                     targetSize: targetSize || "140cm Standard",
                     technique: printTechnique,
-                    layoutStyle: targetLayout // CRUCIAL: Passa o layout para manter aspect ratio
+                    layoutStyle: targetLayout 
                 }) 
             });
             const data = await res.json();
@@ -296,7 +295,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         if (target === 'LAYER' && onNavigateToLayerStudio) onNavigateToLayerStudio();
     };
 
-    // ... (Resto do componente mantido)
     const handleAddCustomColor = () => {
         if (!customColorInput) return;
         const newColor: PantoneColor = { name: "Manual", code: customColorInput, hex: customColorInput.startsWith('#') ? customColorInput : '#000', role: 'User' };
@@ -319,7 +317,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     return (
         <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
-            {/* HEADER COMPACTO DARK COM SAFE AREA FIX EXTREMO (iPhone Friendly) */}
             <div className="bg-[#111111] px-4 pb-3 pt-[calc(1.5rem+env(safe-area-inset-top))] flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-auto min-h-[4.5rem] transition-all duration-300 border-b border-white/5">
                 <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
                 <div className="flex gap-2 relative">
@@ -331,7 +328,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             <button onClick={() => handleTransfer('MOCKUP')} className="text-[10px] bg-vingi-900 text-white px-3 py-1.5 rounded font-bold hover:bg-vingi-800 flex items-center gap-1 border border-vingi-700"><Settings2 size={12}/> Provar</button>
                             <button onClick={() => setShowDownloadMenu(!showDownloadMenu)} className="text-[10px] bg-green-900 text-white px-3 py-1.5 rounded font-bold hover:bg-green-800 flex items-center gap-1 border border-green-700 relative"><Download size={12}/> Baixar</button>
                             
-                            {/* DOWNLOAD MENU */}
                             {showDownloadMenu && (
                                 <div className="absolute top-full right-0 mt-2 w-56 bg-[#1a1a1a] border border-gray-700 rounded-xl shadow-2xl z-[60] overflow-hidden animate-slide-down">
                                     <div className="p-2 space-y-1">
@@ -352,7 +348,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 </div>
             </div>
 
-            {/* ... Resto da renderização da UI (mantida igual) */}
             {!hasActiveSession ? (
                 <div className="flex-1 bg-[#050505] overflow-y-auto">
                     <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if(f){ const r = new FileReader(); r.onload=(ev)=>handleReferenceUpload(ev.target?.result as string); r.readAsDataURL(f); } }} accept="image/*" className="hidden" />
@@ -382,8 +377,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 bg-black">
-                    {/* CANVAS AREA (LEFT) - EXPANDED */}
-                    <div className="flex-1 bg-[#050505] relative flex items-center justify-center p-0 md:p-4 min-h-[40vh] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0">
+                    {/* CANVAS AREA (LEFT) - MOBILE OPTIMIZED (FLEX BASIS) */}
+                    <div className={`relative flex items-center justify-center p-0 md:p-4 bg-[#050505] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0 ${window.innerWidth < 768 ? 'basis-[35%] shrink-0 h-[35dvh]' : 'flex-1'}`}>
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
                         
                         {isProcessing || isUpscaling ? (
@@ -399,7 +394,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             <div className="relative w-full h-full flex items-center justify-center animate-fade-in group overflow-hidden">
                                 <div className="relative w-full h-full">
                                     <SmartImageViewer src={generatedPattern} />
-                                    {/* TEXTURE OVERLAY LAYER */}
                                     <div className="absolute inset-0 pointer-events-none" style={getCurrentTextureStyle()}></div>
                                 </div>
                             </div>
@@ -412,7 +406,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     <h3 className="text-gray-300 font-bold text-lg mb-1">Área de Visualização</h3>
                                     <p className="text-gray-500 text-sm max-w-xs mx-auto">Sua estampa aparecerá aqui.</p>
                                 </div>
-                                {/* STATUS GUIDE MOVED TO TOP TO AVOID OVERLAP WITH REFERENCE */}
                                 {colors.length > 0 && (
                                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-vingi-900/80 backdrop-blur border border-vingi-500/30 px-6 py-3 rounded-full animate-slide-down flex items-center gap-3 shadow-lg z-20">
                                         <Check size={14} className="bg-vingi-500 text-black rounded-full p-0.5"/>
@@ -423,13 +416,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         )}
                         {error && ( <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-900/90 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-700 max-w-md backdrop-blur"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div> )}
                         
-                        {/* Floating Reference (Mini) */}
                         {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20 hover:scale-150 transition-transform origin-bottom-left"><img src={referenceImage} className="w-full h-full object-cover opacity-100" /></div>}
                     </div>
 
-                    {/* CONTROL DECK (FLEX LAYOUT) */}
-                    <div className="w-full md:w-[400px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-[55vh] md:h-full shrink-0 relative transition-all duration-500">
-                        {/* 1. SCROLLABLE CONTENT */}
+                    {/* CONTROL DECK - MOBILE OPTIMIZED (FLEX-1 + SAFE AREA) */}
+                    <div className="w-full md:w-[400px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex-1 md:h-full md:flex-none shrink-0 relative transition-all duration-500 min-h-0 pb-[env(safe-area-inset-bottom)]">
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-24">
                             {!isAnalysisComplete && !generatedPattern && (
                                 <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-10 gap-4">
@@ -440,7 +431,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                             )}
                             {(isAnalysisComplete || generatedPattern) && (
                                 <>
-                                    {/* ... (Controles existentes mantidos) ... */}
                                     <div className="space-y-2 animate-slide-up">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa</h3>
@@ -455,7 +445,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         </div>
                                     </div>
 
-                                    {/* CORES (EXTRAÍDAS) */}
                                     <div className="space-y-2 animate-slide-up" style={{animationDelay: '0.1s'}}>
                                         <div className="flex justify-between items-center">
                                             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12}/> Paleta Detectada</h3>
@@ -466,7 +455,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         </div>
                                     </div>
 
-                                    {/* LAYOUT & TAMANHO */}
                                     <div className="space-y-3 animate-slide-up" style={{animationDelay: '0.2s'}}>
                                         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3>
                                         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -481,7 +469,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                                 </button>
                                             ))}
                                         </div>
-                                        {/* SUB-LAYOUT CONTEXTUAL E SIZE SELECTOR (MANTIDOS) */}
                                         {SUB_LAYOUT_CONFIG[targetLayout] && (
                                             <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 animate-slide-down">
                                                 <div className="grid grid-cols-2 gap-2">
@@ -509,7 +496,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         </div>
                                     </div>
 
-                                    {/* ESTILO ARTÍSTICO */}
                                     <div className="space-y-3 pb-4 animate-slide-up" style={{animationDelay: '0.3s'}}>
                                         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Brush size={12}/> Estilo Artístico</h3>
                                         <div className="grid grid-cols-4 gap-2">
@@ -520,7 +506,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         {artStyle === 'CUSTOM' && (<div className="animate-fade-in mt-2"><input type="text" value={customStyleText} onChange={(e) => setCustomStyleText(e.target.value)} placeholder="Descreva o estilo (Ex: Pontilhismo, Art Deco...)" className="w-full bg-black border border-gray-700 rounded-lg p-3 text-xs text-white outline-none focus:border-vingi-500 transition-colors"/></div>)}
                                     </div>
 
-                                    {/* GENERATE BUTTON */}
                                     <div className="pt-4 border-t border-white/5 animate-slide-up" style={{animationDelay: '0.4s'}}>
                                         {!isProcessing && !isUpscaling && (
                                             <button onClick={handleGenerate} className={`w-full py-5 rounded-xl font-bold shadow-2xl flex items-center justify-center gap-3 text-white transition-all active:scale-95 text-base relative overflow-hidden group ${printTechnique === 'DIGITAL' ? 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:brightness-110 shadow-purple-900/20' : 'bg-gradient-to-r from-vingi-700 to-blue-700 hover:brightness-110 shadow-vingi-900/20'}`}>
@@ -533,7 +518,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         )}
                                     </div>
 
-                                    {/* ACABAMENTO & TEXTURA */}
                                     {generatedPattern && (
                                         <div className="space-y-3 pb-4 border-t border-white/5 pt-4 animate-slide-up" style={{animationDelay: '0.1s'}}>
                                             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Grid size={12}/> Acabamento & Textura (Overlay)</h3>
