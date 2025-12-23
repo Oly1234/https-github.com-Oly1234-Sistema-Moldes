@@ -1,9 +1,11 @@
 
+// ... (imports remain the same)
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
+// ... (PantoneChip, XCircle, triggerTransfer, compressImage, and config arrays remain the same)
 const PantoneChip: React.FC<{ color: PantoneColor, onDelete?: () => void }> = ({ color, onDelete }) => {
     const [showMenu, setShowMenu] = useState(false);
     const handleCopy = (e: React.MouseEvent) => {
@@ -261,6 +263,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setShowDownloadMenu(false);
         try {
             const cleanBase64 = generatedPattern.split(',')[1];
+            
             const res = await fetch('/api/analyze', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
@@ -272,16 +275,33 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     layoutStyle: targetLayout 
                 }) 
             });
-            const data = await res.json();
+
+            // Tratamento Robustecido para Mobile/Timeouts
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Erro do Servidor (${res.status}): Tente novamente.`);
+            }
+
+            const textData = await res.text();
+            let data;
+            try {
+                data = JSON.parse(textData);
+            } catch (jsonError) {
+                throw new Error("Erro de conexão: Resposta inválida do servidor (Timeout em 4K).");
+            }
+
             if (data.success && data.image) {
                 const l = document.createElement('a'); 
                 l.download = `VINGI_PRO_PRODUCTION_${targetSize || 'RAW'}.png`; 
                 l.href = data.image; 
+                document.body.appendChild(l);
                 l.click();
+                document.body.removeChild(l);
             } else {
-                throw new Error("Falha no motor de produção. Tente novamente.");
+                throw new Error(data.error || "Falha no motor de produção. Tente novamente.");
             }
         } catch (e: any) {
+            console.error("Production Error:", e);
             alert(e.message || "Erro ao gerar arquivo de produção.");
         } finally {
             setIsUpscaling(false);
