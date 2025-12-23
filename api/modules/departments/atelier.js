@@ -5,7 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 
 // Análise Visual para extrair Prompt da Imagem com foco em Estúdio de Moda Profissional
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
-    // FIX: Usa a apiKey passada pelo argumento para evitar erro de credenciais
+    // FIX: Usa a apiKey passada pelo argumento, garantindo que venha do analyze.js
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
     const SYSTEM_PROMPT = `

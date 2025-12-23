@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus, Globe, Cpu, Database, Network, Check, Eye, EyeOff, Maximize2, Minus, GripHorizontal } from 'lucide-react';
+import { Move, ZoomIn, Minimize2, ImageIcon, RotateCcw, X, Info, Plus, Globe, Cpu, Database, Network, Check } from 'lucide-react';
 
 // --- VISUALIZADOR INTELIGENTE (ZOOM/PAN) ---
-export const SmartImageViewer: React.FC<{ src: string, className?: string, style?: React.CSSProperties }> = ({ src, className = "", style }) => {
+export const SmartImageViewer: React.FC<{ src: string, className?: string }> = ({ src, className = "" }) => {
     const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
     const [isPinching, setIsPinching] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +61,6 @@ export const SmartImageViewer: React.FC<{ src: string, className?: string, style
         <div 
             ref={containerRef}
             className={`overflow-hidden relative cursor-grab active:cursor-grabbing touch-none flex items-center justify-center bg-gray-50/50 ${className}`}
-            style={style}
             onWheel={handleWheel}
             onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}
             onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
@@ -82,10 +81,9 @@ export const SmartImageViewer: React.FC<{ src: string, className?: string, style
             </div>
             
             {/* Zoom Controls Overlay */}
-            <div className="absolute bottom-2 right-2 flex flex-col gap-1 z-10 scale-90 origin-bottom-right">
-                <button onClick={(e) => { e.stopPropagation(); setTransform(p => ({...p, k: Math.min(p.k * 1.2, 8)})); }} className="bg-black/50 backdrop-blur text-white p-1.5 rounded-full shadow-sm hover:bg-black/70 border border-white/10"><Plus size={14}/></button>
-                <button onClick={(e) => { e.stopPropagation(); reset(); }} className="bg-black/50 backdrop-blur text-white p-1.5 rounded-full shadow-sm hover:bg-black/70 border border-white/10"><RotateCcw size={14}/></button>
-                <button onClick={(e) => { e.stopPropagation(); setTransform(p => ({...p, k: Math.max(p.k / 1.2, 0.5)})); }} className="bg-black/50 backdrop-blur text-white p-1.5 rounded-full shadow-sm hover:bg-black/70 border border-white/10"><Minus size={14}/></button>
+            <div className="absolute bottom-2 right-2 flex flex-col gap-1 z-10">
+                <button onClick={(e) => { e.stopPropagation(); setTransform(p => ({...p, k: Math.min(p.k * 1.2, 8)})); }} className="bg-white/90 p-1.5 rounded-full shadow-sm text-gray-700 hover:text-vingi-600 border border-gray-200"><Plus size={14}/></button>
+                <button onClick={(e) => { e.stopPropagation(); reset(); }} className="bg-white/90 p-1.5 rounded-full shadow-sm text-gray-700 hover:text-vingi-600 border border-gray-200"><RotateCcw size={14}/></button>
             </div>
         </div>
     );
@@ -292,22 +290,16 @@ export const ModuleLandingPage: React.FC<ModuleLandingPageProps> = ({
     );
 }
 
-// --- MODAL FLUTUANTE DE COMPARAÇÃO "HUD PRO" ---
-export const FloatingReference: React.FC<{ image: string, label?: string }> = ({ image, label = "Ref. Original" }) => {
-    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 350 }); 
-    const [size, setSize] = useState({ w: 220, h: 280 }); // Estado para largura e altura
+// --- MODAL FLUTUANTE DE COMPARAÇÃO ---
+export const FloatingReference: React.FC<{ image: string, label?: string }> = ({ image, label = "Referência" }) => {
+    const [position, setPosition] = useState({ x: 20, y: window.innerHeight - 250 }); 
+    const [size, setSize] = useState(160);
     const [isMinimized, setIsMinimized] = useState(false);
-    const [opacity, setOpacity] = useState(1);
     
     const dragOffset = useRef({ x: 0, y: 0 });
     const isDragging = useRef(false);
-    
-    const resizeStart = useRef<{x:number, y:number, w:number, h:number} | null>(null);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        // Prevent drag if clicking controls
-        if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input')) return;
-        
         e.currentTarget.setPointerCapture(e.pointerId);
         isDragging.current = true;
         dragOffset.current = { x: e.clientX - position.x, y: e.clientY - position.y };
@@ -318,7 +310,7 @@ export const FloatingReference: React.FC<{ image: string, label?: string }> = ({
         const newX = e.clientX - dragOffset.current.x;
         const newY = e.clientY - dragOffset.current.y;
         setPosition({
-            x: Math.max(0, Math.min(newX, window.innerWidth - size.w)),
+            x: Math.max(0, Math.min(newX, window.innerWidth - size)),
             y: Math.max(0, Math.min(newY, window.innerHeight - 50))
         });
     };
@@ -327,100 +319,42 @@ export const FloatingReference: React.FC<{ image: string, label?: string }> = ({
         isDragging.current = false;
         e.currentTarget.releasePointerCapture(e.pointerId);
     };
-    
-    // Resize Logic
-    const handleResizeStart = (e: React.PointerEvent) => {
-        e.stopPropagation();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        resizeStart.current = { x: e.clientX, y: e.clientY, w: size.w, h: size.h };
-    };
-    
-    const handleResizeMove = (e: React.PointerEvent) => {
-        if (!resizeStart.current) return;
-        const dx = e.clientX - resizeStart.current.x;
-        const dy = e.clientY - resizeStart.current.y;
-        setSize({
-            w: Math.max(200, Math.min(600, resizeStart.current.w + dx)),
-            h: Math.max(200, Math.min(800, resizeStart.current.h + dy))
-        });
-    };
-    
-    const handleResizeEnd = (e: React.PointerEvent) => {
-        resizeStart.current = null;
-        e.currentTarget.releasePointerCapture(e.pointerId);
-    };
 
     if (isMinimized) {
         return (
             <div 
-                className="fixed bottom-24 right-4 bg-black/80 backdrop-blur text-white p-3 rounded-2xl shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform animate-bounce-subtle border border-white/20 group"
+                className="fixed bottom-20 right-4 bg-vingi-900 text-white p-3 rounded-full shadow-2xl z-[100] cursor-pointer hover:scale-110 transition-transform animate-bounce-subtle border-2 border-white"
                 onClick={() => setIsMinimized(false)}
                 title="Mostrar Referência"
             >
-                <div className="relative">
-                    <ImageIcon size={24} />
-                    <span className="absolute top-0 right-0 w-2 h-2 bg-vingi-500 rounded-full shadow-[0_0_10px_#3b82f6]"></span>
-                </div>
-                <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-black/80 text-[10px] px-2 py-1 rounded text-white opacity-0 group-hover:opacity-100 whitespace-nowrap">
-                    Mostrar Ref
-                </div>
+                <ImageIcon size={20} />
             </div>
         );
     }
 
     return (
         <div 
-            className="fixed z-[90] bg-[#1a1a1a] rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] border border-white/10 overflow-hidden flex flex-col transition-all duration-75"
-            style={{ left: position.x, top: position.y, width: size.w, height: size.h, opacity: Math.max(0.2, opacity) }}
+            className="fixed z-[90] bg-white rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.3)] border border-gray-200 overflow-hidden flex flex-col transition-shadow"
+            style={{ left: position.x, top: position.y, width: size, touchAction: 'none' }}
         >
-            {/* Header / Drag Handle */}
             <div 
-                className="bg-black/90 h-8 flex items-center justify-between px-3 cursor-grab active:cursor-grabbing select-none border-b border-white/5 shrink-0"
+                className="bg-gray-900 h-8 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none"
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
             >
-                <span className="text-[9px] font-black text-white flex items-center gap-1.5 uppercase tracking-widest">
-                    <Move size={10} className="text-vingi-500"/> {label}
+                <span className="text-[9px] font-bold text-white flex items-center gap-1 uppercase tracking-wider">
+                    <Move size={10} className="text-gray-400"/> {label}
                 </span>
                 <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
-                    <button onClick={() => setSize(s => ({...s, w: Math.min(600, s.w + 50), h: Math.min(800, s.h + 50)}))} className="text-gray-500 hover:text-white p-1 transition-colors"><Maximize2 size={10}/></button>
-                    <button onClick={() => setIsMinimized(true)} className="text-gray-500 hover:text-white p-1 transition-colors"><Minimize2 size={10}/></button>
+                    <button onClick={() => setSize(s => Math.min(400, s + 40))} className="text-gray-400 hover:text-white p-1"><ZoomIn size={12}/></button>
+                    <button onClick={() => setIsMinimized(true)} className="text-gray-400 hover:text-white p-1"><Minimize2 size={12}/></button>
                 </div>
             </div>
-
-            {/* Image Viewer (Zoomable) */}
-            <div className="relative bg-[#050505] group border-b border-white/5 flex-1 overflow-hidden">
-                <SmartImageViewer src={image} className="bg-transparent" style={{ height: '100%' }} />
-            </div>
-
-            {/* Footer / Controls */}
-            <div className="bg-[#111] p-2 flex items-center gap-3 shrink-0 relative">
-                <div className="flex items-center gap-2 flex-1">
-                    {opacity < 1 ? <EyeOff size={12} className="text-vingi-500"/> : <Eye size={12} className="text-gray-500"/>}
-                    <input 
-                        type="range" 
-                        min="0.1" max="1" step="0.05" 
-                        value={opacity} 
-                        onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-gray-800 rounded-lg appearance-none accent-vingi-500 outline-none"
-                    />
-                </div>
-                <div className="text-[9px] font-mono text-gray-500 w-8 text-right">
-                    {Math.round(opacity * 100)}%
-                </div>
-                
-                {/* Resize Handle */}
-                <div 
-                    className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-end justify-end p-0.5 opacity-50 hover:opacity-100"
-                    onPointerDown={handleResizeStart}
-                    onPointerMove={handleResizeMove}
-                    onPointerUp={handleResizeEnd}
-                    onPointerCancel={handleResizeEnd}
-                >
-                    <div className="w-0 h-0 border-b-[6px] border-r-[6px] border-b-transparent border-r-gray-400 transform translate-x-[-2px] translate-y-[-2px]"></div>
-                </div>
+            <div className="relative bg-gray-50 group border-t border-gray-800">
+                <img src={image} className="w-full object-contain pointer-events-none select-none" />
+                <div className="absolute inset-0 shadow-inner pointer-events-none"></div>
             </div>
         </div>
     );

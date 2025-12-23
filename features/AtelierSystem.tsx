@@ -439,7 +439,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         {error && ( <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-red-900/90 text-white px-6 py-4 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-3 animate-bounce-subtle z-50 border border-red-700 max-w-md backdrop-blur"><FileWarning size={20} className="shrink-0"/> <div><p>{error}</p></div></div> )}
                         
                         {/* Floating Reference (Mini) */}
-                        {referenceImage && <FloatingReference image={referenceImage} label="Referência" />}
+                        {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20 hover:scale-150 transition-transform origin-bottom-left"><img src={referenceImage} className="w-full h-full object-cover opacity-100" /></div>}
                     </div>
 
                     {/* CONTROL DECK (FLEX LAYOUT) */}
