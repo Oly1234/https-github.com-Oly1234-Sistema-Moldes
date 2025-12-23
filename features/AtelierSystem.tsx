@@ -334,8 +334,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     return (
         <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
-            {/* HEADER COMPACTO DARK */}
-            <div className="bg-[#111111] px-4 py-2 flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-14">
+            {/* HEADER COMPACTO DARK COM SAFE AREA FIX */}
+            <div className="bg-[#111111] px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-auto min-h-[3.5rem] transition-all duration-300 border-b border-white/5">
                 <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
                 <div className="flex gap-2 relative">
                     {hasActiveSession && (
