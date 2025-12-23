@@ -4,7 +4,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
-    // FIX: Usa a apiKey passada pelo argumento, garantindo autenticação correta
+    // FIX: Usa a apiKey passada pelo argumento para evitar erro de credenciais
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
     // 1. Fidelidade Cromática de Estúdio
