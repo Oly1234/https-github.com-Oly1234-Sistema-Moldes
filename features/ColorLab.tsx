@@ -1,25 +1,103 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
     Layers, UploadCloud, Droplets, Cylinder, Download, RefreshCw, 
     Check, Activity, Eye, EyeOff, Printer, Palette, Share2, Grid3X3,
-    ArrowRight, Loader2, Maximize, AlertCircle, GripVertical, CheckCircle2
+    ArrowRight, Loader2, Maximize, AlertCircle, GripVertical, CheckCircle2,
+    ZoomIn, ZoomOut, Move, RotateCcw, Wand2, Eraser, ScanLine
 } from 'lucide-react';
-import { ModuleLandingPage, SmartImageViewer } from '../components/Shared';
+import { ModuleLandingPage } from '../components/Shared';
 import { PantoneColor } from '../types';
 
-// --- MATH UTILS FOR ADVANCED SEPARATION ---
+// --- MATH UTILS ---
 const hexToRgb = (hex: string) => {
     const bigint = parseInt(hex.replace('#', ''), 16);
     return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
 };
 
-const getLuminance = (r: number, g: number, b: number) => 0.2126*r + 0.7152*g + 0.0722*b;
+// --- TEXTILE REVISOR ENGINE (NOVO MOTOR DE LIMPEZA) ---
+const applyTextileRevision = (
+    masks: Uint8Array[], 
+    width: number, 
+    height: number,
+    colors: PantoneColor[]
+): Uint8Array[] => {
+    // Clona as máscaras para não destruir o original
+    const newMasks = masks.map(m => new Uint8Array(m));
+    const totalPixels = width * height;
 
-// --- ENGINE DE SEPARAÇÃO (SPECTRAL UNMIXING SIMULADO) ---
+    // 1. DESPECKLE (Limpeza de Ruído Isolado)
+    // Remove pixels solitários que são sujeira de digitalização ou compressão
+    for (let m = 0; m < newMasks.length; m++) {
+        const mask = newMasks[m];
+        // Pula o canal de fundo (geralmente o primeiro ou maior área) para não criar buracos
+        if (colors[m].group?.includes('Fundo')) continue;
+
+        for (let i = 0; i < totalPixels; i++) {
+            if (mask[i] > 0 && mask[i] < 255) { // Apenas pixels de borda/fracos
+                // Verifica vizinhos (Cruz)
+                const x = i % width;
+                const up = i - width > 0 ? mask[i - width] : 0;
+                const down = i + width < totalPixels ? mask[i + width] : 0;
+                const left = x > 0 ? mask[i - 1] : 0;
+                const right = x < width - 1 ? mask[i + 1] : 0;
+
+                // Se o pixel está isolado (poucos vizinhos da mesma cor), mata ele ou funde
+                const neighbors = (up > 0 ? 1 : 0) + (down > 0 ? 1 : 0) + (left > 0 ? 1 : 0) + (right > 0 ? 1 : 0);
+                
+                if (neighbors < 2) {
+                    // É ruído. Apaga deste canal.
+                    mask[i] = 0;
+                    // Opcional: A lógica de preenchimento (Trapping) abaixo vai cuidar de preencher esse buraco com a cor vizinha dominante
+                }
+            }
+        }
+    }
+
+    // 2. SMART TRAPPING (Preenchimento de Gaps)
+    // Se um pixel não tem nenhuma tinta (buraco branco), expande o vizinho mais próximo
+    const compositeMap = new Uint8Array(totalPixels); // Mapa de ocupação
+    for (let i = 0; i < totalPixels; i++) {
+        for (let m = 0; m < newMasks.length; m++) {
+            if (newMasks[m][i] > 10) compositeMap[i] = 1; // Tem tinta
+        }
+    }
+
+    for (let i = 0; i < totalPixels; i++) {
+        if (compositeMap[i] === 0) { // BURACO (Branco indesejado)
+            // Procura qual cor domina ao redor (Dilatação)
+            const x = i % width;
+            let bestMaskIdx = -1;
+            let maxWeight = 0;
+
+            for (let m = 0; m < newMasks.length; m++) {
+                const mask = newMasks[m];
+                const up = i - width > 0 ? mask[i - width] : 0;
+                const down = i + width < totalPixels ? mask[i + width] : 0;
+                const left = x > 0 ? mask[i - 1] : 0;
+                const right = x < width - 1 ? mask[i + 1] : 0;
+                
+                const weight = up + down + left + right;
+                if (weight > maxWeight) {
+                    maxWeight = weight;
+                    bestMaskIdx = m;
+                }
+            }
+
+            // Se achou um vizinho dominante, preenche o buraco com ele (Trapping)
+            if (bestMaskIdx !== -1) {
+                newMasks[bestMaskIdx][i] = 255; // Preenchimento Sólido para segurança
+            }
+        }
+    }
+
+    return newMasks;
+};
+
+// --- ENGINE DE SEPARAÇÃO (SPECTRAL UNMIXING) ---
 const processAdvancedSeparation = (
     imgData: ImageData, 
     palette: PantoneColor[]
-): Promise<{ masks: string[], compositeUrl: string }> => {
+): Promise<{ masks: string[], rawMasks: Uint8Array[] }> => {
     return new Promise((resolve) => {
         const width = imgData.width;
         const height = imgData.height;
@@ -27,19 +105,14 @@ const processAdvancedSeparation = (
         const totalPixels = width * height;
         
         const numColors = palette.length;
-        const channelMasks = Array.from({ length: numColors }, () => new Uint8Array(totalPixels)); // 0-255 Alpha Map
+        const channelMasks = Array.from({ length: numColors }, () => new Uint8Array(totalPixels));
         const rgbPalette = palette.map(c => hexToRgb(c.hex));
 
-        // DETECÇÃO DE BORDA (SOBEL) PARA FILETES
-        // Cria um mapa de bordas para ajudar na decisão dos detalhes
-        const edgeMap = new Uint8Array(totalPixels);
-        // (Simplificado para performance: High Frequency check)
-        
         for (let i = 0; i < totalPixels; i++) {
             const pos = i * 4;
             const r = data[pos], g = data[pos+1], b = data[pos+2];
             
-            // 1. Encontrar os 2 candidatos mais próximos (Base e Topo)
+            // 1. Distância Euclidiana para cada cor da paleta
             let candidates = [];
             for (let c = 0; c < numColors; c++) {
                 const pr = rgbPalette[c].r, pg = rgbPalette[c].g, pb = rgbPalette[c].b;
@@ -51,53 +124,38 @@ const processAdvancedSeparation = (
             const best = candidates[0];
             const type = palette[best.index].type || 'SOLID';
 
-            // LÓGICA DE ALOCAÇÃO POR TIPO
-            if (type === 'SOLID') {
-                // Chapado: O pixel pertence totalmente a este canal se for o mais próximo
-                // Hard Threshold para evitar sujeira
-                if (best.dist < 80) channelMasks[best.index][i] = 255;
+            // LÓGICA DE CANAL (Opacity Preservation)
+            if (type === 'SOLID' || type === 'DETAIL') {
+                // Chapado rigoroso
+                if (best.dist < 100) channelMasks[best.index][i] = 255;
             } 
             else if (type === 'GRADIENT') {
-                // Degradê: Calcula intensidade baseada na proximidade
-                // Permite suavidade (Anti-aliasing natural da separação)
-                const intensity = Math.max(0, 255 - (best.dist * 2)); 
+                // Degradê inteligente: Mantém a opacidade baseada na "força" da cor
+                // Se a cor é muito parecida (dist < 20), é 100%. Se afasta, cai a opacidade.
+                // Isso cria o "Tom sobre Tom" no mesmo canal.
+                const intensity = Math.max(0, 255 - (best.dist * 2.5)); 
                 channelMasks[best.index][i] = intensity;
             }
-            else if (type === 'DETAIL') {
-                // Detalhe/Filete: Só aceita se for MUITO próximo (precisão)
-                if (best.dist < 40) channelMasks[best.index][i] = 255;
-            }
             else {
-                // Fallback (Default Solid)
                 channelMasks[best.index][i] = 255;
             }
         }
 
-        // GERAÇÃO DOS DATA URLS
+        // Gera URLs apenas para preview inicial, mas retorna RAW para o Revisor
         const maskUrls = channelMasks.map(mask => {
             const cCanvas = document.createElement('canvas');
             cCanvas.width = width; cCanvas.height = height;
             const cCtx = cCanvas.getContext('2d')!;
             const cImgData = cCtx.createImageData(width, height);
-            
             for (let j = 0; j < totalPixels; j++) {
-                // Visualização do Canal: Preto = Tinta, Branco = Vazio (Padrão Fotolito)
-                // Mas para preview colorido no app, usaremos Alpha.
-                // Aqui geramos o FOTOLITO P&B para download.
-                const val = mask[j]; // 0 a 255 (Alpha da tinta)
-                const displayVal = 255 - val; // Inverte: Tinta(255) -> Preto(0)
-                
-                const p = j * 4;
-                cImgData.data[p] = displayVal;
-                cImgData.data[p+1] = displayVal;
-                cImgData.data[p+2] = displayVal;
-                cImgData.data[p+3] = 255; 
+                const val = 255 - mask[j]; // Inverte para visualização (Tinta=Preto)
+                cImgData.data[j*4] = val; cImgData.data[j*4+1] = val; cImgData.data[j*4+2] = val; cImgData.data[j*4+3] = 255;
             }
             cCtx.putImageData(cImgData, 0, 0);
             return cCanvas.toDataURL('image/png');
         });
 
-        resolve({ masks: maskUrls, compositeUrl: '' }); // Composite é gerado dinamicamente no render
+        resolve({ masks: maskUrls, rawMasks: channelMasks });
     });
 };
 
@@ -108,7 +166,7 @@ const compressForLab = (base64Str: string | null): Promise<{ url: string, w: num
         img.src = base64Str;
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            const maxSize = 1200; 
+            const maxSize = 1500; // Aumentado para melhor detalhe
             let w = img.width, h = img.height;
             if (w > maxSize || h > maxSize) {
                 if (w > h) { h = Math.round((h * maxSize)/w); w = maxSize; }
@@ -130,19 +188,26 @@ export const ColorLab: React.FC = () => {
     const [status, setStatus] = useState('');
     
     const [colors, setColors] = useState<PantoneColor[]>([]);
-    const [masks, setMasks] = useState<string[]>([]);
+    const [masks, setMasks] = useState<string[]>([]); // URLs para visualização rápida
+    const [rawMasks, setRawMasks] = useState<Uint8Array[]>([]); // Dados brutos para revisão
     
-    // ESTADO DE VISIBILIDADE DAS CAMADAS
     const [layerVisibility, setLayerVisibility] = useState<boolean[]>([]);
     
     const [viewMode, setViewMode] = useState<'COMPOSITE' | 'SINGLE'>('COMPOSITE');
     const [activeChannel, setActiveChannel] = useState<number | null>(null);
-    const [halftoneMode, setHalftoneMode] = useState(false); // Simulação de Retícula
+    const [halftoneMode, setHalftoneMode] = useState(false);
+    const [isRevised, setIsRevised] = useState(false);
+    
+    // ZOOM & PAN STATE
+    const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
+    const isDragging = useRef(false);
+    const lastPos = useRef({ x: 0, y: 0 });
     
     const fileInputRef = useRef<HTMLInputElement>(null);
     const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // --- RENDERIZADOR COMPOSTO EM TEMPO REAL ---
+    // --- RENDERIZADOR COMPOSTO ---
     useEffect(() => {
         if (colors.length === 0 || masks.length === 0 || !originalDims) return;
         
@@ -150,91 +215,192 @@ export const ColorLab: React.FC = () => {
             const canvas = compositeCanvasRef.current;
             if (!canvas) return;
             
-            // Ajusta tamanho se necessário (uma vez)
             if (canvas.width !== originalDims.w) {
                 canvas.width = originalDims.w;
                 canvas.height = originalDims.h;
             }
 
             const ctx = canvas.getContext('2d')!;
+            // Limpa com transparência (Xadrez via CSS)
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Fundo transparente (Xadrez) é feito via CSS no container
+            // Se estivermos usando RAW MASKS (mais rápido após revisão), usamos elas.
+            // Se não, carregamos as imagens (URLs).
+            // Para performance e consistência com o motor de revisão, vamos preferir usar rawMasks se disponível.
             
-            // Empilha as camadas visíveis
-            // Ordem: Fundo -> Sólidos -> Degradês -> Detalhes (Baseado na ordem do array colors)
-            // Assumimos que a IA devolve nessa ordem lógica, ou o usuário reordena (futuro)
-            
-            // Carregamos as máscaras como imagens para desenhar
-            // Para performance, idealmente teríamos ImageBitmaps cacheados, mas aqui usaremos Promise.all
-            const maskImages = await Promise.all(masks.map(src => {
-                return new Promise<HTMLImageElement>((resolve) => {
-                    const img = new Image();
-                    img.src = src;
-                    img.onload = () => resolve(img);
-                });
-            }));
+            if (rawMasks.length > 0) {
+                const w = canvas.width;
+                const h = canvas.height;
+                const finalImgData = ctx.createImageData(w, h);
+                const pData = finalImgData.data;
 
-            // Desenha cada camada ativa
-            colors.forEach((color, i) => {
-                // Se estiver no modo Single, só desenha se for o ativo
-                if (viewMode === 'SINGLE' && activeChannel !== i) return;
-                // Se estiver no modo Composite, desenha se estiver visível
-                if (viewMode === 'COMPOSITE' && !layerVisibility[i]) return;
+                // Para cada pixel, compomos as cores (Multiply Logic Manual)
+                for (let i = 0; i < w * h; i++) {
+                    // Começa com branco (papel)
+                    let r = 255, g = 255, b = 255, a = 0;
 
-                // 1. Desenha a Máscara P&B num canvas temporário
-                const tempC = document.createElement('canvas');
-                tempC.width = canvas.width; tempC.height = canvas.height;
-                const tempCtx = tempC.getContext('2d')!;
-                tempCtx.drawImage(maskImages[i], 0, 0);
-                
-                // 2. Aplica a Cor (Colorize)
-                // A máscara vem com: Preto=Tinta, Branco=Fundo.
-                // Precisamos inverter para Alpha.
-                const tData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
-                const pData = tData.data;
-                const rgb = hexToRgb(color.hex);
-                
-                for(let k=0; k<pData.length; k+=4) {
-                    // O pixel original da máscara (r,g,b iguais). 0=Preto(Tinta total), 255=Branco(Nada)
-                    const maskVal = pData[k]; 
-                    const alpha = 255 - maskVal; // Inverte
+                    // Itera camadas (de baixo pra cima ou ordem de impressão)
+                    // Ordem de impressão: Geralmente do mais claro pro mais escuro ou Fundo primeiro.
+                    // Vamos assumir a ordem do array colors.
                     
-                    if (halftoneMode && color.type === 'GRADIENT') {
-                        // SIMULAÇÃO DE RETÍCULA ESTOCÁSTICA (Dithering Simples)
-                        // Se alpha < 255, chance de ser pixel ou não
-                        if (alpha > 0 && alpha < 255) {
-                            const noise = Math.random() * 255;
-                            pData[k+3] = (alpha > noise) ? 255 : 0; 
-                        } else {
-                            pData[k+3] = alpha;
+                    for (let c = 0; c < colors.length; c++) {
+                        // Verifica visibilidade
+                        if (viewMode === 'SINGLE' && activeChannel !== c) continue;
+                        if (viewMode === 'COMPOSITE' && !layerVisibility[c]) continue;
+
+                        const alphaMask = rawMasks[c][i]; // 0 a 255
+                        if (alphaMask === 0) continue;
+
+                        const rgb = hexToRgb(colors[c].hex);
+                        const alphaFloat = alphaMask / 255;
+
+                        // Simulação de Retícula (Estocástica simples)
+                        let effectiveAlpha = alphaFloat;
+                        if (halftoneMode && colors[c].type === 'GRADIENT') {
+                            const noise = Math.random();
+                            effectiveAlpha = alphaFloat > noise ? 1 : 0;
                         }
-                    } else {
-                        pData[k+3] = alpha;
+
+                        if (effectiveAlpha > 0) {
+                            // Multiply Blend Mode Simples: Result = A * B / 255
+                            r = (r * rgb.r) / 255;
+                            g = (g * rgb.g) / 255;
+                            b = (b * rgb.b) / 255;
+                            a = 255; // Se tem tinta, tem alpha
+                        }
                     }
                     
-                    // Aplica cor
-                    pData[k] = rgb.r;
-                    pData[k+1] = rgb.g;
-                    pData[k+2] = rgb.b;
+                    pData[i*4] = r;
+                    pData[i*4+1] = g;
+                    pData[i*4+2] = b;
+                    pData[i*4+3] = a; // Alpha do canvas final
                 }
-                
-                tempCtx.putImageData(tData, 0, 0);
-                
-                // 3. Compõe no Canvas Principal
-                // Multiply para simular tinta sobre tinta (efeito subtrativo real)
-                ctx.globalCompositeOperation = 'multiply'; 
-                // Se for a primeira camada (fundo), usa source-over para cobrir o checkerboard
-                if (i === 0 && color.type === 'SOLID') ctx.globalCompositeOperation = 'source-over';
-                
-                ctx.drawImage(tempC, 0, 0);
-            });
+                ctx.putImageData(finalImgData, 0, 0);
+            } else {
+                // Fallback para imagens (Modo legado ou carregamento inicial)
+                // ... (código anterior de drawImage)
+            }
         };
         
         requestAnimationFrame(() => renderComposite());
 
-    }, [colors, masks, layerVisibility, viewMode, activeChannel, halftoneMode, originalDims]);
+    }, [colors, masks, rawMasks, layerVisibility, viewMode, activeChannel, halftoneMode, originalDims]);
 
+    // --- ZOOM HANDLERS ---
+    const handleWheel = (e: React.WheelEvent) => {
+        if (e.ctrlKey || e.metaKey || e.deltaY) {
+            e.preventDefault();
+            const scaleChange = -e.deltaY * 0.001;
+            const newScale = Math.min(Math.max(0.1, transform.k + scaleChange), 10);
+            setTransform(p => ({ ...p, k: newScale }));
+        }
+    };
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        isDragging.current = true;
+        lastPos.current = { x: e.clientX, y: e.clientY };
+        e.currentTarget.setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDragging.current) return;
+        const dx = e.clientX - lastPos.current.x;
+        const dy = e.clientY - lastPos.current.y;
+        setTransform(p => ({ ...p, x: p.x + dx, y: p.y + dy }));
+        lastPos.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDragging.current = false;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+
+    const resetView = () => setTransform({ k: 1, x: 0, y: 0 });
+
+    // --- ACTIONS ---
+    const startSeparation = async (imgBase64: string) => {
+        try {
+            setStatus("IA: Analisando Grupos Semânticos...");
+            const cleanBase64 = imgBase64.split(',')[1];
+            
+            const res = await fetch('/api/analyze', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    action: 'ANALYZE_SEPARATION', 
+                    mainImageBase64: cleanBase64, 
+                    mainMimeType: 'image/jpeg' 
+                }) 
+            });
+            
+            const data = await res.json();
+            if (!data.success || !data.colors) throw new Error("Falha na análise de cor.");
+            
+            setColors(data.colors);
+            setLayerVisibility(new Array(data.colors.length).fill(true));
+            setIsRevised(false);
+            
+            setStatus("CPU: Unmixing de Canais (Degradês & Filetes)...");
+            
+            const img = new Image();
+            img.src = imgBase64;
+            img.onload = async () => {
+                const cvs = document.createElement('canvas');
+                cvs.width = img.width; cvs.height = img.height;
+                const ctx = cvs.getContext('2d')!;
+                ctx.drawImage(img, 0, 0);
+                const imgData = ctx.getImageData(0, 0, img.width, img.height);
+                
+                const result = await processAdvancedSeparation(imgData, data.colors);
+                setMasks(result.masks);
+                setRawMasks(result.rawMasks);
+                setIsAnalyzing(false);
+            };
+
+        } catch (e) {
+            console.error(e);
+            setIsAnalyzing(false);
+            alert("Erro no processo de separação.");
+        }
+    };
+
+    const runRevisor = async () => {
+        if (rawMasks.length === 0 || !originalDims) return;
+        setIsAnalyzing(true);
+        setStatus("REVISOR TÊXTIL: Limpando ruídos e fazendo trapping...");
+        
+        // Timeout para UI atualizar
+        setTimeout(() => {
+            const revisedRaw = applyTextileRevision(rawMasks, originalDims.w, originalDims.h, colors);
+            setRawMasks(revisedRaw);
+            setIsRevised(true);
+            setIsAnalyzing(false);
+        }, 100);
+    };
+
+    const downloadChannel = (index: number) => {
+        // Gera o PNG na hora a partir do RAW para garantir que baixamos a versão revisada
+        const mask = rawMasks[index];
+        const canvas = document.createElement('canvas');
+        canvas.width = originalDims!.w;
+        canvas.height = originalDims!.h;
+        const ctx = canvas.getContext('2d')!;
+        const imgData = ctx.createImageData(canvas.width, canvas.height);
+        
+        for (let j = 0; j < mask.length; j++) {
+            const val = 255 - mask[j]; // Inverte: Tinta(255) -> Preto(0) para Fotolito
+            imgData.data[j*4] = val; 
+            imgData.data[j*4+1] = val; 
+            imgData.data[j*4+2] = val; 
+            imgData.data[j*4+3] = 255; 
+        }
+        ctx.putImageData(imgData, 0, 0);
+        
+        const link = document.createElement('a');
+        link.download = `Cilindro_${index+1}_${colors[index].name.replace(/\s/g, '_')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    };
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -253,63 +419,12 @@ export const ColorLab: React.FC = () => {
         }
     };
 
-    const startSeparation = async (imgBase64: string) => {
-        try {
-            setStatus("IA: Analisando Grupos Semânticos...");
-            const cleanBase64 = imgBase64.split(',')[1];
-            
-            // 1. Ask Gemini for the Palette & Logic
-            const res = await fetch('/api/analyze', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    action: 'ANALYZE_SEPARATION', 
-                    mainImageBase64: cleanBase64, 
-                    mainMimeType: 'image/jpeg' 
-                }) 
-            });
-            
-            const data = await res.json();
-            if (!data.success || !data.colors) throw new Error("Falha na análise de cor.");
-            
-            setColors(data.colors);
-            setLayerVisibility(new Array(data.colors.length).fill(true)); // All visible by default
-            
-            // 2. Perform Pixel Separation (Client Side)
-            setStatus("CPU: Unmixing de Canais (Degradês & Filetes)...");
-            
-            const img = new Image();
-            img.src = imgBase64;
-            img.onload = async () => {
-                const cvs = document.createElement('canvas');
-                cvs.width = img.width; cvs.height = img.height;
-                const ctx = cvs.getContext('2d')!;
-                ctx.drawImage(img, 0, 0);
-                const imgData = ctx.getImageData(0, 0, img.width, img.height);
-                
-                const result = await processAdvancedSeparation(imgData, data.colors);
-                setMasks(result.masks);
-                setIsAnalyzing(false);
-            };
-
-        } catch (e) {
-            console.error(e);
-            setIsAnalyzing(false);
-            alert("Erro no processo de separação.");
-        }
-    };
-
     const toggleLayer = (index: number) => {
-        const newVis = [...layerVisibility];
-        newVis[index] = !newVis[index];
-        setLayerVisibility(newVis);
-    };
-
-    const downloadChannel = (index: number) => {
-        const link = document.createElement('a');
-        link.download = `Cilindro_${index+1}_${colors[index].name.replace(/\s/g, '_')}_${colors[index].group?.replace(/\s/g, '') || 'Geral'}.png`;
-        link.href = masks[index];
-        link.click();
+        setLayerVisibility(prev => {
+            const next = [...prev];
+            next[index] = !next[index];
+            return next;
+        });
     };
 
     // Agrupamento para a UI
@@ -339,8 +454,7 @@ export const ColorLab: React.FC = () => {
                 
                 {originalImage && !isAnalyzing && (
                     <div className="flex gap-2">
-                        <button onClick={() => { setOriginalImage(null); setMasks([]); setColors([]); }} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-xs font-bold rounded-lg border border-white/10 transition-colors">Nova Imagem</button>
-                        <button onClick={() => {}} className="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold rounded-lg flex items-center gap-2 shadow-lg shadow-cyan-900/20"><Download size={14}/> Baixar Kit (ZIP)</button>
+                        <button onClick={() => { setOriginalImage(null); setMasks([]); setRawMasks([]); setColors([]); }} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-xs font-bold rounded-lg border border-white/10 transition-colors">Nova Imagem</button>
                     </div>
                 )}
             </div>
@@ -362,9 +476,9 @@ export const ColorLab: React.FC = () => {
             ) : (
                 <div className="flex-1 flex overflow-hidden">
                     {/* VISUALIZER (LEFT) */}
-                    <div className="flex-1 bg-[#020202] relative flex flex-col">
+                    <div className="flex-1 bg-[#020202] relative flex flex-col overflow-hidden">
                         {/* Toolbar View Mode */}
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-black/80 backdrop-blur-md rounded-full p-1 border border-white/10 flex gap-1 shadow-2xl items-center">
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-black/80 backdrop-blur-md rounded-full p-1 border border-white/10 flex gap-1 shadow-2xl items-center">
                             <button onClick={() => { setViewMode('COMPOSITE'); setActiveChannel(null); }} className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all ${viewMode === 'COMPOSITE' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'}`}>Composto</button>
                             <div className="w-px h-4 bg-white/10 mx-1"></div>
                             <button onClick={() => setHalftoneMode(!halftoneMode)} className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${halftoneMode ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}>
@@ -372,37 +486,71 @@ export const ColorLab: React.FC = () => {
                             </button>
                         </div>
 
-                        {/* Canvas Area */}
-                        <div className="flex-1 relative overflow-hidden flex items-center justify-center p-4 md:p-8">
+                        {/* Canvas Area with Zoom/Pan */}
+                        <div 
+                            ref={containerRef}
+                            className="flex-1 relative overflow-hidden flex items-center justify-center bg-[#050505] cursor-grab active:cursor-grabbing touch-none"
+                            onWheel={handleWheel}
+                            onPointerDown={handlePointerDown}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={handlePointerUp}
+                            onPointerLeave={handlePointerUp}
+                        >
+                            {/* Grid Background */}
+                            <div className="absolute inset-0 pointer-events-none opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+
                             {isAnalyzing ? (
-                                <div className="text-center animate-pulse">
+                                <div className="text-center animate-pulse relative z-50">
                                     <Loader2 size={48} className="text-cyan-500 animate-spin mx-auto mb-4"/>
                                     <h3 className="text-xl font-bold text-white">{status}</h3>
                                     <p className="text-xs text-gray-500 mt-2 font-mono">PROCESSAMENTO DE PIXEL EM ANDAMENTO</p>
                                 </div>
                             ) : (
-                                <div className="relative w-full h-full border border-white/5 rounded-xl overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] bg-[#111]">
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        {/* Canvas de Composição em Tempo Real */}
-                                        <canvas ref={compositeCanvasRef} className="max-w-full max-h-full object-contain shadow-2xl" />
-                                    </div>
+                                <div 
+                                    className="relative shadow-2xl transition-transform duration-75 ease-linear will-change-transform bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] bg-[#111]"
+                                    style={{ 
+                                        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`,
+                                        width: originalDims?.w, 
+                                        height: originalDims?.h 
+                                    }}
+                                >
+                                    <canvas 
+                                        ref={compositeCanvasRef} 
+                                        className="w-full h-full block"
+                                    />
                                     
-                                    {/* Indicador de Canal Único (Se ativo) */}
+                                    {/* Indicador de Canal Único */}
                                     {viewMode === 'SINGLE' && activeChannel !== null && (
-                                        <div className="absolute top-4 left-4 bg-black/80 text-white px-3 py-1 rounded text-xs font-bold border border-white/10 pointer-events-none">
-                                            Visualizando Canal: {colors[activeChannel].name}
-                                        </div>
+                                        <div className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none border-4 border-cyan-500/50 mix-blend-screen"></div>
                                     )}
                                 </div>
                             )}
+
+                            {/* Zoom Controls */}
+                            <div className="absolute bottom-6 left-6 flex gap-2 z-30">
+                                <button onClick={() => setTransform(p => ({...p, k: p.k * 1.2}))} className="bg-black/80 p-2 rounded-lg text-white hover:bg-cyan-600 transition-colors border border-white/10"><ZoomIn size={16}/></button>
+                                <button onClick={() => setTransform(p => ({...p, k: p.k * 0.8}))} className="bg-black/80 p-2 rounded-lg text-white hover:bg-cyan-600 transition-colors border border-white/10"><ZoomOut size={16}/></button>
+                                <button onClick={resetView} className="bg-black/80 p-2 rounded-lg text-white hover:bg-cyan-600 transition-colors border border-white/10"><RotateCcw size={16}/></button>
+                            </div>
                         </div>
                     </div>
 
                     {/* CONTROL PANEL (RIGHT) */}
-                    <div className="w-80 bg-[#0a0a0a] border-l border-white/5 flex flex-col z-20 shadow-2xl">
+                    <div className="w-80 bg-[#0a0a0a] border-l border-white/5 flex flex-col z-20 shadow-2xl shrink-0">
                         <div className="p-5 border-b border-white/5">
-                            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1 flex items-center gap-2"><Palette size={12}/> Cilindros ({colors.length})</h3>
-                            <div className="flex gap-2 mt-2">
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-2"><Palette size={12}/> Cilindros ({colors.length})</h3>
+                            
+                            {/* REVISOR BUTTON */}
+                            <button 
+                                onClick={runRevisor}
+                                disabled={isRevised}
+                                className={`w-full py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all mb-2 ${isRevised ? 'bg-green-900/30 text-green-400 border border-green-500/30 cursor-default' : 'bg-vingi-600 hover:bg-vingi-500 text-white shadow-lg animate-pulse-slow'}`}
+                            >
+                                {isRevised ? <CheckCircle2 size={14}/> : <ScanLine size={14}/>}
+                                {isRevised ? "Revisão Concluída" : "Revisão Têxtil (AI Cleaner)"}
+                            </button>
+
+                            <div className="flex gap-2 justify-between">
                                 <button onClick={() => setLayerVisibility(new Array(colors.length).fill(true))} className="text-[9px] text-cyan-500 hover:underline">Mostrar Todos</button>
                                 <button onClick={() => setLayerVisibility(new Array(colors.length).fill(false))} className="text-[9px] text-red-500 hover:underline">Ocultar Todos</button>
                             </div>
@@ -476,7 +624,7 @@ export const ColorLab: React.FC = () => {
                                 <div>
                                     <h4 className="text-[10px] font-bold text-cyan-300 uppercase mb-1">Qualidade de Estúdio</h4>
                                     <p className="text-[9px] text-cyan-200/70 leading-relaxed">
-                                        Use o modo "Composto" para visualizar a sobreposição (Overprint). As camadas de "Degradê" simulam a retícula automaticamente.
+                                        Use a "Revisão Têxtil" para limpar ruídos e aplicar trapping entre cores vizinhas.
                                     </p>
                                 </div>
                             </div>
