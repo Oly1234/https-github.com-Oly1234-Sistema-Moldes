@@ -59,60 +59,54 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (HIGH DEFINITION & PINTEREST MODE)
+    // --- NOVO MOTOR DE BUSCA "WHITE HUNTER" (Vasta Gama & Sem Estampas) ---
     if (action === 'FIND_WHITE_MODELS') {
         let searchTerm = prompt;
         
+        // Se houver imagem, tenta extrair a silhueta, mas forçamos a cor BRANCA depois
         if (mainImageBase64) {
             const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType || 'image/jpeg', cleanJson, 'GARMENT');
-            searchTerm = visualData.visualDescription || prompt || "Vestido Feminino"; 
+            // Ignora a cor original da imagem e foca na silhueta
+            searchTerm = (visualData.visualDescription || "Vestido").replace(/red|blue|green|black|pattern|print/gi, "").trim(); 
         }
+        
+        if (!searchTerm) searchTerm = "Vestido Feminino";
 
-        // Fontes de Alta Qualidade (Pinterest, Vogue, Street Style)
+        // Fontes Diversificadas (Marketplaces, Editoriais, Marcas)
         const sources = [
-            { name: "Pinterest", q: "Pinterest aesthetic white dress" },
-            { name: "Vogue", q: "Vogue runway white fashion" },
-            { name: "Zara", q: "Zara white clothing editorial" },
-            { name: "Street Style", q: "Paris street style white outfit" },
-            { name: "Revolve", q: "Revolve clothing white" },
-            { name: "Net-a-Porter", q: "luxury fashion white dress" },
-            { name: "Farm Rio", q: "Farm Rio white dress mockup" },
-            { name: "Wedding", q: "Modern bridal white dress simple" },
-            { name: "Minimal", q: "Minimalist fashion white linen" },
-            { name: "Boho", q: "Boho chic white dress beach" },
-            { name: "Studio", q: "Fashion studio photography white background" },
-            { name: "Urban", q: "Urban outfitters white dress" },
-            { name: "Linen", q: "White linen dress texture" },
-            { name: "Silk", q: "White silk dress slip" },
-            { name: "Cotton", q: "White cotton dress summer" }
+            "Pinterest", "Vogue Runway", "Zara", "Revolve", "Net-a-Porter", 
+            "Farm Rio", "Shein", "Massimo Dutti", "Mango", "H&M",
+            "Shopbop", "Farfetch", "ASOS", "Reformation", "Aritzia",
+            "COS", "Arket", "Jacquemus", "Cult Gaia", "Zimmermann"
         ];
 
-        // Modificadores de Variação (Para evitar repetições)
-        const variations = [
-            "full body shot high resolution",
-            "close up texture 4k",
-            "back view detail",
-            "walking motion blur",
-            "sitting pose elegant",
-            "sunlight shadow play",
-            "studio lighting soft",
-            "architectural background",
-            "natural light outdoor",
-            "isolated white background"
+        // Modificadores de Estilo/Tecido (Para garantir variedade visual)
+        const styles = [
+            "Linen fabric", "Silk satin", "Cotton poplin", "Crepe texture", "Chiffon flowy",
+            "Minimalist cut", "Boho chic", "Architectural structure", "Summer resort", "Elegant evening",
+            "Street style candid", "Studio photography", "White denim", "Knitted texture", "Lace detail"
         ];
 
-        const createModelLink = (sourceObj, variation, index) => {
-            const finalQuery = `${sourceObj.q} ${variation} ${searchTerm}`.trim();
+        // Palavras-chave NEGATIVAS (Crucial para remover estampas)
+        // Inserimos isso na query de busca para limpar os resultados
+        const exclusionTerms = "-pattern -print -floral -stripes -polka -graphic -logo -multicolor";
+
+        const createModelLink = (source, style, index) => {
+            // Query Complexa: Fonte + Estilo + Peça + Cor + Exclusões
+            const finalQuery = `${source} ${style} white ${searchTerm} solid color ${exclusionTerms}`.trim();
+            const displayTitle = `${searchTerm} ${style}`;
+            
             return {
-                source: `${sourceObj.name}`,
-                patternName: `Modelo ${index + 1}: ${searchTerm}`, 
+                source: source,
+                patternName: `${displayTitle} (${index + 1})`, 
                 similarityScore: 90,
                 type: "GLOBAL",
                 linkType: 'SEARCH_QUERY',
-                // URL de busca do Google Images simulando "Large Images"
+                // Google Images com parâmetro 'tbs=ic:gray' (ou white) ajuda, mas a query textual é mais forte
+                // Usamos 'isz:l' para imagens grandes
                 url: `https://www.google.com/search?tbm=isch&tbs=isz:l&q=${encodeURIComponent(finalQuery)}`,
-                // O termo de backup inclui "high quality" para o proxy do Bing
-                backupSearchTerm: `${finalQuery} high quality photo -drawing -sketch`,
+                // Backup Search Term para o Proxy do Bing
+                backupSearchTerm: `${finalQuery} high quality photography`,
                 imageUrl: null
             };
         };
@@ -120,15 +114,25 @@ export default async function handler(req, res) {
         const queries = [];
         let globalIndex = 0;
 
-        // Gera 50+ resultados combinando Fonte x Variação de forma Determinística mas Variada
-        while (queries.length < 60) {
-            const src = sources[globalIndex % sources.length];
-            // Usa o índice global para rotacionar variações, garantindo que Zara não tenha sempre a mesma pose
-            const vari = variations[(globalIndex + Math.floor(globalIndex/sources.length)) % variations.length];
-            
-            queries.push(createModelLink(src, vari, globalIndex));
+        // GERAÇÃO COMBINATÓRIA (Fontes x Estilos)
+        // Isso garante que não repetimos a mesma busca.
+        // Loop principal pelas Fontes
+        for (const src of sources) {
+            // Pega um estilo diferente para cada fonte (rotação)
+            const style = styles[globalIndex % styles.length];
+            queries.push(createModelLink(src, style, globalIndex));
             globalIndex++;
         }
+
+        // Segunda Passada (Invertendo a lógica para mais resultados)
+        for (const style of styles) {
+            const src = sources[(globalIndex + 5) % sources.length]; // Offset para variar
+            queries.push(createModelLink(src, style, globalIndex));
+            globalIndex++;
+        }
+
+        // Embaralha levemente para não ficar tudo da mesma marca junto
+        queries.sort(() => Math.random() - 0.5);
 
         return res.status(200).json({ success: true, queries: queries, detectedStructure: searchTerm });
     }

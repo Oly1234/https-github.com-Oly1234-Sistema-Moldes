@@ -84,7 +84,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [searchReferenceImage, setSearchReferenceImage] = useState<string | null>(null);
     const [whiteModelMatches, setWhiteModelMatches] = useState<any[]>([]);
-    const [visibleCount, setVisibleCount] = useState(10);
+    const [visibleCount, setVisibleCount] = useState(20); // Aumentado para mostrar mais opções de cara
     
     // Core Refs
     const canvasRef = useRef<HTMLCanvasElement>(null); 
@@ -143,24 +143,24 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(baseImgObj, 0, 0, w, h);
         
-        // 2. Mask Preview (Se não houver estampa ainda, mostra a máscara em cor sólida)
+        // 2. Mask Preview
         if (maskData && !patternImgObj) {
             const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
             const tCtx = tempC.getContext('2d')!;
             const mData = tCtx.createImageData(w, h);
             for(let i=0; i<maskData.length; i++) {
                 if (maskData[i] > 0) {
-                    mData.data[i*4] = 59; // R (Blue-ish)
-                    mData.data[i*4+1] = 130; // G
-                    mData.data[i*4+2] = 246; // B
-                    mData.data[i*4+3] = 100; // Alpha (Semi-transparente)
+                    mData.data[i*4] = 59; 
+                    mData.data[i*4+1] = 130; 
+                    mData.data[i*4+2] = 246; 
+                    mData.data[i*4+3] = 120; // Mais visível
                 }
             }
             tCtx.putImageData(mData, 0, 0);
             ctx.drawImage(tempC, 0, 0);
         }
 
-        // 3. Pattern Application (Se houver estampa)
+        // 3. Pattern Application
         if (patternImgObj && maskData) {
             const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
             const tCtx = tempC.getContext('2d')!;
@@ -256,7 +256,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         if (!searchQuery.trim() && !imgBase64) return;
         setIsSearching(true);
         setWhiteModelMatches([]);
-        setVisibleCount(10);
+        setVisibleCount(20);
         try {
             let bodyPayload: any = { action: 'FIND_WHITE_MODELS', prompt: searchQuery };
             if (imgBase64) {
@@ -278,6 +278,9 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         const rect = containerRef.current?.getBoundingClientRect();
         if(!rect || !baseImgObj) return;
         
+        // Use pointerCapture to track movement even if it goes outside div
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        
         const cx = rect.width / 2; const cy = rect.height / 2;
         const px = (e.clientX - rect.left - cx - view.x) / view.k + baseImgObj.naturalWidth / 2;
         const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
@@ -286,14 +289,13 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         isDrawingRef.current = true;
 
         if (activeTool === 'HAND' || e.button === 1) return;
-        
         if (activeTool === 'PATTERN_MOVE') return;
 
+        // IMPORTANTE: Salva histórico apenas no INÍCIO do traço, não durante
         if (maskData) setUndoStack(prev => RunwayEngine.pushHistory(prev, maskData));
 
         const ctx = canvasRef.current!.getContext('2d')!;
         
-        // CAPTURA A COR INICIAL DO TRAÇO PARA O SMART BRUSH (Referência)
         if (smartBrush) {
             const p = ctx.getImageData(Math.floor(px), Math.floor(py), 1, 1).data;
             startColorRef.current = { r: p[0], g: p[1], b: p[2] };
@@ -301,6 +303,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             startColorRef.current = null;
         }
         
+        // Aplicação inicial (Clique)
         if (activeTool === 'WAND') {
             const newMask = RunwayEngine.magicWand(
                 ctx, baseImgObj.naturalWidth, baseImgObj.naturalHeight, 
@@ -322,12 +325,10 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-        // ATUALIZAÇÃO DO CURSOR (60FPS - Oculto em Touch via CSS media query ou lógica simples)
-        // Detecta se é touch pelo pointerType
+        // ZERO LATENCY CURSOR UPDATE (Direct DOM)
         const isTouch = e.pointerType === 'touch';
-        
         if (cursorRef.current && (activeTool === 'BRUSH' || activeTool === 'ERASER') && !isTouch) {
-            cursorRef.current.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%, -50%)`;
+            cursorRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
             cursorRef.current.style.display = 'block';
         } else if (cursorRef.current) {
             cursorRef.current.style.display = 'none';
@@ -335,6 +336,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
 
         if (!isDrawingRef.current || !lastPointerPos.current || !baseImgObj) return;
         
+        // Ferramentas de Movimento
         if (activeTool === 'HAND') {
             const dx = e.clientX - lastPointerPos.current.x;
             const dy = e.clientY - lastPointerPos.current.y;
@@ -351,7 +353,8 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             return;
         }
 
-        // Pintura Contínua (Smart Brush usa a cor de referência do Start)
+        // PINTURA CONTÍNUA (ARRASTAR)
+        // Correção Crítica: O cálculo deve acontecer a cada movimento se isDrawingRef for true
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect) return;
         
@@ -362,16 +365,27 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
              const mode = activeTool === 'ERASER' ? 'SUB' : toolMode;
              const ctx = canvasRef.current!.getContext('2d')!;
-             setMaskData(prev => RunwayEngine.paintMask(
-                prev!,
-                smartBrush ? ctx : null,
-                baseImgObj.naturalWidth, baseImgObj.naturalHeight,
-                px, py,
-                { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush, startColor: startColorRef.current }
-            ));
+             
+             // Otimização: Não usar setMaskData funcional (prev => ...) em loop rápido se possível, 
+             // mas aqui precisamos da versão anterior. O React 18 faz batching, então ok.
+             setMaskData(prev => {
+                 if (!prev) return new Uint8Array(baseImgObj.naturalWidth * baseImgObj.naturalHeight);
+                 return RunwayEngine.paintMask(
+                    prev,
+                    smartBrush ? ctx : null,
+                    baseImgObj.naturalWidth, baseImgObj.naturalHeight,
+                    px, py,
+                    { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush, startColor: startColorRef.current }
+                );
+             });
         }
         
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDrawingRef.current = false;
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     };
 
     const handleUndo = () => {
@@ -382,7 +396,6 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         }
     };
 
-    // --- CURSOR STYLE ---
     const getCursorStyle = () => {
         if (activeTool === 'HAND') return 'cursor-grab active:cursor-grabbing';
         if (activeTool === 'WAND') return 'cursor-crosshair';
@@ -397,7 +410,6 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                 <div className="flex-1 bg-[#f0f2f5] overflow-y-auto text-gray-800">
                     <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Busca Global" />
                     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8 pb-24">
-                        {/* SEARCH INTERFACE */}
                         <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 flex flex-col md:flex-row gap-8">
                             <div className="flex-1 space-y-4">
                                 <h3 className="text-xl font-black uppercase tracking-wider text-gray-900">Encontre o Modelo Ideal</h3>
@@ -426,7 +438,6 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                             </div>
                         </div>
 
-                        {/* GRID DE RESULTADOS */}
                         {isSearching && (
                             <div className="text-center py-12"><Loader2 size={48} className="animate-spin text-vingi-500 mx-auto mb-4"/><p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">Varrendo Marketplaces (Pinterest, Vogue, Google...)</p></div>
                         )}
@@ -437,7 +448,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                                     {whiteModelMatches.slice(0, visibleCount).map((match, i) => ( <RunwayModelCard key={i} match={match} onSelect={(img) => { setReferenceImage(img); setShowPatternModal(true); }} /> ))}
                                 </div>
                                 {visibleCount < whiteModelMatches.length && (
-                                    <div className="text-center pt-8"><button onClick={() => setVisibleCount(p => p + 10)} className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all flex items-center gap-2 mx-auto"><Plus size={16}/> Carregar Mais Modelos (+10)</button></div>
+                                    <div className="text-center pt-8"><button onClick={() => setVisibleCount(p => p + 20)} className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all flex items-center gap-2 mx-auto"><Plus size={16}/> Carregar Mais Modelos (+20)</button></div>
                                 )}
                             </div>
                         )}
@@ -464,8 +475,8 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                         className={`flex-1 relative flex items-center justify-center overflow-hidden touch-none ${getCursorStyle()}`} 
                         onPointerDown={handlePointerDown} 
                         onPointerMove={handlePointerMove} 
-                        onPointerUp={() => isDrawingRef.current = false} 
-                        onMouseLeave={() => isDrawingRef.current = false}
+                        onPointerUp={handlePointerUp} 
+                        onMouseLeave={handlePointerUp}
                     >
                         {/* BACKGROUND GRID */}
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
@@ -473,22 +484,22 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                             <canvas ref={canvasRef} className="block bg-white" />
                         </div>
                         
-                        {/* Custom Brush Cursor - VISIBLE ONLY ON DESKTOP */}
+                        {/* ZERO LATENCY CURSOR (Direct DOM) */}
                         <div 
                             ref={cursorRef}
-                            className="pointer-events-none fixed z-[9999] rounded-full border border-white mix-blend-difference hidden" 
+                            className="pointer-events-none fixed z-[9999] rounded-full border border-white mix-blend-difference hidden will-change-transform" 
                             style={{ 
                                 width: brushSize * view.k, 
                                 height: brushSize * view.k,
-                                willChange: 'transform',
-                                transform: 'translate(-50%, -50%)' 
+                                left: 0,
+                                top: 0,
+                                position: 'fixed'
                             }}
                         />
                     </div>
 
-                    {/* TOOL SETTINGS PANEL (LAYER STUDIO STYLE) */}
+                    {/* TOOL SETTINGS PANEL */}
                     <div className="bg-[#0a0a0a] border-t border-white/10 z-[150] shadow-2xl flex flex-col shrink-0">
-                        {/* Slider Controls */}
                         <div className="h-16 px-4 flex items-center justify-between gap-4 border-b border-white/5 bg-[#080808]">
                             {activeTool === 'WAND' && (
                                 <div className="flex items-center gap-4 w-full">
