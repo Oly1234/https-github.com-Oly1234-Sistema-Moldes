@@ -123,12 +123,15 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
     
     const isDrawingRef = useRef(false);
     const startColorRef = useRef<{r:number, g:number, b:number} | null>(null);
+    
+    // UX REFS
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
+    const dragStartPos = useRef<{x: number, y: number} | null>(null); // New: Track drag distance
     const refFileInput = useRef<HTMLInputElement>(null);
     const lastDistRef = useRef<number>(0); 
-    const lastDrawTime = useRef<number>(0); // THROTTLING REF
+    const lastDrawTime = useRef<number>(0);
 
-    // --- RENDERER (CORRIGIDO PARA OPAQUEZA E BRILHO) ---
+    // --- RENDERER ---
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas || !baseImgObj) return;
@@ -141,13 +144,13 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
         const w = canvas.width, h = canvas.height;
         
-        // 1. Base Layer (CLEAN DRAWING - FULL OPACITY)
+        // 1. Base Layer
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1.0;
         ctx.filter = 'none';
         ctx.drawImage(baseImgObj, 0, 0, w, h);
         
-        // 2. Mask Preview (Modo Edição de Máscara)
+        // 2. Mask Preview
         if (maskData && !patternImgObj) {
             const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
             const tCtx = tempC.getContext('2d')!;
@@ -164,7 +167,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             ctx.drawImage(tempC, 0, 0);
         }
 
-        // 3. Pattern Application (Estampa)
+        // 3. Pattern Application
         if (patternImgObj && maskData) {
             const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
             const tCtx = tempC.getContext('2d')!;
@@ -182,19 +185,18 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             tCtx.rotate((patternRotation * Math.PI) / 180);
             tCtx.scale(patternScale, patternScale);
             
-            // BRILHO CORRIGIDO: Aplicado na camada da estampa ANTES do desenho
             if (brightness !== 1.0) tCtx.filter = `brightness(${brightness})`;
             
             const pat = tCtx.createPattern(patternImgObj, 'repeat');
             if (pat) { tCtx.fillStyle = pat; tCtx.fillRect(-w*8, -h*8, w*16, h*16); }
             tCtx.restore();
 
-            // Desenha estampa sobre a base
+            // Draw Pattern
             ctx.save(); 
             ctx.drawImage(tempC, 0, 0); 
             ctx.restore();
             
-            // 4. Sombras (Multiply)
+            // 4. Shadows (Multiply)
             const shadowC = document.createElement('canvas'); shadowC.width = w; shadowC.height = h;
             const sCtx = shadowC.getContext('2d')!;
             sCtx.putImageData(maskImgData, 0, 0); 
@@ -208,7 +210,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             ctx.drawImage(shadowC, 0, 0); 
             ctx.restore();
 
-            // 5. Estrutura (Hard Light)
+            // 5. Structure (Hard Light)
             if (structureIntensity > 0) {
                 const structC = document.createElement('canvas'); structC.width = w; structC.height = h;
                 const stCtx = structC.getContext('2d')!;
@@ -279,20 +281,12 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         finally { setIsSearching(false); }
     };
 
-    // --- EDGE SPECIALIST ACTIONS (SMART EXPAND) ---
     const handleExpandMask = () => {
         if (maskData && baseImgObj) {
             setUndoStack(prev => RunwayEngine.pushHistory(prev, maskData));
-            
-            // Extrai pixels da imagem original para análise inteligente
-            const tempC = document.createElement('canvas');
-            tempC.width = baseImgObj.naturalWidth;
-            tempC.height = baseImgObj.naturalHeight;
-            const tempCtx = tempC.getContext('2d')!;
-            tempCtx.drawImage(baseImgObj, 0, 0);
+            const tempC = document.createElement('canvas'); tempC.width = baseImgObj.naturalWidth; tempC.height = baseImgObj.naturalHeight;
+            const tempCtx = tempC.getContext('2d')!; tempCtx.drawImage(baseImgObj, 0, 0);
             const imgData = tempCtx.getImageData(0, 0, tempC.width, tempC.height).data;
-
-            // Chama o motor Smart Expand (passando imgData)
             setMaskData(prev => RunwayEngine.expandMask(prev!, baseImgObj.naturalWidth, baseImgObj.naturalHeight, imgData, 30));
         }
     };
@@ -316,52 +310,31 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
         
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
+        dragStartPos.current = { x: e.clientX, y: e.clientY }; // Store initial click pos
         
-        // Se for Hand tool ou botão do meio, ativa Pan
-        if (activeTool === 'HAND' || e.button === 1) {
+        if (activeTool === 'HAND' || e.button === 1 || activeTool === 'PATTERN_MOVE') {
             isDrawingRef.current = false;
             return;
         }
         
-        if (activeTool === 'PATTERN_MOVE') return;
-
-        // Se chegou aqui, é desenho
-        isDrawingRef.current = true;
-
-        if (maskData) setUndoStack(prev => RunwayEngine.pushHistory(prev, maskData));
-
-        const ctx = canvasRef.current!.getContext('2d')!;
-        
-        if (smartBrush) {
-            const p = ctx.getImageData(Math.floor(px), Math.floor(py), 1, 1).data;
-            startColorRef.current = { r: p[0], g: p[1], b: p[2] };
-        } else {
-            startColorRef.current = null;
-        }
-        
-        if (activeTool === 'WAND') {
-            const newMask = RunwayEngine.magicWand(
-                ctx, baseImgObj.naturalWidth, baseImgObj.naturalHeight, 
-                px, py, 
-                { tolerance: wandTolerance, contiguous: true, mode: toolMode, existingMask: maskData || undefined }
-            );
-            setMaskData(newMask);
-        } else if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
-            const mode = activeTool === 'ERASER' ? 'SUB' : toolMode;
-            const newMask = RunwayEngine.paintMask(
-                maskData || new Uint8Array(baseImgObj.naturalWidth * baseImgObj.naturalHeight),
-                smartBrush ? ctx : null, 
-                baseImgObj.naturalWidth, baseImgObj.naturalHeight,
-                px, py,
-                { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush, startColor: startColorRef.current }
-            );
-            setMaskData(newMask);
+        // Don't act immediately for WAND or BRUSH. Wait for slight movement or pointerUp.
+        // This prevents accidental painting when zooming.
+        if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
+             isDrawingRef.current = true;
+             
+             // Capture Start Color for Smart Brush immediately
+             const ctx = canvasRef.current!.getContext('2d')!;
+             if (smartBrush) {
+                const p = ctx.getImageData(Math.floor(px), Math.floor(py), 1, 1).data;
+                startColorRef.current = { r: p[0], g: p[1], b: p[2] };
+             }
         }
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-        // CURSOR UPDATE (ALWAYS FAST)
         const isTouch = e.pointerType === 'touch';
+        
+        // Cursor Logic
         if (cursorRef.current && (activeTool === 'BRUSH' || activeTool === 'ERASER') && !isTouch) {
             cursorRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
             cursorRef.current.style.display = 'block';
@@ -369,58 +342,94 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             cursorRef.current.style.display = 'none';
         }
 
+        if (!lastPointerPos.current) return;
+
+        const dx = e.clientX - lastPointerPos.current.x;
+        const dy = e.clientY - lastPointerPos.current.y;
+
+        // 1. PAN TOOL
         if (activeTool === 'HAND' && e.buttons === 1) {
-             const dx = e.clientX - lastPointerPos.current!.x;
-             const dy = e.clientY - lastPointerPos.current!.y;
              setView(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
              lastPointerPos.current = { x: e.clientX, y: e.clientY };
              return;
         }
 
-        if (!isDrawingRef.current || !lastPointerPos.current || !baseImgObj) return;
-        
-        if (activeTool === 'PATTERN_MOVE') {
-            const dx = (e.clientX - lastPointerPos.current.x) / view.k;
-            const dy = (e.clientY - lastPointerPos.current.y) / view.k;
-            setPatternOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+        // 2. PATTERN MOVE TOOL
+        if (activeTool === 'PATTERN_MOVE' && e.buttons === 1) {
+            // Apply scale factor to make movement natural with zoom
+            setPatternOffset(p => ({ x: p.x + dx / view.k, y: p.y + dy / view.k }));
             lastPointerPos.current = { x: e.clientX, y: e.clientY };
             return;
         }
 
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        
-        const cx = rect.width / 2; const cy = rect.height / 2;
-        const px = (e.clientX - rect.left - cx - view.x) / view.k + baseImgObj.naturalWidth / 2;
-        const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
+        // 3. DRAWING TOOLS (Throttled)
+        if (isDrawingRef.current && baseImgObj) {
+            const now = Date.now();
+            if (now - lastDrawTime.current < 16) return; // 60fps throttle
+            lastDrawTime.current = now;
 
-        // THROTTLING (CRITICAL FIX FOR LAG)
-        const now = Date.now();
-        if (now - lastDrawTime.current < 16) { // ~60fps
-            return;
-        }
-        lastDrawTime.current = now;
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            
+            const cx = rect.width / 2; const cy = rect.height / 2;
+            const px = (e.clientX - rect.left - cx - view.x) / view.k + baseImgObj.naturalWidth / 2;
+            const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
 
-        if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
-             const mode = activeTool === 'ERASER' ? 'SUB' : toolMode;
-             const ctx = canvasRef.current!.getContext('2d')!;
-             setMaskData(prev => {
-                 if (!prev) return new Uint8Array(baseImgObj.naturalWidth * baseImgObj.naturalHeight);
-                 return RunwayEngine.paintMask(
-                    prev,
-                    smartBrush ? ctx : null,
-                    baseImgObj.naturalWidth, baseImgObj.naturalHeight,
-                    px, py,
-                    { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush, startColor: startColorRef.current }
-                );
-             });
+            if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
+                 // Save state only once per stroke
+                 if (!undoStack.includes(maskData as any) && undoStack.length === 0) {
+                     // Logic handled in setMaskData mostly, but optimal to push history on Down
+                 }
+
+                 const mode = activeTool === 'ERASER' ? 'SUB' : toolMode;
+                 const ctx = canvasRef.current!.getContext('2d')!;
+                 setMaskData(prev => {
+                     if (!prev) return new Uint8Array(baseImgObj.naturalWidth * baseImgObj.naturalHeight);
+                     return RunwayEngine.paintMask(
+                        prev,
+                        smartBrush ? ctx : null,
+                        baseImgObj.naturalWidth, baseImgObj.naturalHeight,
+                        px, py,
+                        { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush, startColor: startColorRef.current }
+                    );
+                 });
+            }
         }
         
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
     };
 
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (!baseImgObj || !dragStartPos.current) return;
+        
+        isDrawingRef.current = false;
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+
+        // Check if it was a CLICK (not a drag)
+        const dist = Math.sqrt(Math.pow(e.clientX - dragStartPos.current.x, 2) + Math.pow(e.clientY - dragStartPos.current.y, 2));
+        const isClick = dist < 5; // Threshold 5px
+
+        if (isClick && activeTool === 'WAND') {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const cx = rect.width / 2; const cy = rect.height / 2;
+            const px = (e.clientX - rect.left - cx - view.x) / view.k + baseImgObj.naturalWidth / 2;
+            const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
+
+            if (maskData) setUndoStack(prev => RunwayEngine.pushHistory(prev, maskData));
+            const ctx = canvasRef.current!.getContext('2d')!;
+            const newMask = RunwayEngine.magicWand(
+                ctx, baseImgObj.naturalWidth, baseImgObj.naturalHeight, 
+                px, py, 
+                { tolerance: wandTolerance, contiguous: true, mode: toolMode, existingMask: maskData || undefined }
+            );
+            setMaskData(newMask);
+        }
+        
+        dragStartPos.current = null;
+    };
+
     const handleWheel = (e: React.WheelEvent) => {
-        // Desktop Zoom
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             const mouseX = e.clientX - rect.left - rect.width / 2; 
@@ -428,7 +437,6 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             const scaleChange = e.deltaY > 0 ? 0.9 : 1.1;
             const newK = Math.min(Math.max(0.1, view.k * scaleChange), 8);
             
-            // Adjust position to zoom towards mouse
             const dx = (mouseX - view.x) * (newK / view.k - 1);
             const dy = (mouseY - view.y) * (newK / view.k - 1);
             
@@ -436,10 +444,10 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         }
     };
 
-    // --- MOBILE PINCH ZOOM SUPPORT ---
+    // --- MOBILE PINCH ZOOM ---
     const handleTouchStart = (e: React.TouchEvent) => {
         if (e.touches.length === 2) {
-            isDrawingRef.current = false; // Cancel drawing
+            isDrawingRef.current = false;
             const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
             lastDistRef.current = dist;
         }
@@ -447,18 +455,13 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
 
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2) {
-            e.preventDefault(); // Prevent browser zoom
+            e.preventDefault();
             const dist = Math.sqrt((e.touches[0].clientX - e.touches[1].clientX)**2 + (e.touches[0].clientY - e.touches[1].clientY)**2);
             const scaleFactor = dist / lastDistRef.current;
             const newK = Math.min(Math.max(0.1, view.k * scaleFactor), 8);
             setView(v => ({ ...v, k: newK }));
             lastDistRef.current = dist;
         }
-    };
-
-    const handlePointerUp = (e: React.PointerEvent) => {
-        isDrawingRef.current = false;
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     };
 
     const handleUndo = () => {

@@ -59,77 +59,92 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // --- NOVO MOTOR DE BUSCA "WHITE HUNTER" (Google Simulation) ---
+    // --- NOVO MOTOR DE BUSCA "WHITE HUNTER v2" (Source Rotation Strategy) ---
     if (action === 'FIND_WHITE_MODELS') {
         let structure = prompt;
         
-        // 1. Extração Estrutural da Imagem (Visual DNA)
+        // 1. Extração Estrutural da Imagem
         if (mainImageBase64) {
             const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType || 'image/jpeg', cleanJson, 'GARMENT');
-            // Removemos menções a cores e estampas, focando na peça (ex: "Vestido Midi Alça Fina")
+            // Limpa termos de cor e estampa para focar na forma
             structure = (visualData.visualDescription || "Vestido").replace(/red|blue|green|black|pattern|print|floral|striped/gi, "").trim(); 
         }
         
         if (!structure) structure = "Vestido Feminino";
 
-        // 2. Modificadores de Alta Qualidade (Style & Context)
-        const styles = [
-            "Minimalist", "Elegant", "Boho Chic", "Summer Resort", 
-            "Avant-Garde Structure", "Clean Cut", "Sophisticated", 
-            "Flowy Silhouette", "Architectural", "Romantic", "Modern Classic"
+        // 2. FONTES VISUAIS DISTINTAS (Rotation Sources)
+        // Isso força o buscador a olhar em lugares diferentes para evitar duplicatas
+        const sources = [
+            { name: "Zara", type: "Fast Fashion" },
+            { name: "Vogue Runway", type: "Editorial" },
+            { name: "Net-a-Porter", type: "Luxury" },
+            { name: "Pinterest Street Style", type: "Casual" },
+            { name: "Revolve", type: "Influencer" },
+            { name: "ASOS", type: "Retail" },
+            { name: "Massimo Dutti", type: "Elegant" },
+            { name: "H&M", type: "Basic" },
+            { name: "Shein", type: "Budget" },
+            { name: "Mango", type: "Chic" },
+            { name: "Shopbop", type: "Trend" },
+            { name: "Farfetch", type: "Designer" }
         ];
 
-        const contexts = [
-            "full body lookbook", "fashion editorial white background", 
-            "studio shot full body", "street style fashion week", 
-            "catalog photography", "runway model", "high quality photoshoot"
-        ];
-
-        const fabrics = [
-            "Linen", "Silk Satin", "Cotton Poplin", "Crepe", 
-            "Chiffon", "White Denim", "Knitted", "Viscose"
-        ];
-
-        // 3. Filtros Negativos Rigorosos (Google Operators)
-        // Isso força o buscador a remover rostos em close, estampas e poluição visual
-        const exclusionTerms = "-face close up -portrait -selfie -print -pattern -floral -stripes -polka -graphic -logo -multicolor -black -red -blue -green";
-
-        const createModelLink = (style, context, fabric, index) => {
-            // Query: Estrutura + Tecido + Cor + Estilo + Contexto + Negativos
-            // Ex: "Vestido Midi Linen White Minimalist full body lookbook -print..."
-            const finalQuery = `${structure} ${fabric} white ${style} ${context} solid color ${exclusionTerms}`.trim();
-            const displayTitle = `${structure} ${style} (${fabric})`;
-            
-            return {
-                source: "Google Images", // Fonte unificada
-                patternName: `${displayTitle}`, 
-                similarityScore: 90 + Math.random() * 10,
-                type: "GLOBAL",
-                linkType: 'SEARCH_QUERY',
-                // URL para o usuário abrir no Google Imagens direto
-                url: `https://www.google.com/search?tbm=isch&tbs=isz:l,ic:white&q=${encodeURIComponent(finalQuery)}`,
-                // Backup Term para o nosso Proxy Visual (Bing TBN)
-                // Removemos os operadores negativos complexos para o TBN ser mais assertivo no match visual direto
-                backupSearchTerm: `${structure} ${fabric} white ${style} ${context} photography`,
-                imageUrl: null
-            };
-        };
+        // 3. Modificadores Visuais
+        const styles = ["Minimalist", "Boho", "Elegant", "Casual", "Avant-Garde"];
+        const contexts = ["white background studio", "full body lookbook", "fashion editorial", "runway walking"];
+        const fabrics = ["Linen", "Cotton", "Silk", "Satin", "Viscose"];
 
         const queries = [];
         let globalIndex = 0;
 
-        // 4. Geração Combinatória (Permutação Inteligente)
-        // Gera ~60 combinações únicas para maximizar a variedade visual
-        for (const style of styles) {
-            for (const context of contexts) {
-                // Seleciona um tecido rotativo para não ficar repetitivo
-                const fabric = fabrics[globalIndex % fabrics.length];
-                queries.push(createModelLink(style, context, fabric, globalIndex));
-                globalIndex++;
+        // 4. Geração Rotativa (Source x Style x Fabric)
+        // Garante que cada card tenha um 'backupSearchTerm' único contendo a FONTE específica
+        // O scraper usa esse termo para buscar a imagem. Se o termo for "Zara white dress", virá uma foto da Zara.
+        // Se for "Vogue white dress", virá outra.
+        
+        // Loop principal: Itera pelas fontes para garantir diversidade máxima
+        for (const source of sources) {
+            // Escolhe estilo e tecido baseados no índice para variar
+            const style = styles[globalIndex % styles.length];
+            const context = contexts[globalIndex % contexts.length];
+            const fabric = fabrics[globalIndex % fabrics.length];
+            
+            // Query Visual para o Scraper (O segredo da diversidade)
+            // Ex: "Zara white dress linen minimalist full body"
+            const uniqueVisualTerm = `${source.name} white ${structure} ${fabric} ${style} ${context} -print -pattern`.trim();
+            
+            queries.push({
+                source: source.name,
+                patternName: `${structure} ${style} (${source.type})`, 
+                similarityScore: 90 + Math.random() * 10,
+                type: "GLOBAL",
+                linkType: 'SEARCH_QUERY',
+                // URL de busca genérica para o usuário clicar
+                url: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(uniqueVisualTerm)}`,
+                // TERMO CHAVE: Único por card, forçando imagem diferente
+                backupSearchTerm: uniqueVisualTerm,
+                imageUrl: null
+            });
+
+            globalIndex++;
+            
+            // Adiciona variação para fontes grandes (Zara/Vogue)
+            if (['Zara', 'Vogue Runway', 'Net-a-Porter'].includes(source.name)) {
+                 const altTerm = `${source.name} white ${structure} close up detail texture`.trim();
+                 queries.push({
+                    source: `${source.name} Detail`,
+                    patternName: `${structure} Detail View`, 
+                    similarityScore: 85,
+                    type: "GLOBAL",
+                    linkType: 'SEARCH_QUERY',
+                    url: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(altTerm)}`,
+                    backupSearchTerm: altTerm,
+                    imageUrl: null
+                });
             }
         }
 
-        // Embaralha para o usuário ver variedade logo de cara
+        // Embaralha levemente, mas mantém a estrutura de fontes variadas
         queries.sort(() => Math.random() - 0.5);
 
         return res.status(200).json({ success: true, queries: queries, detectedStructure: structure });
