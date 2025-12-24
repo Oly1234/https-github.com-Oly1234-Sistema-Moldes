@@ -1,22 +1,30 @@
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-    Layers, Trash2, Eye, EyeOff, Lock, Hand, Wand2, Brush, 
-    X, Check, Loader2, LayoutGrid, Sliders, Eraser, 
-    Undo2, Redo2, Plus, Minus, Zap, Info, PenTool, ChevronUp, ChevronDown, MousePointer2,
-    Activity, Brain, Crosshair, Target, MoreVertical, MoreHorizontal, Copy, MoveDown, Edit2, FlipHorizontal2, FlipVertical2,
-    GripVertical, FolderPlus, Link as LinkIcon, Folder, ChevronRight, FolderOpen, Combine, Ungroup, LogOut,
-    PlusCircle, Maximize2, MousePointerClick, Settings, Save, ArrowLeft, SlidersHorizontal, Shirt, PlusSquare,
-    SearchCode, MessageSquare, Sparkles, BrainCircuit, MinusCircle, ArrowUp, ArrowDown, Target as TargetIcon
+    Layers, Trash2, Eye, EyeOff, Hand, Wand2, Brush, 
+    Loader2, LayoutGrid, Eraser, Undo2, Brain, Target, 
+    MoreHorizontal, Copy, MoveDown, Edit2, 
+    Plus, Minus, Maximize2, ArrowLeft, SlidersHorizontal, ArrowUp, ArrowDown, Target as TargetIcon
 } from 'lucide-react';
-import { DesignLayer } from '../types';
 import { ModuleLandingPage } from './Shared';
 import { LayerEnginePro, MaskSnapshot } from '../services/layerEnginePro';
 
-interface StudioLayer extends DesignLayer {
-    parentId?: string;
+interface StudioLayer {
+    id: string;
+    type: 'BACKGROUND' | 'ELEMENT';
+    name: string;
+    src: string;
+    x: number;
+    y: number;
+    scale: number;
+    rotation: number;
+    flipX: boolean;
+    flipY: boolean;
+    visible: boolean;
+    locked: boolean;
+    zIndex: number;
+    opacity: number;
     isGroup?: boolean;
-    expanded?: boolean;
 }
 
 const compressForAI = (img: HTMLImageElement, maxSize = 1024): Promise<string> => {
@@ -42,6 +50,7 @@ const compressForAI = (img: HTMLImageElement, maxSize = 1024): Promise<string> =
 };
 
 export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMockup?: () => void }> = ({ onNavigateBack, onNavigateToMockup }) => {
+    // --- STATE CORE ---
     const [originalImg, setOriginalImg] = useState<HTMLImageElement | null>(null);
     const [originalData, setOriginalData] = useState<Uint8ClampedArray | null>(null);
     const [layers, setLayers] = useState<StudioLayer[]>([]);
@@ -50,32 +59,41 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
     const [mobileMenuLayerId, setMobileMenuLayerId] = useState<string | null>(null);
     
+    // --- TOOLS STATE ---
     const [tool, setTool] = useState<'WAND' | 'LASSO' | 'BRUSH' | 'ERASER' | 'HAND'>('BRUSH');
     const [toolMode, setToolMode] = useState<'ADD' | 'SUB'>('ADD');
     const [wandParams, setWandParams] = useState({ tolerance: 45, contiguous: true });
     const [brushParams, setBrushParams] = useState({ size: 50, eraserSize: 50, hardness: 80, opacity: 100, smart: true });
     
+    // --- WORKSPACE STATE ---
     const [isSemanticLoading, setIsSemanticLoading] = useState(false);
     const [activeMask, setActiveMask] = useState<Uint8Array | null>(null);
     const [suggestedMask, setSuggestedMask] = useState<Uint8Array | null>(null);
     const [lassoPoints, setLassoPoints] = useState<{x: number, y: number}[]>([]);
     const [undoStack, setUndoStack] = useState<MaskSnapshot[]>([]);
 
+    // --- VIEWPORT STATE ---
     const [view, setView] = useState({ x: 0, y: 0, k: 0.8 });
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+    // --- REFS ---
     const containerRef = useRef<HTMLDivElement>(null);
     const overlayRef = useRef<HTMLCanvasElement>(null);
     const cursorRef = useRef<HTMLCanvasElement>(null);
     const isInteracting = useRef(false);
     const lastPointerPos = useRef({ x: 0, y: 0 });
+    
+    // --- GESTURE REFS (PINCH ZOOM) ---
+    const isZooming = useRef(false);
+    const lastPinchDist = useRef(0);
+    const lastPinchCenter = useRef({ x: 0, y: 0 });
 
     const fitImageToContainer = useCallback(() => {
         if (!containerRef.current || !originalImg) return;
         const rect = containerRef.current.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
-        const padding = isMobile ? 30 : 80;
+        const padding = isMobile ? 20 : 80;
         const k = Math.min((rect.width - padding) / originalImg.naturalWidth, (rect.height - padding) / originalImg.naturalHeight);
         setView({ x: 0, y: 0, k: k || 0.8 });
     }, [originalImg, isMobile]);
@@ -84,11 +102,11 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         if (!containerRef.current) return;
         const observer = new ResizeObserver(() => {
             setIsMobile(window.innerWidth < 768);
-            requestAnimationFrame(fitImageToContainer);
+            if (originalImg) requestAnimationFrame(fitImageToContainer);
         });
         observer.observe(containerRef.current);
         return () => observer.disconnect();
-    }, [fitImageToContainer]);
+    }, [fitImageToContainer, originalImg]);
 
     const initStudio = (src: string) => {
         setIsProcessing(true);
@@ -108,13 +126,13 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         };
     };
 
-    const getPreciseCoords = (e: React.PointerEvent | PointerEvent) => {
+    const getPreciseCoords = (clientX: number, clientY: number) => {
         if (!containerRef.current || !originalImg) return { x: 0, y: 0 };
         const rect = containerRef.current.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
-        const x = (e.clientX - centerX - view.x) / view.k + originalImg.naturalWidth / 2;
-        const y = (e.clientY - centerY - view.y) / view.k + originalImg.naturalHeight / 2;
+        const x = (clientX - centerX - view.x) / view.k + originalImg.naturalWidth / 2;
+        const y = (clientY - centerY - view.y) / view.k + originalImg.naturalHeight / 2;
         return { x, y };
     };
 
@@ -186,11 +204,78 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         setLayers(ls => ls.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
     };
 
+    const triggerTransfer = (targetModule: string, imageData: string) => {
+        if (targetModule === 'MOCKUP') localStorage.setItem('vingi_mockup_pattern', imageData);
+        window.dispatchEvent(new CustomEvent('vingi_transfer', { detail: { module: targetModule } }));
+        if (targetModule === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
+    };
+
+    // --- TOUCH & POINTER EVENTS (Hybrid System) ---
+
+    // Touch Handlers (Pinch Zoom)
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            isZooming.current = true;
+            isInteracting.current = false;
+            
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            lastPinchDist.current = dist;
+            lastPinchCenter.current = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+            };
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 2 && isZooming.current) {
+            e.preventDefault(); // Stop scrolling
+            
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            
+            const center = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+            };
+
+            if (lastPinchDist.current > 0) {
+                const scaleFactor = dist / lastPinchDist.current;
+                const newK = Math.min(Math.max(0.05, view.k * scaleFactor), 20);
+                const dx = center.x - lastPinchCenter.current.x;
+                const dy = center.y - lastPinchCenter.current.y;
+
+                setView(prev => ({
+                    ...prev,
+                    k: newK,
+                    x: prev.x + dx,
+                    y: prev.y + dy
+                }));
+            }
+
+            lastPinchDist.current = dist;
+            lastPinchCenter.current = center;
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (isZooming.current) {
+            isZooming.current = false;
+        }
+    };
+
+    // Pointer Handlers (Drawing & Pan)
     const handlePointerDown = (e: React.PointerEvent) => {
-        if (!originalImg || !originalData) return;
+        if (!originalImg || !originalData || isZooming.current) return;
+        
         isInteracting.current = true;
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
-        const { x, y } = getPreciseCoords(e);
+        const { x, y } = getPreciseCoords(e.clientX, e.clientY);
         
         if (tool === 'WAND') {
             if (activeMask) setUndoStack(prev => LayerEnginePro.pushHistory(prev, activeMask));
@@ -210,9 +295,11 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-        if (!originalImg || !originalData) return;
-        const { x, y } = getPreciseCoords(e);
+        if (!originalImg || !originalData || isZooming.current) return;
+        
+        const { x, y } = getPreciseCoords(e.clientX, e.clientY);
         setMousePos({ x, y });
+        
         if (isInteracting.current) {
             if (tool === 'LASSO') setLassoPoints(prev => [...prev, {x, y}]);
             else if (tool === 'BRUSH' || tool === 'ERASER') {
@@ -220,7 +307,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 const currentSize = tool === 'ERASER' ? brushParams.eraserSize : brushParams.size;
                 setActiveMask(prev => LayerEnginePro.paintSmartMask(prev!, originalData, originalImg.naturalWidth, originalImg.naturalHeight, x, y, { ...brushParams, size: currentSize, mode: m, smartEnabled: brushParams.smart }));
             } else if (tool === 'HAND' || (e.buttons === 4)) {
-                const dx = e.clientX - lastPointerPos.current.x, dy = e.clientY - lastPointerPos.current.y;
+                const dx = e.clientX - lastPointerPos.current.x;
+                const dy = e.clientY - lastPointerPos.current.y;
                 setView(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
             }
         }
@@ -228,7 +316,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     };
 
     const handlePointerUp = () => {
-        if (!isInteracting.current || !originalImg) return;
+        if (!isInteracting.current || !originalImg || isZooming.current) return;
         isInteracting.current = false;
         if (tool === 'LASSO' && lassoPoints.length > 3) {
             const currentMask = activeMask || new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
@@ -241,6 +329,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     };
 
     const handleWheel = (e: React.WheelEvent) => {
+        if (isZooming.current) return;
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect) return;
         const scaleChange = e.deltaY > 0 ? 0.9 : 1.1;
@@ -250,6 +339,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         setView(v => ({ x: v.x - dx, y: v.y - dy, k: newK }));
     };
 
+    // --- EFFECTS ---
     useEffect(() => {
         if (!overlayRef.current || !originalImg) return;
         const ctx = overlayRef.current.getContext('2d')!;
@@ -324,16 +414,26 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col overflow-hidden relative">
-                    <div ref={containerRef} className="flex-1 relative bg-[#050505] overflow-hidden cursor-none touch-none" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
+                    <div 
+                        ref={containerRef} 
+                        className="flex-1 relative bg-[#050505] overflow-hidden cursor-none touch-none shrink-0" 
+                        onPointerDown={handlePointerDown} 
+                        onPointerMove={handlePointerMove} 
+                        onPointerUp={handlePointerUp} 
+                        onWheel={handleWheel}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                    >
                         <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-                        <div className="absolute shadow-[0_0_80px_rgba(0,0,0,1)] transition-transform duration-75 will-change-transform" style={{ width: originalImg.naturalWidth, height: originalImg.naturalHeight, left: '50%', top: '50%', marginLeft: -originalImg.naturalWidth / 2, marginTop: -originalImg.naturalHeight / 2, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: 'center center' }}>
+                        <div className="absolute shadow-[0_0_80px_rgba(0,0,0,1)] transition-transform duration-75 will-change-transform origin-center" style={{ width: originalImg.naturalWidth, height: originalImg.naturalHeight, left: '50%', top: '50%', marginLeft: -originalImg.naturalWidth / 2, marginTop: -originalImg.naturalHeight / 2, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
                             {layers.map(l => ( <img key={l.id} src={l.src} className={`absolute inset-0 w-full h-full pointer-events-none ${selectedLayerIds.includes(l.id) ? 'filter drop-shadow-[0_0_10px_rgba(59,130,246,0.4)] z-10' : ''}`} draggable={false} style={{ objectFit: 'contain', display: l.visible ? 'block' : 'none', opacity: l.opacity ?? 1 }} /> ))}
                             <canvas ref={overlayRef} width={originalImg.naturalWidth} height={originalImg.naturalHeight} className="absolute inset-0 pointer-events-none z-[60]" />
                             <canvas ref={cursorRef} width={originalImg.naturalWidth} height={originalImg.naturalHeight} className="absolute inset-0 pointer-events-none z-[70] mix-blend-difference" />
                         </div>
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[200] pointer-events-none">
                             {tool === 'BRUSH' && activeMask && !isSemanticLoading && (
-                                <button onClick={handleSemanticIdentification} className="pointer-events-auto bg-blue-600 text-white px-6 py-3 rounded-full font-black text-[10px] shadow-[0_0_30px_rgba(59,130,246,0.8)] animate-bounce-subtle flex items-center gap-2 border-2 border-white/20 active:scale-95 transition-transform uppercase tracking-widest"><BrainCircuit size={16}/> Localizar Elemento</button>
+                                <button onClick={handleSemanticIdentification} className="pointer-events-auto bg-blue-600 text-white px-6 py-3 rounded-full font-black text-[10px] shadow-[0_0_30px_rgba(59,130,246,0.8)] animate-bounce-subtle flex items-center gap-2 border-2 border-white/20 active:scale-95 transition-transform uppercase tracking-widest"><Brain size={16}/> Localizar Elemento</button>
                             )}
                             {isSemanticLoading && (
                                 <div className="bg-black/80 backdrop-blur-md text-white px-6 py-3 rounded-full font-black text-[10px] border border-blue-500/50 flex items-center gap-3 uppercase tracking-widest"><Loader2 size={16} className="animate-spin text-blue-400"/> Identificando...</div>
@@ -344,7 +444,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     {isMobile ? (
                         <div className="bg-[#0a0a0a] border-t border-white/10 z-[150] shadow-2xl safe-area-bottom flex flex-col shrink-0">
                             <div className="h-20 px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black">
-                                <button onClick={() => document.getElementById('l-up')?.click()} className="min-w-[48px] h-[48px] rounded-xl bg-white/5 border border-dashed border-white/20 flex flex-col items-center justify-center text-gray-500 shrink-0"><PlusSquare size={18}/><span className="text-[7px] mt-1 uppercase font-bold">Novo</span></button>
+                                <button onClick={() => document.getElementById('l-up')?.click()} className="min-w-[48px] h-[48px] rounded-xl bg-white/5 border border-dashed border-white/20 flex flex-col items-center justify-center text-gray-500 shrink-0"><Plus size={18}/><span className="text-[7px] mt-1 uppercase font-bold">Novo</span></button>
                                 {[...layers].reverse().map(l => (
                                     <div key={l.id} onClick={() => setSelectedLayerIds([l.id])} onContextMenu={(e) => { e.preventDefault(); setMobileMenuLayerId(l.id); }} className={`min-w-[48px] h-[48px] rounded-xl border-2 transition-all relative bg-black shrink-0 flex flex-col items-center ${selectedLayerIds.includes(l.id) ? 'border-blue-500 scale-105 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-60'}`}>
                                         <div className="w-full h-full rounded-lg overflow-hidden relative">
@@ -381,13 +481,12 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 <ToolBtn icon={Wand2} label="Mira" active={tool==='WAND'} onClick={() => setTool('WAND')} />
                                 <ToolBtn icon={Brush} label="Pincel" active={tool==='BRUSH'} onClick={() => setTool('BRUSH')} />
                                 <ToolBtn icon={Eraser} label="Apagar" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
-                                <ToolBtn icon={PenTool} label="Laço" active={tool==='LASSO'} onClick={() => setTool('LASSO')} />
+                                <ToolBtn icon={Layers} label="Laço" active={tool==='LASSO'} onClick={() => setTool('LASSO')} />
                                 <div className="w-px h-8 bg-white/10 mx-1"></div>
                                 <div className="flex bg-white/5 rounded-xl p-0.5 border border-white/10 shrink-0">
                                     <button onClick={() => setToolMode('ADD')} className={`p-2.5 rounded-lg transition-all ${toolMode==='ADD' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-600'}`}><Plus size={16}/></button>
                                     <button onClick={() => setToolMode('SUB')} className={`p-2.5 rounded-lg transition-all ${toolMode==='SUB' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-600'}`}><Minus size={16}/></button>
                                 </div>
-                                <button onClick={() => setMobileMenuLayerId(selectedLayerIds[0])} disabled={selectedLayerIds.length === 0} className="flex flex-col items-center justify-center min-w-[50px] h-12 rounded-xl text-vingi-400 bg-vingi-500/10 ml-1"><Settings size={18}/><span className="text-[7px] font-black mt-0.5 uppercase">Ação</span></button>
                             </div>
                         </div>
                     ) : (
@@ -398,7 +497,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                 <ToolBtn icon={Wand2} label="Mira" active={tool==='WAND'} onClick={() => setTool('WAND')} />
                                 <ToolBtn icon={Brush} label="Pincel" active={tool==='BRUSH'} onClick={() => setTool('BRUSH')} />
                                 <ToolBtn icon={Eraser} label="Apagar" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
-                                <ToolBtn icon={PenTool} label="Laço" active={tool==='LASSO'} onClick={() => setTool('LASSO')} />
+                                <ToolBtn icon={Layers} label="Laço" active={tool==='LASSO'} onClick={() => setTool('LASSO')} />
                                 <div className="mt-auto flex flex-col gap-4 mb-4">
                                     <button onClick={() => setToolMode(toolMode==='ADD'?'SUB':'ADD')} className={`p-2 rounded-xl transition-all ${toolMode==='ADD' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>{toolMode==='ADD' ? <Plus size={20}/> : <Minus size={20}/>}</button>
                                 </div>
@@ -436,7 +535,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                         <button onClick={fitImageToContainer} className="w-full py-2.5 rounded-lg text-[9px] font-black uppercase bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2"><Maximize2 size={14}/> Resetar Visualização</button>
                                     )}
                                 </div>
-                                <LayerList layers={layers} selectedIds={selectedLayerIds} onSelect={(id:string, m:boolean)=>setSelectedLayerIds(m?([...selectedLayerIds, id]):[id])} onRename={(id:string,n:string)=>setLayers(ls=>ls.map(l=>l.id===id?{...l,name:n}:l))} onDelete={(id:string)=>setLayers(ls=>ls.filter(l=>l.id!==id))} onVisibility={toggleVisibility} onReorder={reorderLayer} editingLayerId={editingLayerId} setEditingLayerId={setEditingLayerId} />
+                                <LayerList layers={layers} selectedIds={selectedLayerIds} onSelect={(id:string, m:boolean)=>setSelectedLayerIds(m?([...selectedLayerIds, id]):[id])} onRename={(id:string,n:string)=>setLayers(ls=>ls.map(l=>l.id===id?{...l,name:n}:l))} onDelete={(id:string)=>setLayers(ls=>ls.filter(l=>l.id!==id))} onVisibility={toggleVisibility} onReorder={reorderLayer} editingLayerId={editingLayerId} setEditingLayerId={setEditingLayerId} onTransfer={(id:string) => { const l=layers.find(x=>x.id===id); if(l) triggerTransfer('MOCKUP', l.src); }} />
                             </div>
                         </>
                     )}
@@ -487,7 +586,7 @@ const MobileSlider = ({ label, icon: Icon, value, onChange, min, max }: any) => 
     </div>
 );
 
-const LayerList = ({ layers, selectedIds, onSelect, onRename, onDelete, onVisibility, onReorder, editingLayerId, setEditingLayerId }: any) => {
+const LayerList = ({ layers, selectedIds, onSelect, onRename, onDelete, onVisibility, onReorder, editingLayerId, setEditingLayerId, onTransfer }: any) => {
     const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
     return (
         <div className="flex flex-col h-full overflow-hidden bg-[#0a0a0a]">
@@ -501,7 +600,7 @@ const LayerList = ({ layers, selectedIds, onSelect, onRename, onDelete, onVisibi
                     return (
                         <div key={l.id} onClick={(e) => onSelect(l.id, e.ctrlKey || e.metaKey)} className={`p-3 rounded-2xl border transition-all flex items-center gap-4 relative cursor-pointer ${isSelected ? 'bg-blue-600/10 border-blue-500/50 shadow-lg scale-[1.02]' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
                             <div className="w-12 h-12 bg-black rounded-xl border border-white/10 flex items-center justify-center p-0.5 overflow-hidden shrink-0 shadow-inner relative">
-                                {l.isGroup ? <Folder className="text-blue-500" size={24}/> : <img src={l.src} className="max-w-full max-h-full object-contain" />}
+                                <img src={l.src} className="max-w-full max-h-full object-contain" />
                                 {!l.visible && <div className="absolute inset-0 bg-red-900/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none"><EyeOff size={14} className="text-white"/></div>}
                                 <div className="absolute bottom-0 right-0 bg-black/80 text-[7px] font-black px-1 rounded-tl-md border-t border-l border-white/10 text-gray-400">#{layers.length - idx}</div>
                             </div>
@@ -523,7 +622,7 @@ const LayerList = ({ layers, selectedIds, onSelect, onRename, onDelete, onVisibi
                             {menuOpenId === l.id && (
                                 <div className="absolute right-2 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-[300] p-1 animate-in fade-in slide-in-from-top-2">
                                     <button onClick={(e)=>{e.stopPropagation(); setEditingLayerId(l.id); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Edit2 size={14}/> Renomear</button>
-                                    <button onClick={(e)=>{e.stopPropagation(); triggerTransfer('MOCKUP', l.src); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Shirt size={14}/> Aplicar em Molde</button>
+                                    <button onClick={(e)=>{e.stopPropagation(); onTransfer(l.id); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Layers size={14}/> Aplicar em Molde</button>
                                     <div className="h-px bg-white/5 my-1"></div>
                                     <button onClick={(e)=>{e.stopPropagation(); onDelete(l.id); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all"><Trash2 size={14}/> Excluir Permanente</button>
                                 </div>
@@ -535,9 +634,4 @@ const LayerList = ({ layers, selectedIds, onSelect, onRename, onDelete, onVisibi
             {menuOpenId && <div className="fixed inset-0 z-[250]" onClick={() => setMenuOpenId(null)} />}
         </div>
     );
-};
-
-const triggerTransfer = (targetModule: string, imageData: string) => {
-    if (targetModule === 'MOCKUP') localStorage.setItem('vingi_mockup_pattern', imageData);
-    window.dispatchEvent(new CustomEvent('vingi_transfer', { detail: { module: targetModule } }));
 };
