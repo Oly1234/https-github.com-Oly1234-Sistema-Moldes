@@ -1,7 +1,7 @@
 
 /**
- * VINGI RUNWAY ENGINE v4.0 (AUTO-HEAL)
- * Motor especializado com Morfologia Matemática para fechar buracos em estampas.
+ * VINGI RUNWAY ENGINE v4.2 (SMART EDGE)
+ * Motor especializado com Morfologia Matemática e Tratamento de Bordas Inteligente.
  */
 
 export interface RunwayMaskSnapshot {
@@ -15,71 +15,97 @@ export const RunwayEngine = {
     },
 
     /**
-     * OPERAÇÕES MORFOLÓGICAS (A Mágica da Limpeza)
-     * Dilatar: Expande a seleção (fecha buracos).
-     * Erodir: Contrai a seleção (restaura borda).
-     * Closing: Dilatar -> Erodir (Remove buracos pretos dentro do branco).
+     * EXPANDIR MÁSCARA INTELIGENTE (SMART DILATE)
+     * Expande a seleção pixel a pixel, mas PARA se encontrar uma cor muito diferente.
+     * Isso permite preencher "cantinhos" da roupa sem invadir o fundo ou a pele.
+     */
+    expandMask: (mask: Uint8Array, width: number, height: number, imgData?: Uint8ClampedArray, tolerance: number = 30): Uint8Array => {
+        const newMask = new Uint8Array(mask); // Começa com a cópia do estado atual
+        
+        // Percorre a máscara procurando pixels já selecionados (255)
+        for (let i = 0; i < mask.length; i++) {
+            if (mask[i] === 255) {
+                // Tenta expandir para os 4 vizinhos
+                const x = i % width;
+                
+                const tryExpand = (targetIdx: number) => {
+                    // Se já estiver selecionado, ignora
+                    if (newMask[targetIdx] === 255) return; 
+                    
+                    if (imgData) {
+                        // SMART CHECK: Compara a cor do pixel original (i) com o vizinho (targetIdx)
+                        const r1 = imgData[targetIdx*4];
+                        const g1 = imgData[targetIdx*4+1];
+                        const b1 = imgData[targetIdx*4+2];
+                        
+                        const r2 = imgData[i*4];
+                        const g2 = imgData[i*4+1];
+                        const b2 = imgData[i*4+2];
+                        
+                        // Distância de cor (Manhattan simples para performance)
+                        const diff = Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
+                        
+                        // Se a diferença for pequena (cores parecidas), permite a expansão.
+                        // Se for grande (ex: roupa branca p/ fundo preto), bloqueia.
+                        if (diff <= tolerance * 3) {
+                            newMask[targetIdx] = 255;
+                        }
+                    } else {
+                        // MODO ESTRUTURAL (Sem imagem): Expande cegamente (para fechar buracos internos)
+                        newMask[targetIdx] = 255;
+                    }
+                };
+
+                // Checa vizinhos (Cima, Baixo, Esq, Dir)
+                if (x > 0) tryExpand(i - 1);
+                if (x < width - 1) tryExpand(i + 1);
+                if (i >= width) tryExpand(i - width);
+                if (i < mask.length - width) tryExpand(i + width);
+            }
+        }
+        return newMask;
+    },
+
+    /**
+     * CONTRAIR MÁSCARA (ERODE)
+     * Remove bordas para limpar halos.
+     */
+    contractMask: (mask: Uint8Array, width: number, height: number): Uint8Array => {
+        const newMask = new Uint8Array(mask.length);
+        for (let i = 0; i < mask.length; i++) {
+            if (mask[i] === 255) {
+                const x = i % width;
+                const l = (x > 0) ? mask[i - 1] : 0;
+                const r = (x < width - 1) ? mask[i + 1] : 0;
+                const t = (i >= width) ? mask[i - width] : 0;
+                const b = (i < mask.length - width) ? mask[i + width] : 0;
+                
+                // Só mantém se estiver cercado de pixels brancos (centro seguro)
+                if (l && r && t && b) {
+                    newMask[i] = 255;
+                } else {
+                    newMask[i] = 0; // Come as bordas
+                }
+            }
+        }
+        return newMask;
+    },
+
+    /**
+     * Refinamento Automático (Closing)
+     * Usado pela Varinha Mágica para fechar buracos internos automaticamente.
+     * Aqui usamos expansão cega (sem imgData) pois queremos fechar buracos independente da cor interna.
      */
     refineMask: (mask: Uint8Array, width: number, height: number, iterations: number = 2): Uint8Array => {
         let current = new Uint8Array(mask);
-        const buffer = new Uint8Array(mask.length);
-
-        // Função Helper: Dilatar (Expandir o branco)
-        const dilate = (src: Uint8Array, dst: Uint8Array) => {
-            for (let i = 0; i < src.length; i++) {
-                if (src[i] === 255) {
-                    dst[i] = 255;
-                    // Vizinhos (Cima, Baixo, Esquerda, Direita)
-                    const x = i % width;
-                    if (x > 0) dst[i - 1] = 255;
-                    if (x < width - 1) dst[i + 1] = 255;
-                    if (i >= width) dst[i - width] = 255;
-                    if (i < src.length - width) dst[i + width] = 255;
-                }
-            }
-        };
-
-        // Função Helper: Erodir (Comer o branco pelas bordas)
-        const erode = (src: Uint8Array, dst: Uint8Array) => {
-            for (let i = 0; i < src.length; i++) {
-                // Só mantém branco se o centro for branco E todos os vizinhos forem brancos
-                if (src[i] === 255) {
-                    const x = i % width;
-                    const l = (x > 0) ? src[i - 1] : 0;
-                    const r = (x < width - 1) ? src[i + 1] : 0;
-                    const t = (i >= width) ? src[i - width] : 0;
-                    const b = (i < src.length - width) ? src[i + width] : 0;
-                    
-                    if (l && r && t && b) {
-                        dst[i] = 255;
-                    } else {
-                        dst[i] = 0;
-                    }
-                } else {
-                    dst[i] = 0;
-                }
-            }
-        };
-
-        // APLICAÇÃO: CLOSING (Fecha buracos pequenos/médios da estampa)
-        // 1. Dilata X vezes
-        for(let k=0; k<iterations; k++) {
-            buffer.fill(0);
-            dilate(current, buffer);
-            current.set(buffer);
-        }
-        // 2. Erode X vezes (Volta ao tamanho original, mas com buracos preenchidos)
-        for(let k=0; k<iterations; k++) {
-            buffer.fill(0);
-            erode(current, buffer);
-            current.set(buffer);
-        }
-
+        // Dilata X vezes (Cego) -> Erode X vezes
+        for(let k=0; k<iterations; k++) current = RunwayEngine.expandMask(current, width, height);
+        for(let k=0; k<iterations; k++) current = RunwayEngine.contractMask(current, width, height);
         return current;
     },
 
     /**
-     * Varinha Mágica Otimizada com Auto-Heal
+     * Varinha Mágica Otimizada
      */
     magicWand: (
         ctx: CanvasRenderingContext2D, 
@@ -94,21 +120,18 @@ export const RunwayEngine = {
         
         const startX = Math.floor(x);
         const startY = Math.floor(y);
-        const startPos = (startY * width + startX) * 4;
         
         if (startX < 0 || startX >= width || startY < 0 || startY >= height) return resultMask;
 
+        const startPos = (startY * width + startX) * 4;
         const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
         const getLuma = (r: number, g: number, b: number) => 0.299*r + 0.587*g + 0.114*b;
         const luma0 = getLuma(r0, g0, b0);
         
         const stack: [number, number][] = [[startX, startY]];
-        
-        // Tolerância Dinâmica
         const lumaTolerance = params.tolerance * 1.8; 
         const chromaTolerance = params.tolerance * 0.7; 
 
-        // Passo 1: Seleção Bruta (Flood Fill)
         if (params.contiguous) {
             while (stack.length) {
                 const [cx, cy] = stack.pop()!;
@@ -141,10 +164,8 @@ export const RunwayEngine = {
             }
         }
 
-        // Passo 2: Auto-Heal (Morfologia) se estiver adicionando
-        // Isso fecha os "pixels sujos" dentro da estampa automaticamente
         if (params.mode === 'ADD') {
-            return RunwayEngine.refineMask(resultMask, width, height, 2); // 2 iterações fecha buracos pequenos/médios
+            return RunwayEngine.refineMask(resultMask, width, height, 2); 
         }
 
         return resultMask;
