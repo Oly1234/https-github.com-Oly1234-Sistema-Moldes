@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (ATUALIZADO)
+    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (ATUALIZADO & DIVERSIFICADO)
     if (action === 'FIND_WHITE_MODELS') {
         let searchTerm = prompt;
         
@@ -72,42 +72,60 @@ export default async function handler(req, res) {
             searchTerm = visualData.visualDescription || prompt || "Vestido Feminino"; 
         }
 
+        // Variadores visuais para garantir unicidade nas imagens (Evita duplicatas no Bing TBN)
+        const visualVariations = [
+            "studio lighting full body", "outdoor natural light", "catwalk runway", "street style candid",
+            "minimalist lookbook", "editorial high fashion", "close up fabric detail", "back view pose",
+            "side profile standing", "sitting pose elegant", "dynamic movement blur", "architectural background",
+            "blonde model", "brunette model", "curly hair", "short hair chic",
+            "luxury silk texture", "cotton linen texture", "summer vibe", "winter styling",
+            "mannequin ghost", "flat lay photography", "hanger shot", "detail macro",
+            "urban setting", "garden setting", "beach setting", "interior luxury"
+        ];
+
         // 2. Gerador de Links Otimizado para Mockups Brancos
-        const createModelLink = (source, type, urlBase, suffix, boost) => ({
-            source,
-            patternName: `Base: ${searchTerm}`, // Nome exibido
-            similarityScore: 90 + boost,
-            type,
-            linkType: 'SEARCH_QUERY',
-            url: `${urlBase}${encodeURIComponent(`white ${searchTerm} ${suffix}`)}`,
-            backupSearchTerm: `white ${searchTerm} ${suffix} model photography high resolution`,
-            imageUrl: null
-        });
+        const createModelLink = (source, type, urlBase, suffix, boost, index) => {
+            // Seleciona um variador baseado no índice para rotacionar estilos visualmente
+            const variation = visualVariations[index % visualVariations.length];
+            
+            return {
+                source,
+                patternName: `Base: ${searchTerm}`, // Nome exibido
+                similarityScore: 90 + boost,
+                type,
+                linkType: 'SEARCH_QUERY',
+                url: `${urlBase}${encodeURIComponent(`white ${searchTerm} ${suffix}`)}`,
+                // CRUCIAL: O termo de backup (usado para gerar a imagem) AGORA inclui o variador visual
+                // Isso força o Bing a retornar imagens diferentes para cada card.
+                backupSearchTerm: `white ${searchTerm} ${suffix} ${variation} high quality photo -drawing`,
+                imageUrl: null
+            };
+        };
 
         const queries = [];
+        let gIndex = 0;
         
-        // Geração de 50+ Variações (Estratégia de Permutação)
-        // Grupo A: Studio & Clean (Alta qualidade para mockup)
-        queries.push(createModelLink("Google Images", "STUDIO", "https://www.google.com/search?tbm=isch&q=", "model studio background", 5));
-        queries.push(createModelLink("Pinterest", "VIBE", "https://www.pinterest.com/search/pins/?q=", "fashion photography white dress", 5));
-        queries.push(createModelLink("Unsplash", "FREE", "https://unsplash.com/s/photos/", "white clothing model", 4));
-        queries.push(createModelLink("Pexels", "STOCK", "https://www.pexels.com/search/", "white dress fashion", 4));
+        // Grupo A: Fontes Diversas (4 variações)
+        queries.push(createModelLink("Google Images", "STUDIO", "https://www.google.com/search?tbm=isch&q=", "model studio", 5, gIndex++));
+        queries.push(createModelLink("Pinterest", "VIBE", "https://www.pinterest.com/search/pins/?q=", "fashion aesthetic", 5, gIndex++));
+        queries.push(createModelLink("Unsplash", "FREE", "https://unsplash.com/s/photos/", "clothing model", 4, gIndex++));
+        queries.push(createModelLink("Pexels", "STOCK", "https://www.pexels.com/search/", "dress fashion", 4, gIndex++));
         
-        // Variações de Termos para encher o Grid (10 em 10)
-        const styles = ["studio shot", "lookbook", "catwalk", "street style", "mannequin", "flat lay", "back view", "detail shot", "editorial", "minimalist"];
-        const modifiers = ["isolated", "high fashion", "white fabric", "mockup ready", "clean lighting"];
-        
-        styles.forEach((style, i) => {
-            queries.push(createModelLink("Ref. Visual " + (i+1), "STYLE", "https://www.google.com/search?tbm=isch&q=", `${style} white`, 3));
+        // Variações de Estilo (10)
+        const styles = ["studio", "lookbook", "catwalk", "street", "mannequin", "flatlay", "back view", "detail", "editorial", "minimal"];
+        styles.forEach((style) => {
+            queries.push(createModelLink(`Ref. ${style.toUpperCase()}`, "STYLE", "https://www.google.com/search?tbm=isch&q=", `${style} white`, 3, gIndex++));
         });
         
-        modifiers.forEach((mod, i) => {
-             queries.push(createModelLink("Mockup Base " + (i+1), "TECH", "https://www.pinterest.com/search/pins/?q=", `${mod}`, 3));
+        // Variações de Modificadores (5)
+        const modifiers = ["isolated", "luxury", "casual", "boho", "formal"];
+        modifiers.forEach((mod) => {
+             queries.push(createModelLink(`Ref. ${mod.toUpperCase()}`, "TECH", "https://www.pinterest.com/search/pins/?q=", `${mod}`, 3, gIndex++));
         });
 
-        // Preencher até 50 se necessário com variações compostas
+        // Preenchimento Massivo até 50 (Variando o sufixo numérico e o variador visual)
         while(queries.length < 50) {
-             queries.push(createModelLink("Global Search", "MIX", "https://www.google.com/search?tbm=isch&q=", `white ${searchTerm} fashion reference ${queries.length}`, 2));
+             queries.push(createModelLink("Global Find", "MIX", "https://www.google.com/search?tbm=isch&q=", `white ${searchTerm} reference ${queries.length}`, 2, gIndex++));
         }
 
         return res.status(200).json({ success: true, queries: queries, detectedStructure: searchTerm });
