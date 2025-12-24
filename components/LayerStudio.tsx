@@ -1,11 +1,11 @@
 
-// ... existing imports
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Layers, Trash2, Eye, EyeOff, Hand, Wand2, Brush, 
     Loader2, LayoutGrid, Eraser, Undo2, Brain, Target, 
     MoreHorizontal, Copy, MoveDown, Edit2, 
-    Plus, Minus, Maximize2, ArrowLeft, SlidersHorizontal, ArrowUp, ArrowDown, Target as TargetIcon
+    Plus, Minus, Maximize2, ArrowLeft, SlidersHorizontal, ArrowUp, ArrowDown, Target as TargetIcon,
+    Lock, Unlock, GripVertical, Check, Send
 } from 'lucide-react';
 import { ModuleLandingPage } from './Shared';
 import { LayerEnginePro, MaskSnapshot } from '../services/layerEnginePro';
@@ -85,10 +85,11 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     const isInteracting = useRef(false);
     const lastPointerPos = useRef({ x: 0, y: 0 });
     
-    // --- GESTURE REFS (PINCH ZOOM) ---
+    // --- GESTURE REFS (PINCH ZOOM & TOUCH LOGIC) ---
     const isZooming = useRef(false);
     const lastPinchDist = useRef(0);
     const lastPinchCenter = useRef({ x: 0, y: 0 });
+    const pendingTouchStart = useRef<{ x: number, y: number, event: React.PointerEvent } | null>(null);
 
     const fitImageToContainer = useCallback(() => {
         if (!containerRef.current || !originalImg) return;
@@ -114,7 +115,6 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const img = new Image();
         img.src = src;
         img.onload = () => {
-            // SAFETY: Downscale large images to max 2048px to prevent memory crashes on mobile
             const MAX_DIM = 2048;
             let w = img.naturalWidth;
             let h = img.naturalHeight;
@@ -122,25 +122,18 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
             if (w > MAX_DIM || h > MAX_DIM) {
                 needsResize = true;
-                if (w > h) {
-                    h = Math.round((h * MAX_DIM) / w);
-                    w = MAX_DIM;
-                } else {
-                    w = Math.round((w * MAX_DIM) / h);
-                    h = MAX_DIM;
-                }
+                if (w > h) { h = Math.round((h * MAX_DIM) / w); w = MAX_DIM; } 
+                else { w = Math.round((w * MAX_DIM) / h); h = MAX_DIM; }
             }
 
             const canvas = document.createElement('canvas');
-            canvas.width = w; 
-            canvas.height = h;
+            canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0, w, h);
             
             const optimizedData = ctx.getImageData(0, 0, w, h).data;
             const optimizedUrl = needsResize ? canvas.toDataURL('image/jpeg', 0.9) : src;
             
-            // Create a new image object if resized to ensure dimensions match
             const finalImg = new Image();
             finalImg.src = optimizedUrl;
             finalImg.onload = () => {
@@ -165,19 +158,13 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
     const pushUndoState = () => {
         if (!originalImg) return;
-        // If there's no active mask, we push a blank one to represent "Step 0"
-        const currentData = activeMask 
-            ? activeMask 
-            : new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
-            
+        const currentData = activeMask ? activeMask : new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
         setUndoStack(prev => LayerEnginePro.pushHistory(prev, currentData));
     };
 
     const handleUndo = () => {
         if (undoStack.length > 0) {
             const last = undoStack[undoStack.length - 1];
-            // If the popped stack is all zeros (empty), we can set activeMask to null or the zero array
-            // Optimization: check if it's practically empty
             setActiveMask(last.data); 
             setUndoStack(prev => prev.slice(0, -1));
         }
@@ -188,30 +175,44 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         setIsSemanticLoading(true);
         try {
             let minX = originalImg.naturalWidth, maxX = 0, minY = originalImg.naturalHeight, maxY = 0;
+            let sumX = 0, sumY = 0, count = 0;
             let hasPixels = false;
+            
+            // Analyze current mask to get BBox AND Centroid (Seed)
             for (let i = 0; i < activeMask.length; i++) {
                 if (activeMask[i] > 0) {
                     const x = i % originalImg.naturalWidth;
                     const y = (i / originalImg.naturalWidth) | 0;
                     if (x < minX) minX = x; if (x > maxX) maxX = x;
                     if (y < minY) minY = y; if (y > maxY) maxY = y;
+                    
+                    sumX += x; sumY += y; count++;
                     hasPixels = true;
                 }
             }
             if (!hasPixels) { setIsSemanticLoading(false); return; }
+
             const compressedDataUrl = await compressForAI(originalImg);
             const contextData = { bbox: { xmin: (minX / originalImg.naturalWidth) * 1000, xmax: (maxX / originalImg.naturalWidth) * 1000, ymin: (minY / originalImg.naturalHeight) * 1000, ymax: (maxY / originalImg.naturalHeight) * 1000 } };
+            
             const res = await fetch('/api/layer-studio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'SEMANTIC_SEGMENTATION', imageBase64: compressedDataUrl.split(',')[1], contextData }) });
             const data = await res.json();
+            
             if (data.bbox) {
                 const { ymin, xmin, ymax, xmax } = data.bbox;
                 const canvas = document.createElement('canvas');
                 canvas.width = originalImg.naturalWidth; canvas.height = originalImg.naturalHeight;
                 const ctx = canvas.getContext('2d')!; ctx.drawImage(originalImg, 0, 0);
-                const focalX = (xmin + xmax) / 2 * originalImg.naturalWidth / 1000;
-                const focalY = (ymin + ymax) / 2 * originalImg.naturalHeight / 1000;
-                const { suggested } = LayerEnginePro.magicWandPro(ctx, originalImg.naturalWidth, originalImg.naturalHeight, focalX, focalY, { tolerance: 75, contiguous: false, mode: 'ADD' });
+                
+                // CRITICAL FIX: Use the centroid of the USER'S selection as seed, not the AI BBox center.
+                // This ensures we sample the correct color/texture.
+                const seedX = count > 0 ? sumX / count : (xmin + xmax) / 2 * originalImg.naturalWidth / 1000;
+                const seedY = count > 0 ? sumY / count : (ymin + ymax) / 2 * originalImg.naturalHeight / 1000;
+
+                const { suggested } = LayerEnginePro.magicWandPro(ctx, originalImg.naturalWidth, originalImg.naturalHeight, seedX, seedY, { tolerance: 60, contiguous: false, mode: 'ADD' });
                 const w = originalImg.naturalWidth;
+                
+                // Filter mask by AI BBox
                 for(let i=0; i < suggested.length; i++) {
                     if (suggested[i] === 0) continue;
                     const ix = i % w, iy = (i / w) | 0;
@@ -257,13 +258,14 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         if (targetModule === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
     };
 
-    // --- TOUCH & POINTER EVENTS (Hybrid System) ---
+    // --- TOUCH & POINTER EVENTS (Robust Mobile Handling) ---
 
-    // Touch Handlers (Pinch Zoom)
     const handleTouchStart = (e: React.TouchEvent) => {
         if (e.touches.length === 2) {
             isZooming.current = true;
             isInteracting.current = false;
+            // Clear any pending touch starts to prevent drawing dots on zoom
+            pendingTouchStart.current = null;
             
             const dist = Math.hypot(
                 e.touches[0].clientX - e.touches[1].clientX,
@@ -279,13 +281,11 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2 && isZooming.current) {
-            e.preventDefault(); // Stop scrolling
-            
+            e.preventDefault(); 
             const dist = Math.hypot(
                 e.touches[0].clientX - e.touches[1].clientX,
                 e.touches[0].clientY - e.touches[1].clientY
             );
-            
             const center = {
                 x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
                 y: (e.touches[0].clientY + e.touches[1].clientY) / 2
@@ -296,15 +296,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                 const newK = Math.min(Math.max(0.05, view.k * scaleFactor), 20);
                 const dx = center.x - lastPinchCenter.current.x;
                 const dy = center.y - lastPinchCenter.current.y;
-
-                setView(prev => ({
-                    ...prev,
-                    k: newK,
-                    x: prev.x + dx,
-                    y: prev.y + dy
-                }));
+                setView(prev => ({ ...prev, k: newK, x: prev.x + dx, y: prev.y + dy }));
             }
-
             lastPinchDist.current = dist;
             lastPinchCenter.current = center;
         }
@@ -316,13 +309,10 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         }
     };
 
-    // Pointer Handlers (Drawing & Pan)
-    const handlePointerDown = (e: React.PointerEvent) => {
-        if (!originalImg || !originalData || isZooming.current) return;
-        
-        isInteracting.current = true;
-        lastPointerPos.current = { x: e.clientX, y: e.clientY };
-        const { x, y } = getPreciseCoords(e.clientX, e.clientY);
+    // Shared execution logic for drawing/tools
+    const executeToolAction = (clientX: number, clientY: number) => {
+        if (!originalImg || !originalData) return;
+        const { x, y } = getPreciseCoords(clientX, clientY);
         
         if (tool === 'WAND') {
             pushUndoState();
@@ -341,12 +331,41 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         }
     };
 
-    const handlePointerMove = (e: React.PointerEvent) => {
+    const handlePointerDown = (e: React.PointerEvent) => {
         if (!originalImg || !originalData || isZooming.current) return;
+        
+        // DEFER TOUCH ACTIONS to prevent zoom conflicts
+        if (e.pointerType === 'touch') {
+            pendingTouchStart.current = { x: e.clientX, y: e.clientY, event: e };
+            lastPointerPos.current = { x: e.clientX, y: e.clientY };
+            return;
+        }
+
+        isInteracting.current = true;
+        lastPointerPos.current = { x: e.clientX, y: e.clientY };
+        executeToolAction(e.clientX, e.clientY);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!originalImg || !originalData || isZooming.current) {
+            pendingTouchStart.current = null;
+            return;
+        }
         
         const { x, y } = getPreciseCoords(e.clientX, e.clientY);
         setMousePos({ x, y });
         
+        // Handle Pending Touch Start (if user moved finger enough to indicate a draw stroke, not a tap)
+        if (pendingTouchStart.current) {
+            const dist = Math.hypot(e.clientX - pendingTouchStart.current.x, e.clientY - pendingTouchStart.current.y);
+            if (dist > 5) { // Threshold to confirm it's a drag/draw
+                isInteracting.current = true;
+                // Execute the initial down action we skipped
+                executeToolAction(pendingTouchStart.current.x, pendingTouchStart.current.y);
+                pendingTouchStart.current = null;
+            }
+        }
+
         if (isInteracting.current) {
             if (tool === 'LASSO') setLassoPoints(prev => [...prev, {x, y}]);
             else if (tool === 'BRUSH' || tool === 'ERASER') {
@@ -362,12 +381,20 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
     };
 
-    const handlePointerUp = () => {
+    const handlePointerUp = (e: React.PointerEvent) => {
+        // If we had a pending touch start that didn't move enough (it was a TAP)
+        if (pendingTouchStart.current && !isZooming.current) {
+            executeToolAction(pendingTouchStart.current.x, pendingTouchStart.current.y);
+            pendingTouchStart.current = null;
+            // For LASSO/WAND, we are done. For BRUSH, it was a dot.
+        }
+
         if (!isInteracting.current || !originalImg || isZooming.current) return;
         isInteracting.current = false;
+        
         if (tool === 'LASSO' && lassoPoints.length > 3) {
-            pushUndoState();
             const currentMask = activeMask || new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
+            if (activeMask) pushUndoState();
             const intent = LayerEnginePro.detectLassoIntent(currentMask, originalImg.naturalWidth, originalImg.naturalHeight, lassoPoints);
             const nextMask = LayerEnginePro.createPolygonMask(originalImg.naturalWidth, originalImg.naturalHeight, lassoPoints, intent, currentMask);
             setActiveMask(nextMask);
@@ -506,13 +533,13 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             <div className="h-14 px-4 flex items-center justify-between gap-4 border-b border-white/5 bg-[#0a0a0a]">
                                 {(tool === 'BRUSH' || tool === 'ERASER') && (
                                     <div className="flex items-center gap-4 w-full">
-                                        <div className="flex-1"><MobileSlider icon={tool==='ERASER'?Eraser:Brush} value={tool==='ERASER'?brushParams.eraserSize:brushParams.size} onChange={v => setBrushParams(p=>({...p, [tool==='ERASER'?'eraserSize':'size']:v}))} min={5} max={400} /></div>
+                                        <div className="flex-1"><MobileSlider icon={tool==='ERASER'?Eraser:Brush} value={tool==='ERASER'?brushParams.eraserSize:brushParams.size} onChange={(v:any) => setBrushParams(p=>({...p, [tool==='ERASER'?'eraserSize':'size']:v}))} min={5} max={400} /></div>
                                         <button onClick={() => setBrushParams(p=>({...p, smart:!p.smart}))} className={`h-8 px-2.5 rounded-lg text-[9px] font-black uppercase flex items-center gap-1.5 border transition-all ${brushParams.smart ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-transparent text-gray-500'}`}><Brain size={12}/> Neural</button>
                                     </div>
                                 )}
                                 {tool === 'WAND' && (
                                     <div className="w-full flex items-center gap-4">
-                                        <div className="flex-1"><MobileSlider icon={Target} value={wandParams.tolerance} onChange={v => setWandParams(p=>({...p, tolerance:v}))} min={1} max={180} /></div>
+                                        <div className="flex-1"><MobileSlider icon={Target} value={wandParams.tolerance} onChange={(v:any) => setWandParams(p=>({...p, tolerance:v}))} min={1} max={180} /></div>
                                         <button onClick={() => setWandParams(p=>({...p, contiguous:!p.contiguous}))} className={`h-8 px-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${wandParams.contiguous ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-transparent text-gray-500'}`}>Contínuo</button>
                                     </div>
                                 )}
@@ -610,75 +637,84 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
     );
 };
 
-const MenuAction = ({ icon: Icon, label, onClick, danger }: any) => (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-white/5 active:scale-95 transition-all ${danger ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-gray-300'}`}>
-        <Icon size={24}/><span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
-    </button>
-);
-
 const ToolBtn = ({ icon: Icon, label, active, onClick }: any) => (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center h-full flex-1 transition-all ${active ? 'text-blue-500' : 'text-gray-600'}`}>
-        <div className={`p-2 rounded-xl mb-1 ${active ? 'bg-blue-500/10' : ''}`}><Icon size={22} strokeWidth={active ? 2.5 : 1.5} /></div>
-        <span className={`text-[8px] uppercase font-black tracking-tight ${active ? 'text-white' : 'text-gray-700'}`}>{label}</span>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center w-10 h-10 md:w-16 md:h-14 rounded-xl transition-all ${active ? 'text-blue-500' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}>
+        <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
+        {label && <span className="text-[9px] font-bold uppercase tracking-tight mt-1">{label}</span>}
     </button>
 );
 
-const MobileSlider = ({ label, icon: Icon, value, onChange, min, max }: any) => (
-    <div className="flex items-center gap-3 w-full">
-        {Icon && <Icon size={14} className="text-gray-500 shrink-0"/>}
-        <div className="flex-1 relative flex items-center">
-            <input type="range" min={min} max={max} value={value} onChange={e => onChange(parseInt(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
-        </div>
-        <span className="text-[10px] font-mono text-blue-500 min-w-[30px] text-right">{value}</span>
+const MobileSlider = ({ icon: Icon, value, onChange, min, max }: any) => (
+    <div className="flex items-center gap-3 bg-white/5 rounded-xl px-3 py-2 border border-white/10 h-full">
+        <Icon size={14} className="text-gray-400"/>
+        <input 
+            type="range" 
+            min={min} max={max} 
+            value={value} 
+            onChange={(e) => onChange(parseInt(e.target.value))} 
+            className="flex-1 h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none"
+        />
+        <span className="text-[9px] font-mono text-blue-400 w-8 text-right">{value}</span>
     </div>
 );
 
+const MenuAction = ({ icon: Icon, label, onClick, danger }: any) => (
+    <button onClick={onClick} className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all active:scale-95 ${danger ? 'bg-red-900/20 border-red-900/50 text-red-400' : 'bg-white/5 border-white/10 text-gray-300'}`}>
+        <Icon size={24} className="mb-2"/>
+        <span className="text-[10px] font-bold uppercase">{label}</span>
+    </button>
+);
+
 const LayerList = ({ layers, selectedIds, onSelect, onRename, onDelete, onVisibility, onReorder, editingLayerId, setEditingLayerId, onTransfer }: any) => {
-    const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-[#0a0a0a]">
-            <div className="p-5 flex items-center justify-between border-b border-white/5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-2"><LayoutGrid size={14}/> Camadas Nexus</span>
-                <span className="text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">{layers.length} ITENS</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar pb-32">
-                {[...layers].reverse().map((l: any, idx: number) => {
-                    const isSelected = selectedIds.includes(l.id);
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-2"><Layers size={14}/> Camadas ({layers.length})</h3>
+            <div className="space-y-1">
+                {[...layers].reverse().map((layer: any) => {
+                    const isSelected = selectedIds.includes(layer.id);
                     return (
-                        <div key={l.id} onClick={(e) => onSelect(l.id, e.ctrlKey || e.metaKey)} className={`p-3 rounded-2xl border transition-all flex items-center gap-4 relative cursor-pointer ${isSelected ? 'bg-blue-600/10 border-blue-500/50 shadow-lg scale-[1.02]' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
-                            <div className="w-12 h-12 bg-black rounded-xl border border-white/10 flex items-center justify-center p-0.5 overflow-hidden shrink-0 shadow-inner relative">
-                                <img src={l.src} className="max-w-full max-h-full object-contain" />
-                                {!l.visible && <div className="absolute inset-0 bg-red-900/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none"><EyeOff size={14} className="text-white"/></div>}
-                                <div className="absolute bottom-0 right-0 bg-black/80 text-[7px] font-black px-1 rounded-tl-md border-t border-l border-white/10 text-gray-400">#{layers.length - idx}</div>
+                        <div 
+                            key={layer.id}
+                            onClick={(e) => onSelect(layer.id, e.ctrlKey || e.metaKey)}
+                            className={`group flex items-center gap-2 p-2 rounded-lg border transition-all ${isSelected ? 'bg-blue-900/20 border-blue-500/50' : 'bg-transparent border-transparent hover:bg-white/5'}`}
+                        >
+                            <div className="flex flex-col gap-0.5">
+                                <button onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'UP'); }} className="text-gray-600 hover:text-white"><ArrowUp size={10}/></button>
+                                <button onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'DOWN'); }} className="text-gray-600 hover:text-white"><ArrowDown size={10}/></button>
+                            </div>
+                            <div className="w-10 h-10 bg-black/50 rounded overflow-hidden shrink-0 border border-white/10 relative">
+                                <img src={layer.src} className="w-full h-full object-contain" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                {editingLayerId === l.id ? (
-                                    <input autoFocus className="w-full bg-blue-900/30 border border-blue-500/50 rounded px-2 py-1 text-[11px] font-bold text-white outline-none" defaultValue={l.name} onBlur={(e) => { onRename(l.id, e.target.value); setEditingLayerId(null); }} onKeyDown={(e) => e.key==='Enter' && onRename(l.id, e.currentTarget.value)} />
+                                {editingLayerId === layer.id ? (
+                                    <input 
+                                        autoFocus
+                                        type="text" 
+                                        defaultValue={layer.name}
+                                        onBlur={(e) => { onRename(layer.id, e.target.value); setEditingLayerId(null); }}
+                                        onKeyDown={(e) => { if(e.key==='Enter') { onRename(layer.id, (e.target as HTMLInputElement).value); setEditingLayerId(null); } }}
+                                        className="w-full bg-black border border-blue-500 text-white text-xs px-1 py-0.5 rounded outline-none"
+                                    />
                                 ) : (
-                                    <div className="flex flex-col"><p className={`text-[11px] font-black truncate uppercase tracking-tight ${isSelected ? 'text-blue-400' : l.visible ? 'text-gray-200' : 'text-gray-600'}`}>{l.name}</p><span className="text-[8px] text-gray-600 font-mono tracking-tighter">REF_{l.id.substring(0, 8)}</span></div>
+                                    <div className="flex items-center gap-2" onDoubleClick={() => setEditingLayerId(layer.id)}>
+                                        <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{layer.name}</span>
+                                        <button onClick={() => setEditingLayerId(layer.id)} className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white"><Edit2 size={10}/></button>
+                                    </div>
                                 )}
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <div className="flex flex-col gap-0.5 mr-1">
-                                    <button onClick={(e) => { e.stopPropagation(); onReorder(l.id, 'UP'); }} className="p-1 hover:text-blue-400 text-gray-600"><ArrowUp size={12}/></button>
-                                    <button onClick={(e) => { e.stopPropagation(); onReorder(l.id, 'DOWN'); }} className="p-1 hover:text-blue-400 text-gray-600"><ArrowDown size={12}/></button>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <button onClick={(e) => { e.stopPropagation(); onVisibility(layer.id); }} className={`${layer.visible ? 'text-gray-400 hover:text-white' : 'text-gray-600'}`}>
+                                        {layer.visible ? <Eye size={10}/> : <EyeOff size={10}/>}
+                                    </button>
+                                    {layer.type !== 'BACKGROUND' && (
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(layer.id); }} className="text-gray-600 hover:text-red-400"><Trash2 size={10}/></button>
+                                    )}
+                                    <button onClick={(e) => { e.stopPropagation(); onTransfer(layer.id); }} className="text-gray-600 hover:text-green-400 ml-auto" title="Enviar para Mockup"><Send size={10}/></button>
                                 </div>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); onVisibility(l.id); }} className={`p-2 rounded-lg transition-colors cursor-pointer ${l.visible ? 'text-blue-400 bg-blue-400/5 hover:bg-blue-400/10' : 'text-gray-700 bg-black/20 hover:bg-black/30'}`}>{l.visible ? <Eye size={16}/> : <EyeOff size={16}/>}</button>
-                                <button onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === l.id ? null : l.id); }} className="p-2 text-gray-500 hover:text-white"><MoreHorizontal size={18}/></button>
                             </div>
-                            {menuOpenId === l.id && (
-                                <div className="absolute right-2 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-[300] p-1 animate-in fade-in slide-in-from-top-2">
-                                    <button onClick={(e)=>{e.stopPropagation(); setEditingLayerId(l.id); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Edit2 size={14}/> Renomear</button>
-                                    <button onClick={(e)=>{e.stopPropagation(); onTransfer(l.id); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-gray-300 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Layers size={14}/> Aplicar em Molde</button>
-                                    <div className="h-px bg-white/5 my-1"></div>
-                                    <button onClick={(e)=>{e.stopPropagation(); onDelete(l.id); setMenuOpenId(null);}} className="w-full flex items-center gap-3 px-3 py-2.5 text-[10px] font-bold text-red-400 hover:bg-red-600 hover:text-white rounded-xl transition-all"><Trash2 size={14}/> Excluir Permanente</button>
-                                </div>
-                            )}
                         </div>
                     );
                 })}
             </div>
-            {menuOpenId && <div className="fixed inset-0 z-[250]" onClick={() => setMenuOpenId(null)} />}
         </div>
     );
 };
