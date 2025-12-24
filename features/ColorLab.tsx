@@ -179,6 +179,7 @@ export const ColorLab: React.FC = () => {
     
     const isDragging = useRef(false);
     const lastPos = useRef({ x: 0, y: 0 });
+    const lastDistRef = useRef<number>(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -188,6 +189,21 @@ export const ColorLab: React.FC = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // --- AUTO FIT EFFECT ---
+    useEffect(() => {
+        if (originalDims && containerRef.current) {
+            const { w, h } = originalDims;
+            const container = containerRef.current.getBoundingClientRect();
+            // Calcula escala para caber com 90% do espaço
+            if (container.width && container.height) {
+                const scaleX = (container.width * 0.9) / w;
+                const scaleY = (container.height * 0.9) / h;
+                const k = Math.min(scaleX, scaleY);
+                setTransform({ k: k || 0.5, x: 0, y: 0 });
+            }
+        }
+    }, [originalDims]);
 
     // --- RENDERIZADOR COMPOSTO ---
     useEffect(() => {
@@ -346,6 +362,33 @@ export const ColorLab: React.FC = () => {
     const handlePointerUp = (e: React.PointerEvent) => { isDragging.current = false; e.currentTarget.releasePointerCapture(e.pointerId); };
     const resetView = () => setTransform({ k: 1, x: 0, y: 0 });
 
+    // --- MOBILE PINCH ZOOM HANDLERS ---
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            lastDistRef.current = dist;
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            if (lastDistRef.current > 0) {
+                const scaleFactor = dist / lastDistRef.current;
+                setTransform(p => ({ ...p, k: Math.max(0.1, Math.min(p.k * scaleFactor, 10)) }));
+            }
+            lastDistRef.current = dist;
+        }
+    };
+
     const groupedColors = useMemo(() => {
         const groups: Record<string, { color: PantoneColor, index: number }[]> = {};
         colors.forEach((c, i) => { const gName = c.group || "Geral"; if (!groups[gName]) groups[gName] = []; groups[gName].push({ color: c, index: i }); });
@@ -380,7 +423,16 @@ export const ColorLab: React.FC = () => {
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
                     {/* CANVAS AREA */}
                     <div className="flex-1 relative bg-[#080808] overflow-hidden flex flex-col">
-                        <div ref={containerRef} className="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing touch-none" onWheel={handleWheel} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
+                        <div 
+                            ref={containerRef} 
+                            className="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing touch-none" 
+                            onWheel={handleWheel} 
+                            onPointerDown={handlePointerDown} 
+                            onPointerMove={handlePointerMove} 
+                            onPointerUp={handlePointerUp}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                        >
                             <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
                             {isAnalyzing ? (
                                 <div className="text-center animate-pulse relative z-50">
@@ -388,7 +440,14 @@ export const ColorLab: React.FC = () => {
                                     <h3 className="text-xl font-bold text-white">{status}</h3>
                                 </div>
                             ) : (
-                                <div className="relative shadow-2xl transition-transform duration-75 ease-linear will-change-transform bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] bg-[#111]" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`, width: originalDims?.w, height: originalDims?.h }}>
+                                <div 
+                                    className="relative shadow-2xl transition-transform duration-75 ease-linear will-change-transform bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] bg-[#111] shrink-0" 
+                                    style={{ 
+                                        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`, 
+                                        width: originalDims?.w, 
+                                        height: originalDims?.h 
+                                    }}
+                                >
                                     <canvas ref={compositeCanvasRef} className="w-full h-full block" />
                                     {viewMode === 'SINGLE' && activeChannel !== null && <div className="absolute inset-0 border-4 border-blue-500/50 mix-blend-screen pointer-events-none"></div>}
                                 </div>
