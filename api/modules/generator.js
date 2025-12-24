@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
     // FIX: Usa a apiKey passada pelo argumento para evitar erro de credenciais
+    // Isso garante que o servidor use a chave validada em analyze.js
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
     // 1. Fidelidade Cromática de Estúdio
@@ -66,6 +67,21 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
         }
     }
 
+    // 4. Layout Intelligence
+    let layoutInstruction = "LAYOUT: Seamless Repeat Pattern (High continuity).";
+    if (layoutStyle === 'LENCO') {
+        layoutInstruction = `LAYOUT: SILK SCARF COMPOSITION (Square). 
+        - Structure: Engineered placement print with a distinct BORDER/FRAME and a CENTRAL MEDALLION or localized motif.
+        - Symmetry: Rotational or Reflectional symmetry typical of Hermès/Versace scarves.`;
+    } else if (layoutStyle === 'BARRADO') {
+        layoutInstruction = `LAYOUT: BORDER PRINT (Barrado). 
+        - Structure: Elements concentrated at the BOTTOM edge, fading up into negative space. 
+        - Horizontal Repeat: Seamless horizontally, but localized vertically.`;
+    } else if (layoutStyle === 'PAREO') {
+        layoutInstruction = `LAYOUT: PAREO / BEACH SARONG (Rectangular Panel).
+        - Structure: Large scale placement print. Frame style or Centralized Art.`;
+    }
+
     const FULL_PROMPT = `
     MASTER PRODUCTION DIRECTIVE: REPRODUCE THIS PRINT AS A TECHNICAL FASHION MASTERPIECE.
     REFERENCE DNA: ${prompt}.
@@ -73,18 +89,22 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     ${TECHNIQUE_PROMPT}
     ${artStyleInstruction}
     ${colorContext}
-    
-    LAYOUT: ${layoutStyle === 'PAREO' ? 'Rectangular Placement' : 'Seamless Repeat Pattern'}.
+    ${layoutInstruction}
     
     ${NEGATIVE_PROMPT}
     `;
+
+    // Define Aspect Ratio based on Layout
+    let aspectRatio = "1:1";
+    if (layoutStyle === 'PAREO') aspectRatio = "9:16";
+    if (layoutStyle === 'BARRADO') aspectRatio = "16:9";
 
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: { parts: [{ text: FULL_PROMPT }] },
             config: {
-                imageConfig: { aspectRatio: layoutStyle === 'PAREO' ? "9:16" : "1:1" }
+                imageConfig: { aspectRatio: aspectRatio }
             }
         });
 
