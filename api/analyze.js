@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (ATUALIZADO & DIVERSIFICADO)
+    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (GLOBAL DIVERSITY ENGINE v2)
     if (action === 'FIND_WHITE_MODELS') {
         let searchTerm = prompt;
         
@@ -72,60 +72,71 @@ export default async function handler(req, res) {
             searchTerm = visualData.visualDescription || prompt || "Vestido Feminino"; 
         }
 
-        // Variadores visuais para garantir unicidade nas imagens (Evita duplicatas no Bing TBN)
-        const visualVariations = [
-            "studio lighting full body", "outdoor natural light", "catwalk runway", "street style candid",
-            "minimalist lookbook", "editorial high fashion", "close up fabric detail", "back view pose",
-            "side profile standing", "sitting pose elegant", "dynamic movement blur", "architectural background",
-            "blonde model", "brunette model", "curly hair", "short hair chic",
-            "luxury silk texture", "cotton linen texture", "summer vibe", "winter styling",
-            "mannequin ghost", "flat lay photography", "hanger shot", "detail macro",
-            "urban setting", "garden setting", "beach setting", "interior luxury"
+        // Variadores de CONTEXTO (Onde a foto foi tirada)
+        const contexts = [
+            "studio white background", "street style paris", "runway fashion week", "beach sunlight", 
+            "urban concrete wall", "luxury hotel interior", "minimalist loft", "garden outdoor",
+            "red carpet event", "casual coffee shop", "backstage fashion", "editorial magazine shoot"
         ];
 
-        // 2. Gerador de Links Otimizado para Mockups Brancos
-        const createModelLink = (source, type, urlBase, suffix, boost, index) => {
-            // Seleciona um variador baseado no índice para rotacionar estilos visualmente
-            const variation = visualVariations[index % visualVariations.length];
-            
+        // Variadores de FONTE/ESTILO (Marcas, Revistas e Estilos) - Força diversidade de "mão" fotográfica
+        const sources = [
+            "Vogue editorial", "Zara catalog", "Revolve clothing", "Net-a-Porter style", 
+            "Pinterest aesthetic", "Instagram influencer", "H&M studio", "Shein lookbook", 
+            "Mango fashion", "ASOS design", "Elle magazine", "Harper's Bazaar",
+            "Reformation style", "Farm Rio vibe", "Massimo Dutti", "Anthropologie",
+            "Shutterstock photo", "Getty Images editorial", "Unsplash portrait", "Pexels fashion"
+        ];
+
+        // Variadores de DETALHE VISUAL (Para evitar a mesma pose)
+        const details = [
+            "full body shot", "close up detail", "walking motion", "sitting pose", 
+            "back view", "side profile", "laughing candid", "serious model pose",
+            "holding bag", "sunglasses", "architectural lighting", "shadow play"
+        ];
+
+        // 2. Gerador de Links Otimizado
+        const createModelLink = (sourceLabel, type, urlBase, visualQuery, index) => {
             return {
-                source,
-                patternName: `Base: ${searchTerm}`, // Nome exibido
-                similarityScore: 90 + boost,
+                source: sourceLabel,
+                patternName: `Base: ${searchTerm}`, 
+                similarityScore: 90,
                 type,
                 linkType: 'SEARCH_QUERY',
-                url: `${urlBase}${encodeURIComponent(`white ${searchTerm} ${suffix}`)}`,
-                // CRUCIAL: O termo de backup (usado para gerar a imagem) AGORA inclui o variador visual
-                // Isso força o Bing a retornar imagens diferentes para cada card.
-                backupSearchTerm: `white ${searchTerm} ${suffix} ${variation} high quality photo -drawing`,
+                url: `${urlBase}${encodeURIComponent(visualQuery)}`,
+                // O termo de backup é o que realmente busca a imagem no Bing Proxy
+                backupSearchTerm: visualQuery + " high resolution -drawing -sketch",
                 imageUrl: null
             };
         };
 
         const queries = [];
-        let gIndex = 0;
-        
-        // Grupo A: Fontes Diversas (4 variações)
-        queries.push(createModelLink("Google Images", "STUDIO", "https://www.google.com/search?tbm=isch&q=", "model studio", 5, gIndex++));
-        queries.push(createModelLink("Pinterest", "VIBE", "https://www.pinterest.com/search/pins/?q=", "fashion aesthetic", 5, gIndex++));
-        queries.push(createModelLink("Unsplash", "FREE", "https://unsplash.com/s/photos/", "clothing model", 4, gIndex++));
-        queries.push(createModelLink("Pexels", "STOCK", "https://www.pexels.com/search/", "dress fashion", 4, gIndex++));
-        
-        // Variações de Estilo (10)
-        const styles = ["studio", "lookbook", "catwalk", "street", "mannequin", "flatlay", "back view", "detail", "editorial", "minimal"];
-        styles.forEach((style) => {
-            queries.push(createModelLink(`Ref. ${style.toUpperCase()}`, "STYLE", "https://www.google.com/search?tbm=isch&q=", `${style} white`, 3, gIndex++));
-        });
-        
-        // Variações de Modificadores (5)
-        const modifiers = ["isolated", "luxury", "casual", "boho", "formal"];
-        modifiers.forEach((mod) => {
-             queries.push(createModelLink(`Ref. ${mod.toUpperCase()}`, "TECH", "https://www.pinterest.com/search/pins/?q=", `${mod}`, 3, gIndex++));
-        });
+        let globalIndex = 0;
 
-        // Preenchimento Massivo até 50 (Variando o sufixo numérico e o variador visual)
-        while(queries.length < 50) {
-             queries.push(createModelLink("Global Find", "MIX", "https://www.google.com/search?tbm=isch&q=", `white ${searchTerm} reference ${queries.length}`, 2, gIndex++));
+        // ESTRATÉGIA DE PERMUTAÇÃO ALEATÓRIA
+        // Gera 50+ combinações únicas
+        while (queries.length < 55) {
+            // Seleciona aleatoriamente um de cada categoria
+            const ctx = contexts[globalIndex % contexts.length];
+            const src = sources[globalIndex % sources.length];
+            const dtl = details[globalIndex % details.length];
+            
+            // Constrói uma query visual rica
+            // Ex: "White Dress Vogue editorial studio white background full body shot"
+            const uniqueQuery = `white ${searchTerm} ${src} ${ctx} ${dtl}`;
+            
+            // Define o rótulo da fonte (ex: "Vogue / Studio")
+            const sourceLabel = `${src.split(' ')[0]} • ${ctx.split(' ')[0]}`;
+            
+            queries.push(createModelLink(
+                sourceLabel,
+                "GLOBAL",
+                "https://www.google.com/search?tbm=isch&q=",
+                uniqueQuery,
+                globalIndex
+            ));
+            
+            globalIndex++;
         }
 
         return res.status(200).json({ success: true, queries: queries, detectedStructure: searchTerm });
