@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera, Scissors, FileText } from 'lucide-react';
+import { ScanLine, History, Shirt, Globe, Palette, LayoutGrid, Layers, Camera, Scissors, FileText, Cylinder } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface SidebarProps {
@@ -64,6 +64,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             tooltip="Lab de Imagem"
           />
           <NavItem 
+            icon={<Cylinder size={24} />} 
+            active={currentView === 'COLOR_LAB'} 
+            onClick={() => onViewChange('COLOR_LAB')}
+            tooltip="Separação de Cores"
+          />
+          <NavItem 
             icon={<FileText size={24} />} 
             active={currentView === 'TECHNICAL_HUB'} 
             onClick={() => onViewChange('TECHNICAL_HUB')}
@@ -103,10 +109,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <NavItem icon={<ScanLine size={20} />} active={currentView === 'SCANNER'} onClick={() => onViewChange('SCANNER')} isMobile />
           <NavItem icon={<Globe size={20} />} active={currentView === 'CREATOR'} onClick={() => onViewChange('CREATOR')} isMobile />
           <NavItem icon={<Palette size={20} />} active={currentView === 'ATELIER'} onClick={() => onViewChange('ATELIER')} isMobile />
-          <NavItem icon={<FileText size={20} />} active={currentView === 'TECHNICAL_HUB'} onClick={() => onViewChange('TECHNICAL_HUB')} isMobile />
+          <NavItem icon={<Layers size={20} />} active={currentView === 'LAYER_STUDIO'} onClick={() => onViewChange('LAYER_STUDIO')} isMobile />
+          <NavItem icon={<Cylinder size={20} />} active={currentView === 'COLOR_LAB'} onClick={() => onViewChange('COLOR_LAB')} isMobile />
           <div className="w-[1px] h-6 bg-vingi-700 flex-shrink-0"></div>
-          <NavItem icon={<Shirt size={20} />} active={currentView === 'MOCKUP'} onClick={() => onViewChange('MOCKUP')} isMobile />
-          <NavItem icon={<Camera size={20} />} active={currentView === 'RUNWAY'} onClick={() => onViewChange('RUNWAY')} isMobile />
+          <NavItem icon={<FileText size={20} />} active={currentView === 'TECHNICAL_HUB'} onClick={() => onViewChange('TECHNICAL_HUB')} isMobile />
       </div>
 
       {/* Bottom Actions (Desktop) */}

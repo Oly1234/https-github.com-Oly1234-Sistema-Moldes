@@ -16,6 +16,7 @@ import { HomePage } from './components/HomePage';
 import { LayerStudio } from './components/LayerStudio';
 import { VirtualRunway } from './features/VirtualRunway'; 
 import { TechnicalHub } from './features/TechnicalHub'; 
+import { ColorLab } from './features/ColorLab';
 import { ViewState } from './types';
 import { Sparkles, Check, Bot } from 'lucide-react';
 
@@ -66,7 +67,7 @@ export default function App() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    const APP_VERSION = '7.0-TECH-HUB';
+    const APP_VERSION = '7.0-COLOR-LAB';
     const checkUpdate = async () => {
         try {
             const storedVersion = localStorage.getItem('vingi_app_version');
@@ -123,6 +124,7 @@ export default function App() {
         <div style={{ display: view === 'CREATOR' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><PatternCreator onNavigateToAtelier={() => handleNavigate('ATELIER')} /></div>
         <div style={{ display: view === 'ATELIER' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><AtelierSystem onNavigateToMockup={() => handleNavigate('RUNWAY')} onNavigateToLayerStudio={() => handleNavigate('LAYER_STUDIO')}/></div>
         <div style={{ display: view === 'LAYER_STUDIO' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><LayerStudio onNavigateBack={() => handleNavigate('ATELIER')} onNavigateToMockup={() => handleNavigate('RUNWAY')}/></div>
+        <div style={{ display: view === 'COLOR_LAB' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><ColorLab /></div>
         <div style={{ display: view === 'TECHNICAL_HUB' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><TechnicalHub /></div>
         <div style={{ display: view === 'MOCKUP' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><MockupStudio /></div>
         <div style={{ display: view === 'RUNWAY' ? 'block' : 'none' }} className="w-full h-full pb-20 md:pb-0"><VirtualRunway onNavigateToCreator={() => handleNavigate('CREATOR')}/></div>

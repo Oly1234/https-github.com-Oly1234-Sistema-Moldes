@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, Layers, Camera, ArrowUpRight, Fingerprint, FileText } from 'lucide-react';
+import { ScanLine, Globe, Palette, Shirt, ArrowRight, History, Sparkles, Zap, Layers, Camera, ArrowUpRight, Fingerprint, FileText, Cylinder } from 'lucide-react';
 import { ViewState } from '../types';
 import { AIVoiceAgent } from './AIVoiceAgent';
 
@@ -120,6 +120,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                         colorClass="from-indigo-600 to-violet-500"
                         onClick={() => onNavigate('LAYER_STUDIO')}
                         stats="Editor"
+                    />
+
+                    <ModuleCard 
+                        title="Color Lab"
+                        description="Separação de cores para cilindros (rotativa) e fotolitos (K-Means AI)."
+                        icon={<Cylinder size={20} />}
+                        colorClass="from-cyan-600 to-blue-700"
+                        onClick={() => onNavigate('COLOR_LAB')}
+                        stats="Color Engine"
                     />
 
                     <ModuleCard 

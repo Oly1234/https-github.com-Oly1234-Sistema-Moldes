@@ -7,6 +7,7 @@ import { getLinkPreview } from './modules/scraper.js';
 import { generatePattern, generateTextureLayer } from './modules/generator.js'; 
 import { reconstructElement, transformElement } from './modules/departments/layerLab.js'; 
 import { generateHighResProductionFile } from './modules/departments/qualityControl.js';
+import { analyzeForSeparation } from './modules/separation.js';
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -35,7 +36,8 @@ export default async function handler(req, res) {
     if (!apiKey) return res.status(500).json({ error: "Chave de API não configurada no servidor." });
 
     if (action === 'VOICE_COMMAND') {
-        const ROUTER_PROMPT = `Map user command to view: HOME, SCANNER, CREATOR, ATELIER, LAYER_STUDIO, MOCKUP, RUNWAY, HISTORY, TECHNICAL_HUB.
+        const ROUTER_PROMPT = `Map user command to view: HOME, SCANNER, CREATOR, ATELIER, LAYER_STUDIO, MOCKUP, RUNWAY, TECHNICAL_HUB, COLOR_LAB.
+        Keywords for COLOR_LAB: separação, cores, cilindros, rotativa, estamparia, separation, channels.
         Keywords for TECHNICAL_HUB: ficha, técnica, hub, industrial, produção, especificação.`;
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: ROUTER_PROMPT + `\nCommand: ${commandText}` }] }] }) });
@@ -59,6 +61,11 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
+    if (action === 'ANALYZE_SEPARATION') {
+        const result = await analyzeForSeparation(apiKey, mainImageBase64, mainMimeType, cleanJson);
+        return res.status(200).json({ success: true, ...result });
+    }
+    
     // --- NOVO MOTOR DE BUSCA "WHITE HUNTER v2" (Source Rotation Strategy) ---
     if (action === 'FIND_WHITE_MODELS') {
         let structure = prompt;
@@ -73,7 +80,6 @@ export default async function handler(req, res) {
         if (!structure) structure = "Vestido Feminino";
 
         // 2. FONTES VISUAIS DISTINTAS (Rotation Sources)
-        // Isso força o buscador a olhar em lugares diferentes para evitar duplicatas
         const sources = [
             { name: "Zara", type: "Fast Fashion" },
             { name: "Vogue Runway", type: "Editorial" },
@@ -89,7 +95,6 @@ export default async function handler(req, res) {
             { name: "Farfetch", type: "Designer" }
         ];
 
-        // 3. Modificadores Visuais
         const styles = ["Minimalist", "Boho", "Elegant", "Casual", "Avant-Garde"];
         const contexts = ["white background studio", "full body lookbook", "fashion editorial", "runway walking"];
         const fabrics = ["Linen", "Cotton", "Silk", "Satin", "Viscose"];
@@ -97,20 +102,11 @@ export default async function handler(req, res) {
         const queries = [];
         let globalIndex = 0;
 
-        // 4. Geração Rotativa (Source x Style x Fabric)
-        // Garante que cada card tenha um 'backupSearchTerm' único contendo a FONTE específica
-        // O scraper usa esse termo para buscar a imagem. Se o termo for "Zara white dress", virá uma foto da Zara.
-        // Se for "Vogue white dress", virá outra.
-        
-        // Loop principal: Itera pelas fontes para garantir diversidade máxima
         for (const source of sources) {
-            // Escolhe estilo e tecido baseados no índice para variar
             const style = styles[globalIndex % styles.length];
             const context = contexts[globalIndex % contexts.length];
             const fabric = fabrics[globalIndex % fabrics.length];
             
-            // Query Visual para o Scraper (O segredo da diversidade)
-            // Ex: "Zara white dress linen minimalist full body"
             const uniqueVisualTerm = `${source.name} white ${structure} ${fabric} ${style} ${context} -print -pattern`.trim();
             
             queries.push({
@@ -119,16 +115,13 @@ export default async function handler(req, res) {
                 similarityScore: 90 + Math.random() * 10,
                 type: "GLOBAL",
                 linkType: 'SEARCH_QUERY',
-                // URL de busca genérica para o usuário clicar
                 url: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(uniqueVisualTerm)}`,
-                // TERMO CHAVE: Único por card, forçando imagem diferente
                 backupSearchTerm: uniqueVisualTerm,
                 imageUrl: null
             });
 
             globalIndex++;
             
-            // Adiciona variação para fontes grandes (Zara/Vogue)
             if (['Zara', 'Vogue Runway', 'Net-a-Porter'].includes(source.name)) {
                  const altTerm = `${source.name} white ${structure} close up detail texture`.trim();
                  queries.push({
@@ -144,7 +137,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // Embaralha levemente, mas mantém a estrutura de fontes variadas
         queries.sort(() => Math.random() - 0.5);
 
         return res.status(200).json({ success: true, queries: queries, detectedStructure: structure });
