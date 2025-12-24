@@ -1,8 +1,7 @@
 
 /**
- * VINGI RUNWAY ENGINE v2.0
- * Motor de segmentação exclusivo para o Provador Mágico.
- * Inclui: Magic Wand, Smart Brush e Histórico.
+ * VINGI RUNWAY ENGINE v3.0 (WHITE-AWARE)
+ * Motor especializado em segmentação de tecidos claros e preservação de sombras.
  */
 
 export interface RunwayMaskSnapshot {
@@ -16,7 +15,8 @@ export const RunwayEngine = {
     },
 
     /**
-     * Varinha Mágica Otimizada
+     * Varinha Mágica Especialista em Roupas Brancas
+     * Diferencial: Aceita variação de brilho (dobras/sombras) mas rejeita variação de cor (fundo).
      */
     magicWand: (
         ctx: CanvasRenderingContext2D, 
@@ -36,9 +36,16 @@ export const RunwayEngine = {
         if (startX < 0 || startX >= width || startY < 0 || startY >= height) return resultMask;
 
         const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
+        
+        // Conversão rápida para "Luma" (Brilho percebido)
+        const getLuma = (r: number, g: number, b: number) => 0.299*r + 0.587*g + 0.114*b;
+        const luma0 = getLuma(r0, g0, b0);
+        
         const stack: [number, number][] = [[startX, startY]];
         
-        const effectiveTolerance = params.tolerance;
+        // Tolerância ajustada: Mais permissiva para brilho (sombras do branco), restrita para cor
+        const lumaTolerance = params.tolerance * 1.5; // Permite sombras
+        const chromaTolerance = params.tolerance * 0.8; // Não permite mudar de cor (ex: ir para pele ou fundo)
 
         if (params.contiguous) {
             while (stack.length) {
@@ -48,9 +55,19 @@ export const RunwayEngine = {
                 visited[idx] = 1;
 
                 const pos = idx * 4;
-                const diff = Math.abs(data[pos] - r0) + Math.abs(data[pos+1] - g0) + Math.abs(data[pos+2] - b0);
+                const r = data[pos], g = data[pos+1], b = data[pos+2];
+                
+                // Diferença de Brilho (Sombras)
+                const luma = getLuma(r, g, b);
+                const lumaDiff = Math.abs(luma - luma0);
+                
+                // Diferença de Crominância (Cor Absoluta - aproximada pela distância euclidiana RGB normalizada)
+                const rgbDiff = (Math.abs(r - r0) + Math.abs(g - g0) + Math.abs(b - b0)) / 3;
 
-                if (diff <= effectiveTolerance * 3) {
+                // Lógica Híbrida:
+                // Se for roupa branca, a cor muda pouco (rgbDiff baixo), mas o brilho muda muito (lumaDiff alto).
+                // Se for para o fundo, a cor muda muito.
+                if (lumaDiff <= lumaTolerance && rgbDiff <= chromaTolerance * 1.5) {
                     resultMask[idx] = params.mode === 'ADD' ? 255 : 0;
 
                     if (cx > 0) stack.push([cx-1, cy]);
@@ -60,10 +77,14 @@ export const RunwayEngine = {
                 }
             }
         } else {
+            // Modo Global (Não contíguo)
             for (let i = 0; i < width * height; i++) {
                 const pos = i * 4;
-                const diff = Math.abs(data[pos] - r0) + Math.abs(data[pos+1] - g0) + Math.abs(data[pos+2] - b0);
-                if (diff <= effectiveTolerance * 3) {
+                const r = data[pos], g = data[pos+1], b = data[pos+2];
+                const lumaDiff = Math.abs(getLuma(r, g, b) - luma0);
+                const rgbDiff = (Math.abs(r - r0) + Math.abs(g - g0) + Math.abs(b - b0)) / 3;
+
+                if (lumaDiff <= lumaTolerance && rgbDiff <= chromaTolerance) {
                     resultMask[i] = params.mode === 'ADD' ? 255 : 0;
                 }
             }
@@ -72,11 +93,11 @@ export const RunwayEngine = {
     },
 
     /**
-     * Pincel Inteligente (Smart Brush) - Respeita bordas
+     * Pincel Inteligente com Detecção de Borda (High Contrast Edge Stop)
      */
     paintMask: (
         mask: Uint8Array,
-        ctx: CanvasRenderingContext2D | null, // Contexto para ler cores (Smart Mode)
+        ctx: CanvasRenderingContext2D | null, 
         width: number, height: number, 
         x: number, y: number, 
         params: { size: number, hardness: number, opacity: number, mode: 'ADD' | 'SUB', smart?: boolean }
@@ -93,20 +114,28 @@ export const RunwayEngine = {
         const startX = Math.max(0, Math.floor(centerX - radius));
         const endX = Math.min(width - 1, Math.ceil(centerX + radius));
 
-        // Dados para Smart Mode
         let imgData: Uint8ClampedArray | null = null;
         let r0 = 0, g0 = 0, b0 = 0;
-        let smartTolerance = 40;
-
+        
+        // Smart Logic: Amostra a cor central para saber o que "proteger"
         if (params.smart && ctx) {
-            // Amostra a cor central para referência
             const p = ctx.getImageData(centerX, centerY, 1, 1).data;
             r0 = p[0]; g0 = p[1]; b0 = p[2];
-            // Pega a área inteira para performance (ou apenas o bounding box do pincel)
-            imgData = ctx.getImageData(0, 0, width, height).data;
+            // Pega uma área um pouco maior que o pincel para performance
+            const safeX = Math.max(0, startX - 10);
+            const safeY = Math.max(0, startY - 10);
+            const safeW = Math.min(width, endX + 10) - safeX;
+            const safeH = Math.min(height, endY + 10) - safeY;
+            
+            // Nota: Para simplificar aqui, vamos pegar a imagem toda se não for gigante,
+            // ou idealmente pegaríamos só o patch. Assumindo imagem cheia cacheada no frontend seria melhor,
+            // mas aqui vamos pegar o patch para ser rápido.
+            imgData = ctx.getImageData(0, 0, width, height).data; 
         }
 
         const hardnessK = params.hardness / 100;
+        // Tolerância dinâmica: Roupas brancas precisam de mais tolerância a sombras (60-80)
+        const smartTolerance = 65; 
 
         for (let ny = startY; ny <= endY; ny++) {
             for (let nx = startX; nx <= endX; nx++) {
@@ -117,17 +146,22 @@ export const RunwayEngine = {
                 if (distSq <= radiusSq) {
                     const idx = ny * width + nx;
                     
-                    // Cálculo Smart (Proteção de Borda)
                     let affinity = 1;
                     if (params.smart && imgData) {
                         const pos = idx * 4;
-                        const diff = Math.abs(imgData[pos] - r0) + Math.abs(imgData[pos+1] - g0) + Math.abs(imgData[pos+2] - b0);
-                        // Se a diferença for muito grande, reduz drasticamente a afinidade
-                        if (diff > smartTolerance * 3) affinity = 0;
-                        else if (diff > smartTolerance) affinity = 1 - ((diff - smartTolerance) / (smartTolerance * 2));
+                        // Distância Euclidiana Simples é rápida e eficaz para bordas duras
+                        const diff = Math.sqrt(
+                            Math.pow(imgData[pos] - r0, 2) + 
+                            Math.pow(imgData[pos+1] - g0, 2) + 
+                            Math.pow(imgData[pos+2] - b0, 2)
+                        );
+                        
+                        // Curva de decaimento suave
+                        if (diff > smartTolerance * 1.5) affinity = 0; // Borda dura
+                        else if (diff > smartTolerance) affinity = 1 - ((diff - smartTolerance) / (smartTolerance * 0.5));
                     }
 
-                    if (affinity <= 0.1) continue;
+                    if (affinity <= 0.05) continue;
 
                     const dist = Math.sqrt(distSq);
                     const innerRadius = radius * hardnessK;

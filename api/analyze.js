@@ -34,8 +34,6 @@ export default async function handler(req, res) {
     const apiKey = rawKey ? rawKey.trim() : null;
     if (!apiKey) return res.status(500).json({ error: "Chave de API não configurada no servidor." });
 
-    // --- ROTEAMENTO ---
-
     if (action === 'VOICE_COMMAND') {
         const ROUTER_PROMPT = `Map user command to view: HOME, SCANNER, CREATOR, ATELIER, LAYER_STUDIO, MOCKUP, RUNWAY, HISTORY, TECHNICAL_HUB.
         Keywords for TECHNICAL_HUB: ficha, técnica, hub, industrial, produção, especificação.`;
@@ -61,54 +59,60 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (MARKETPLACE SIMULATION v3)
+    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (HIGH DEFINITION & PINTEREST MODE)
     if (action === 'FIND_WHITE_MODELS') {
         let searchTerm = prompt;
         
-        // 1. Se tiver imagem, analisa o DNA primeiro
         if (mainImageBase64) {
             const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType || 'image/jpeg', cleanJson, 'GARMENT');
             searchTerm = visualData.visualDescription || prompt || "Vestido Feminino"; 
         }
 
-        // 2. Estratégia de "Marcas Virtuais" e Contextos (Copiando lógica do Scanner)
-        // Isso força o buscador a tratar cada query como uma entidade diferente.
-        const marketSources = [
-            { name: "Zara Style", query: "Zara white dress lookbook" },
-            { name: "H&M Studio", query: "H&M white clothing studio" },
-            { name: "Vogue Editorial", query: "Vogue fashion photography white dress" },
-            { name: "Street Style", query: "Paris fashion week street style white" },
-            { name: "Revolve", query: "Revolve clothing white dress model" },
-            { name: "Net-a-Porter", query: "luxury fashion e-commerce white dress" },
-            { name: "Mango", query: "Mango fashion campaign white" },
-            { name: "Farm Rio Vibe", query: "Farm Rio white dress mockup" },
-            { name: "Minimalist", query: "COS stores minimalist white fashion" },
-            { name: "Boho Chic", query: "Free People white dress boho" },
-            { name: "Bridal Modern", query: "Modern bridal white dress simple" },
-            { name: "Runway", query: "Runway fashion show white collection" },
-            { name: "Photoshoot", query: "Professional model photoshoot white background" },
-            { name: "Urban", query: "Urban fashion white outfit concrete" },
-            { name: "Beach", query: "Beachwear white dress sunset" },
-            { name: "Linen", query: "Linen white clothing texture" },
-            { name: "Silk", query: "Silk white dress luxury" },
-            { name: "Cotton", query: "Cotton white dress casual" },
-            { name: "Pinterest", query: "Pinterest aesthetic white outfit" },
-            { name: "Instagram", query: "Instagram fashion influencer white" }
+        // Fontes de Alta Qualidade (Pinterest, Vogue, Street Style)
+        const sources = [
+            { name: "Pinterest", q: "Pinterest aesthetic white dress" },
+            { name: "Vogue", q: "Vogue runway white fashion" },
+            { name: "Zara", q: "Zara white clothing editorial" },
+            { name: "Street Style", q: "Paris street style white outfit" },
+            { name: "Revolve", q: "Revolve clothing white" },
+            { name: "Net-a-Porter", q: "luxury fashion white dress" },
+            { name: "Farm Rio", q: "Farm Rio white dress mockup" },
+            { name: "Wedding", q: "Modern bridal white dress simple" },
+            { name: "Minimal", q: "Minimalist fashion white linen" },
+            { name: "Boho", q: "Boho chic white dress beach" },
+            { name: "Studio", q: "Fashion studio photography white background" },
+            { name: "Urban", q: "Urban outfitters white dress" },
+            { name: "Linen", q: "White linen dress texture" },
+            { name: "Silk", q: "White silk dress slip" },
+            { name: "Cotton", q: "White cotton dress summer" }
         ];
 
-        const poses = ["standing", "sitting", "walking", "back view", "detail shot", "full body"];
+        // Modificadores de Variação (Para evitar repetições)
+        const variations = [
+            "full body shot high resolution",
+            "close up texture 4k",
+            "back view detail",
+            "walking motion blur",
+            "sitting pose elegant",
+            "sunlight shadow play",
+            "studio lighting soft",
+            "architectural background",
+            "natural light outdoor",
+            "isolated white background"
+        ];
 
-        const createModelLink = (sourceObj, pose, index) => {
-            const finalQuery = `${sourceObj.query} ${pose} ${searchTerm}`;
+        const createModelLink = (sourceObj, variation, index) => {
+            const finalQuery = `${sourceObj.q} ${variation} ${searchTerm}`.trim();
             return {
-                source: `${sourceObj.name} • ${pose}`, // Nome Visual
-                patternName: `Base: ${searchTerm}`, 
+                source: `${sourceObj.name}`,
+                patternName: `Modelo ${index + 1}: ${searchTerm}`, 
                 similarityScore: 90,
                 type: "GLOBAL",
                 linkType: 'SEARCH_QUERY',
-                url: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(finalQuery)}`,
-                // O termo de backup é o segredo: ele varia drasticamente para cada card
-                backupSearchTerm: `${finalQuery} high resolution photo -drawing`,
+                // URL de busca do Google Images simulando "Large Images"
+                url: `https://www.google.com/search?tbm=isch&tbs=isz:l&q=${encodeURIComponent(finalQuery)}`,
+                // O termo de backup inclui "high quality" para o proxy do Bing
+                backupSearchTerm: `${finalQuery} high quality photo -drawing -sketch`,
                 imageUrl: null
             };
         };
@@ -116,12 +120,13 @@ export default async function handler(req, res) {
         const queries = [];
         let globalIndex = 0;
 
-        // Gera 60 resultados únicos combinando Fontes x Poses
+        // Gera 50+ resultados combinando Fonte x Variação de forma Determinística mas Variada
         while (queries.length < 60) {
-            const source = marketSources[globalIndex % marketSources.length];
-            const pose = poses[Math.floor(globalIndex / marketSources.length) % poses.length] || "model";
+            const src = sources[globalIndex % sources.length];
+            // Usa o índice global para rotacionar variações, garantindo que Zara não tenha sempre a mesma pose
+            const vari = variations[(globalIndex + Math.floor(globalIndex/sources.length)) % variations.length];
             
-            queries.push(createModelLink(source, pose, globalIndex));
+            queries.push(createModelLink(src, vari, globalIndex));
             globalIndex++;
         }
 
@@ -149,7 +154,6 @@ export default async function handler(req, res) {
     }
 
     if (action === 'PREPARE_PRODUCTION') {
-        // Agora passamos o layoutStyle para garantir aspect ratio correto (ex: Pareô)
         const enhancedImage = await generateHighResProductionFile(apiKey, mainImageBase64, targetSize, technique, layoutStyle);
         return res.status(200).json({ success: true, image: enhancedImage });
     }
