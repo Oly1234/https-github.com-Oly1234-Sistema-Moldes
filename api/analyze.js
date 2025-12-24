@@ -61,14 +61,56 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
+    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (ATUALIZADO)
     if (action === 'FIND_WHITE_MODELS') {
-        let finalPrompt = prompt || "Vestido";
-        const MOCKUP_PROMPT = `Generate 30 search queries for "white solid color ${finalPrompt}" for virtual try-on.`;
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: MOCKUP_PROMPT }] }] }) });
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        return res.status(200).json({ success: true, queries: [finalPrompt + " white model"], detectedStructure: finalPrompt });
+        let searchTerm = prompt;
+        
+        // 1. Se tiver imagem, analisa o DNA primeiro para saber O QUE buscar
+        if (mainImageBase64) {
+            const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType || 'image/jpeg', cleanJson, 'GARMENT');
+            // Ex: "Vestido Longo Chemise"
+            searchTerm = visualData.visualDescription || prompt || "Vestido Feminino"; 
+        }
+
+        // 2. Gerador de Links Otimizado para Mockups Brancos
+        const createModelLink = (source, type, urlBase, suffix, boost) => ({
+            source,
+            patternName: `Base: ${searchTerm}`, // Nome exibido
+            similarityScore: 90 + boost,
+            type,
+            linkType: 'SEARCH_QUERY',
+            url: `${urlBase}${encodeURIComponent(`white ${searchTerm} ${suffix}`)}`,
+            backupSearchTerm: `white ${searchTerm} ${suffix} model photography high resolution`,
+            imageUrl: null
+        });
+
+        const queries = [];
+        
+        // Geração de 50+ Variações (Estratégia de Permutação)
+        // Grupo A: Studio & Clean (Alta qualidade para mockup)
+        queries.push(createModelLink("Google Images", "STUDIO", "https://www.google.com/search?tbm=isch&q=", "model studio background", 5));
+        queries.push(createModelLink("Pinterest", "VIBE", "https://www.pinterest.com/search/pins/?q=", "fashion photography white dress", 5));
+        queries.push(createModelLink("Unsplash", "FREE", "https://unsplash.com/s/photos/", "white clothing model", 4));
+        queries.push(createModelLink("Pexels", "STOCK", "https://www.pexels.com/search/", "white dress fashion", 4));
+        
+        // Variações de Termos para encher o Grid (10 em 10)
+        const styles = ["studio shot", "lookbook", "catwalk", "street style", "mannequin", "flat lay", "back view", "detail shot", "editorial", "minimalist"];
+        const modifiers = ["isolated", "high fashion", "white fabric", "mockup ready", "clean lighting"];
+        
+        styles.forEach((style, i) => {
+            queries.push(createModelLink("Ref. Visual " + (i+1), "STYLE", "https://www.google.com/search?tbm=isch&q=", `${style} white`, 3));
+        });
+        
+        modifiers.forEach((mod, i) => {
+             queries.push(createModelLink("Mockup Base " + (i+1), "TECH", "https://www.pinterest.com/search/pins/?q=", `${mod}`, 3));
+        });
+
+        // Preencher até 50 se necessário com variações compostas
+        while(queries.length < 50) {
+             queries.push(createModelLink("Global Search", "MIX", "https://www.google.com/search?tbm=isch&q=", `white ${searchTerm} fashion reference ${queries.length}`, 2));
+        }
+
+        return res.status(200).json({ success: true, queries: queries, detectedStructure: searchTerm });
     }
 
     if (action === 'ANALYZE_REFERENCE_FOR_PROMPT') {

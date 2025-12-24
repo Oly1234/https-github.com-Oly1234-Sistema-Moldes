@@ -1,7 +1,70 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus, MinusCircle, PlusCircle, Target, Move3d, Trash2, RefreshCcw } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus, MinusCircle, PlusCircle, Target, Move3d, Trash2, RefreshCcw, ImagePlus, User } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
+
+// --- HELPERS VISUAIS (Reutilizados do Scanner) ---
+const getBrandIcon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+
+// Componente de Card de Modelo (Simplificado do PatternVisualCard para o Runway)
+const RunwayModelCard: React.FC<{ match: any, onSelect: (img: string) => void }> = ({ match, onSelect }) => {
+    const [imgSrc, setImgSrc] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    
+    useEffect(() => {
+        let active = true;
+        const fetchImage = async () => {
+            try {
+                // Usa o Scraper (GET_LINK_PREVIEW) para pegar a imagem visual da busca
+                const res = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'GET_LINK_PREVIEW', 
+                        targetUrl: match.url,
+                        backupSearchTerm: match.backupSearchTerm,
+                        linkType: match.linkType
+                    })
+                });
+                const data = await res.json();
+                if (active && data.success && data.image) {
+                    setImgSrc(data.image);
+                }
+            } catch (e) { console.error(e); } finally { if (active) setLoading(false); }
+        };
+        fetchImage();
+        return () => { active = false; };
+    }, [match]);
+
+    return (
+        <div 
+            onClick={() => imgSrc && onSelect(imgSrc)}
+            className="aspect-[3/4] bg-white rounded-xl overflow-hidden cursor-pointer hover:ring-4 ring-vingi-500 transition-all shadow-md group relative border border-gray-200"
+        >
+            {loading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                    <Loader2 size={20} className="animate-spin text-gray-300"/>
+                </div>
+            ) : imgSrc ? (
+                <>
+                    <img src={imgSrc} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                    <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Check size={32} className="text-white mb-2"/>
+                        <span className="text-[10px] font-bold text-white uppercase tracking-widest bg-black/50 px-2 py-1 rounded">Selecionar Base</span>
+                    </div>
+                    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[8px] font-bold px-2 py-1 rounded backdrop-blur-md max-w-[90%] truncate">
+                        {match.source}
+                    </div>
+                </>
+            ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-400">
+                    <ImagePlus size={24} className="mb-1 opacity-50"/>
+                    <span className="text-[9px]">Sem Preview</span>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // --- HELPERS MATEMÁTICOS & VISÃO ---
 const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: number, startX: number, startY: number, tolerance: number) => {
@@ -37,11 +100,33 @@ const createMockupMask = (ctx: CanvasRenderingContext2D, width: number, height: 
     return { maskCanvas };
 };
 
+const compressImage = (base64Str: string, maxWidth = 1024): Promise<string> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+    });
+};
+
 export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ onNavigateToCreator }) => {
     const [step, setStep] = useState<'SEARCH_BASE' | 'STUDIO'>('SEARCH_BASE');
-    const [referenceImage, setReferenceImage] = useState<string | null>(null);
+    const [referenceImage, setReferenceImage] = useState<string | null>(null); // Imagem selecionada para o Canvas
+    const [searchReferenceImage, setSearchReferenceImage] = useState<string | null>(null); // Imagem de referência para a BUSCA
+    
     const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
-    const [whiteBases, setWhiteBases] = useState<string[]>([]);
+    
+    // Resultados da Busca
+    const [whiteModelMatches, setWhiteModelMatches] = useState<any[]>([]);
+    const [visibleCount, setVisibleCount] = useState(10);
     
     // Tools & Studio
     const canvasRef = useRef<HTMLCanvasElement>(null); 
@@ -65,12 +150,20 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
     const [showPatternModal, setShowPatternModal] = useState(false);
     const isDrawingRef = useRef(false);
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
+    const refFileInput = useRef<HTMLInputElement>(null);
 
     // --- RENDERER ---
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         const maskCanvas = maskCanvasRef.current;
         if (!canvas || !baseImgObj || !maskCanvas) return;
+        
+        // FIX: Ensure canvas dimensions match image natural size to prevent distortion
+        if (canvas.width !== baseImgObj.naturalWidth || canvas.height !== baseImgObj.naturalHeight) {
+            canvas.width = baseImgObj.naturalWidth;
+            canvas.height = baseImgObj.naturalHeight;
+        }
+
         const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
         const w = canvas.width, h = canvas.height;
         ctx.clearRect(0, 0, w, h);
@@ -109,39 +202,77 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             const img = new Image(); img.src = referenceImage; img.crossOrigin = "anonymous";
             img.onload = () => {
                 setBaseImgObj(img);
+                // FIX: Use natural dimensions
+                const w = img.naturalWidth;
+                const h = img.naturalHeight;
+
+                if (canvasRef.current) {
+                    canvasRef.current.width = w;
+                    canvasRef.current.height = h;
+                }
+
                 const mCanvas = document.createElement('canvas');
-                mCanvas.width = img.width; mCanvas.height = img.height;
+                mCanvas.width = w; mCanvas.height = h;
                 maskCanvasRef.current = mCanvas;
+                
                 if (containerRef.current) {
                     const rect = containerRef.current.getBoundingClientRect();
-                    setView({ x: 0, y: 0, k: Math.min(rect.width / img.width, rect.height / img.height) * 0.8 });
+                    const scale = Math.min(rect.width / w, rect.height / h) * 0.9;
+                    setView({ x: 0, y: 0, k: scale || 0.5 });
                 }
             };
         }
     }, [referenceImage]);
 
-    const performSearch = async () => {
-        if (!searchQuery.trim()) return;
+    // Handle Upload for White Model Search
+    const handleRefUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setSearchReferenceImage(ev.target?.result as string);
+                performSearch(ev.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const performSearch = async (imgBase64?: string) => {
+        if (!searchQuery.trim() && !imgBase64) return;
         setIsSearching(true);
+        setWhiteModelMatches([]);
+        setVisibleCount(10);
+        
         try {
-            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'FIND_WHITE_MODELS', prompt: searchQuery }) });
-            const data = await res.json();
-            if (data.success) {
-                const results = await Promise.all(data.queries.slice(0, 10).map(async (q: string) => {
-                    const r = await fetch('/api/analyze', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'GET_LINK_PREVIEW', backupSearchTerm: q, linkType: 'SEARCH_QUERY' }) });
-                    const d = await r.json(); return d.success ? d.image : null;
-                }));
-                setWhiteBases(results.filter(u => u));
+            let bodyPayload: any = { action: 'FIND_WHITE_MODELS', prompt: searchQuery };
+            
+            if (imgBase64) {
+                const compressed = await compressImage(imgBase64);
+                bodyPayload.mainImageBase64 = compressed.split(',')[1];
+                bodyPayload.mainMimeType = 'image/jpeg';
             }
-        } catch(e) { console.error(e); } finally { setIsSearching(false); }
+
+            const res = await fetch('/api/analyze', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(bodyPayload) 
+            });
+            const data = await res.json();
+            
+            if (data.success && data.queries) {
+                setWhiteModelMatches(data.queries);
+                if (data.detectedStructure && !searchQuery) setSearchQuery(data.detectedStructure);
+            }
+        } catch(e) { console.error(e); } 
+        finally { setIsSearching(false); }
     };
 
     const handlePointerDown = (e: React.PointerEvent) => {
         const rect = containerRef.current?.getBoundingClientRect();
-        if(!rect) return;
+        if(!rect || !baseImgObj) return;
         const cx = rect.width / 2; const cy = rect.height / 2;
-        const px = (e.clientX - rect.left - cx - view.x) / view.k + (baseImgObj?.width || 0) / 2;
-        const py = (e.clientY - rect.top - cy - view.y) / view.k + (baseImgObj?.height || 0) / 2;
+        const px = (e.clientX - rect.left - cx - view.x) / view.k + baseImgObj.naturalWidth / 2;
+        const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
         
         lastPointerPos.current = { x: e.clientX, y: e.clientY };
         if (activeTool === 'HAND' || e.button === 1) return;
@@ -172,22 +303,100 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             {step === 'SEARCH_BASE' ? (
                 <div className="flex-1 bg-[#f0f2f5] overflow-y-auto text-gray-800">
                     <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Busca de Base" />
-                    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 pb-24">
-                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
-                            <h3 className="text-xl font-black mb-4 uppercase tracking-wider">Selecione um Modelo de Base</h3>
-                            <div className="flex flex-col md:flex-row gap-4">
-                                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && performSearch()} placeholder="Ex: Vestido branco seda..." className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-vingi-500 font-bold" />
-                                <button onClick={performSearch} className="bg-vingi-900 text-white px-8 py-4 rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2">{isSearching ? <Loader2 className="animate-spin" size={20}/> : <Search size={20}/>} Buscar Modelos</button>
+                    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8 pb-24">
+                        
+                        {/* ÁREA DE BUSCA (INPUT + UPLOAD) */}
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 flex flex-col md:flex-row gap-8">
+                            <div className="flex-1 space-y-4">
+                                <h3 className="text-xl font-black uppercase tracking-wider text-gray-900">Encontre o Modelo Ideal</h3>
+                                <p className="text-sm text-gray-500">Faça o upload de uma referência para encontrarmos modelos usando roupas brancas com a mesma silhueta, ou descreva o que procura.</p>
+                                
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={searchQuery} 
+                                        onChange={e => setSearchQuery(e.target.value)} 
+                                        onKeyDown={e => e.key === 'Enter' && performSearch()} 
+                                        placeholder="Ex: Vestido longo seda, Camisa social..." 
+                                        className="flex-1 p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-vingi-500 font-bold" 
+                                    />
+                                    <button onClick={() => performSearch()} className="bg-vingi-900 text-white px-6 rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 min-w-[60px]">
+                                        <Search size={20}/>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="w-px bg-gray-100 hidden md:block"></div>
+
+                            <div className="flex-1">
+                                <input type="file" ref={refFileInput} onChange={handleRefUpload} accept="image/*" className="hidden" />
+                                <div 
+                                    onClick={() => refFileInput.current?.click()}
+                                    className="border-2 border-dashed border-gray-300 rounded-xl h-full min-h-[120px] flex flex-col items-center justify-center cursor-pointer hover:border-vingi-500 hover:bg-vingi-50 transition-all group relative overflow-hidden"
+                                >
+                                    {searchReferenceImage ? (
+                                        <>
+                                            <img src={searchReferenceImage} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                                            <div className="relative z-10 bg-white/90 px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                                                <RefreshCw size={14} className="text-vingi-600"/> <span className="text-xs font-bold text-gray-800">Trocar Referência</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="bg-gray-100 p-3 rounded-full mb-2 group-hover:scale-110 transition-transform"><ImagePlus size={24} className="text-gray-400 group-hover:text-vingi-500"/></div>
+                                            <p className="text-xs font-bold text-gray-500 uppercase">Carregar Referência (IA)</p>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {whiteBases.map((u, i) => (
-                                <div key={i} onClick={() => { setReferenceImage(u); setShowPatternModal(true); }} className="aspect-[3/4] bg-white rounded-xl overflow-hidden cursor-pointer hover:ring-4 ring-vingi-500 transition-all shadow-md group relative">
-                                    <img src={u} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Check size={32} className="text-white"/></div>
+
+                        {/* LOADER DE BUSCA */}
+                        {isSearching && (
+                            <div className="text-center py-12">
+                                <Loader2 size={48} className="animate-spin text-vingi-500 mx-auto mb-4"/>
+                                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">Analisando Silhueta & Buscando Modelos...</p>
+                            </div>
+                        )}
+
+                        {/* GRID DE RESULTADOS */}
+                        {!isSearching && whiteModelMatches.length > 0 && (
+                            <div className="animate-fade-in space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><User size={20}/> Modelos Disponíveis ({whiteModelMatches.length})</h3>
                                 </div>
-                            ))}
-                        </div>
+                                
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {whiteModelMatches.slice(0, visibleCount).map((match, i) => (
+                                        <RunwayModelCard 
+                                            key={i} 
+                                            match={match} 
+                                            onSelect={(img) => { 
+                                                setReferenceImage(img); 
+                                                setShowPatternModal(true); 
+                                                // Opcional: Rolar para o topo ou feedback
+                                            }} 
+                                        />
+                                    ))}
+                                </div>
+
+                                {visibleCount < whiteModelMatches.length && (
+                                    <div className="text-center pt-8">
+                                        <button onClick={() => setVisibleCount(p => p + 10)} className="px-8 py-3 bg-white border border-gray-300 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-400 text-gray-600 transition-all flex items-center gap-2 mx-auto">
+                                            <Plus size={16}/> Carregar Mais Modelos (+10)
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ESTADO VAZIO INICIAL */}
+                        {!isSearching && whiteModelMatches.length === 0 && (
+                            <div className="text-center py-12 opacity-50">
+                                <Shirt size={48} className="mx-auto mb-4 text-gray-300"/>
+                                <p className="text-sm text-gray-400">Faça uma busca para ver modelos disponíveis.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : (
@@ -204,7 +413,10 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                     </div>
                     
                     <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden touch-none" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => isDrawingRef.current = false}>
-                        <div className="relative shadow-2xl origin-center" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: baseImgObj?.width, height: baseImgObj?.height }}>
+                        {/* BACKGROUND GRID (ATELIER STYLE) */}
+                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                        
+                        <div className="relative shadow-2xl origin-center" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: baseImgObj?.naturalWidth, height: baseImgObj?.naturalHeight }}>
                             <canvas ref={canvasRef} className="block bg-white" />
                         </div>
 
