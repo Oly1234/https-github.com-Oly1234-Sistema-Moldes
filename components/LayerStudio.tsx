@@ -1,4 +1,5 @@
 
+// ... existing imports
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Layers, Trash2, Eye, EyeOff, Hand, Wand2, Brush, 
@@ -113,16 +114,42 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const img = new Image();
         img.src = src;
         img.onload = () => {
+            // SAFETY: Downscale large images to max 2048px to prevent memory crashes on mobile
+            const MAX_DIM = 2048;
+            let w = img.naturalWidth;
+            let h = img.naturalHeight;
+            let needsResize = false;
+
+            if (w > MAX_DIM || h > MAX_DIM) {
+                needsResize = true;
+                if (w > h) {
+                    h = Math.round((h * MAX_DIM) / w);
+                    w = MAX_DIM;
+                } else {
+                    w = Math.round((w * MAX_DIM) / h);
+                    h = MAX_DIM;
+                }
+            }
+
             const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth; 
-            canvas.height = img.naturalHeight;
+            canvas.width = w; 
+            canvas.height = h;
             const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0);
-            setOriginalData(ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight).data);
-            setOriginalImg(img);
-            setLayers([{ id: 'BG', type: 'BACKGROUND', name: 'Base', src, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: true, zIndex: 0, opacity: 1 }]);
-            setSelectedLayerIds(['BG']);
-            setIsProcessing(false);
+            ctx.drawImage(img, 0, 0, w, h);
+            
+            const optimizedData = ctx.getImageData(0, 0, w, h).data;
+            const optimizedUrl = needsResize ? canvas.toDataURL('image/jpeg', 0.9) : src;
+            
+            // Create a new image object if resized to ensure dimensions match
+            const finalImg = new Image();
+            finalImg.src = optimizedUrl;
+            finalImg.onload = () => {
+                setOriginalData(optimizedData);
+                setOriginalImg(finalImg);
+                setLayers([{ id: 'BG', type: 'BACKGROUND', name: 'Base', src: optimizedUrl, x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false, visible: true, locked: true, zIndex: 0, opacity: 1 }]);
+                setSelectedLayerIds(['BG']);
+                setIsProcessing(false);
+            };
         };
     };
 
@@ -134,6 +161,26 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const x = (clientX - centerX - view.x) / view.k + originalImg.naturalWidth / 2;
         const y = (clientY - centerY - view.y) / view.k + originalImg.naturalHeight / 2;
         return { x, y };
+    };
+
+    const pushUndoState = () => {
+        if (!originalImg) return;
+        // If there's no active mask, we push a blank one to represent "Step 0"
+        const currentData = activeMask 
+            ? activeMask 
+            : new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
+            
+        setUndoStack(prev => LayerEnginePro.pushHistory(prev, currentData));
+    };
+
+    const handleUndo = () => {
+        if (undoStack.length > 0) {
+            const last = undoStack[undoStack.length - 1];
+            // If the popped stack is all zeros (empty), we can set activeMask to null or the zero array
+            // Optimization: check if it's practically empty
+            setActiveMask(last.data); 
+            setUndoStack(prev => prev.slice(0, -1));
+        }
     };
 
     const handleSemanticIdentification = async () => {
@@ -278,7 +325,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         const { x, y } = getPreciseCoords(e.clientX, e.clientY);
         
         if (tool === 'WAND') {
-            if (activeMask) setUndoStack(prev => LayerEnginePro.pushHistory(prev, activeMask));
+            pushUndoState();
             const canvas = document.createElement('canvas'); 
             canvas.width = originalImg.naturalWidth; canvas.height = originalImg.naturalHeight;
             const ctx = canvas.getContext('2d')!; ctx.drawImage(originalImg, 0, 0);
@@ -287,7 +334,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         } else if (tool === 'LASSO') {
             setLassoPoints([{x, y}]);
         } else if (tool === 'BRUSH' || tool === 'ERASER') {
-            if (activeMask) setUndoStack(prev => LayerEnginePro.pushHistory(prev, activeMask));
+            pushUndoState();
             const m = tool === 'ERASER' ? 'SUB' : toolMode;
             const currentSize = tool === 'ERASER' ? brushParams.eraserSize : brushParams.size;
             setActiveMask(prev => LayerEnginePro.paintSmartMask(prev || new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight), originalData, originalImg.naturalWidth, originalImg.naturalHeight, x, y, { ...brushParams, size: currentSize, mode: m, smartEnabled: brushParams.smart }));
@@ -319,8 +366,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         if (!isInteracting.current || !originalImg || isZooming.current) return;
         isInteracting.current = false;
         if (tool === 'LASSO' && lassoPoints.length > 3) {
+            pushUndoState();
             const currentMask = activeMask || new Uint8Array(originalImg.naturalWidth * originalImg.naturalHeight);
-            if (activeMask) setUndoStack(prev => LayerEnginePro.pushHistory(prev, activeMask));
             const intent = LayerEnginePro.detectLassoIntent(currentMask, originalImg.naturalWidth, originalImg.naturalHeight, lassoPoints);
             const nextMask = LayerEnginePro.createPolygonMask(originalImg.naturalWidth, originalImg.naturalHeight, lassoPoints, intent, currentMask);
             setActiveMask(nextMask);
@@ -402,7 +449,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => { if(undoStack.length>0) { const last=undoStack[undoStack.length-1]; setActiveMask(last.data); setUndoStack(undoStack.slice(0,-1)); }}} disabled={undoStack.length===0} className="p-2 text-gray-500 disabled:opacity-20"><Undo2 size={18}/></button>
+                    <button onClick={handleUndo} disabled={undoStack.length===0} className="p-2 text-gray-500 hover:text-white disabled:opacity-20"><Undo2 size={18}/></button>
                     <button onClick={confirmExtraction} disabled={!activeMask} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${activeMask ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'bg-white/5 text-gray-700'}`}>Extrair</button>
                 </div>
             </div>

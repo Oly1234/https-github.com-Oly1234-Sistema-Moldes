@@ -10,8 +10,10 @@ export interface MaskSnapshot {
 }
 
 export const LayerEnginePro = {
+    // Reduced history size for mobile optimization
     pushHistory: (stack: MaskSnapshot[], currentMask: Uint8Array): MaskSnapshot[] => {
-        return [...stack, { data: new Uint8Array(currentMask), timestamp: Date.now() }].slice(-30);
+        // Limit to 10 undo steps to save memory on mobile devices handling 4K arrays
+        return [...stack, { data: new Uint8Array(currentMask), timestamp: Date.now() }].slice(-10);
     },
 
     /**
