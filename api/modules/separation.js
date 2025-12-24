@@ -1,22 +1,23 @@
 
 // api/modules/separation.js
-// DEPARTAMENTO: SEPARAÇÃO DE CORES (Pré-Impressão)
-// Responsabilidade: Identificar a paleta exata para indexação de cores (Cilindros).
+// DEPARTAMENTO: SEPARAÇÃO DE CORES (Pré-Impressão Avançada)
+// Responsabilidade: Identificar a paleta exata, agrupar semanticamente e definir estratégias de retícula.
 
 export const analyzeForSeparation = async (apiKey, imageBase64, mimeType, cleanJson) => {
     
     const SEPARATOR_PROMPT = `
-    ACT AS: Senior Pre-Press Technician for Rotary Screen Printing (Textile Industry).
+    ACT AS: Senior Textile Engraver & Color Separation Expert (Rotary Screen Printing).
     
-    TASK: Analyze the uploaded textile design and determine the OPTIMAL color separation palette.
+    TASK: Deconstruct this textile design into a logical set of printing cylinders (channels).
     
-    GOAL: Reduce the image to a limited number of "Spot Colors" (Cylinders) for printing.
+    OBJECTIVE: Create a sophisticated separation that allows for "Tone-on-Tone" effects, gradients, and fine details, avoiding a "hard plastic" look.
     
     INSTRUCTIONS:
-    1. Identify the high-contrast dominant colors used in the artwork.
-    2. Ignore anti-aliasing pixels or compression noise. Look for the "intended" solid colors.
-    3. Group similar shades into a single channel (e.g., light blue and mid-blue might be the same cylinder with halftime/reticula, OR separate cylinders if distinct).
-    4. Limit to maximum 12 colors (standard rotary machine limit), but prefer 6-8 if possible for cost efficiency.
+    1. **SEMANTIC GROUPING:** Group colors by what they represent (e.g., "Background", "Floral Elements", "Leaves/Foliage", "Outlines/Filetes", "Shadows").
+    2. **GRADIENT DETECTION:** Identify where a color interacts with another to create volume. 
+       - If you see a dark red shadow on a pink flower, separate the Pink as a SOLID BASE and the Red as a GRADIENT/RETICULA layer on top.
+       - If you see fine lines, classify them as "DETAIL" or "FILETE".
+    3. **QUANTITY:** Prefer MORE cylinders (up to 12) to allow flexible recombination later, rather than merging too early.
     
     OUTPUT JSON ONLY:
     {
@@ -24,18 +25,33 @@ export const analyzeForSeparation = async (apiKey, imageBase64, mimeType, cleanJ
         "complexity": "Low/Medium/High",
         "colors": [
             { 
-                "name": "Base Navy", 
-                "hex": "#000080", 
-                "code": "19-3923 TCX",
-                "role": "Background"
+                "group": "Fundo / Base",
+                "name": "Off-White Base", 
+                "hex": "#f5f5f0", 
+                "code": "11-0602 TCX",
+                "type": "SOLID" 
             },
             { 
-                "name": "Motif Red", 
-                "hex": "#FF0000", 
-                "code": "18-1662 TCX",
-                "role": "Primary Element"
+                "group": "Floral - Hibiscus",
+                "name": "Coral Midtone", 
+                "hex": "#ff7f50", 
+                "code": "16-1546 TCX",
+                "type": "SOLID"
+            },
+            { 
+                "group": "Floral - Hibiscus",
+                "name": "Deep Red Shadow", 
+                "hex": "#8b0000", 
+                "code": "19-1664 TCX",
+                "type": "GRADIENT" 
+            },
+            { 
+                "group": "Acabamento",
+                "name": "Filete Preto", 
+                "hex": "#000000", 
+                "code": "19-4005 TCX",
+                "type": "DETAIL"
             }
-            ...
         ]
     }
     `;

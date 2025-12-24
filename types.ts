@@ -103,6 +103,9 @@ export interface PantoneColor {
   hex: string;
   trendStatus?: string; // e.g. "COY 2023"
   role?: string;
+  // NOVOS CAMPOS PARA SEPARAÇÃO AVANÇADA
+  group?: string; // e.g. "Floral", "Fundo", "Filetes"
+  type?: 'SOLID' | 'GRADIENT' | 'DETAIL'; // Tipo de gravação
 }
 
 // TIPO PARA CAMADAS DO STUDIO
