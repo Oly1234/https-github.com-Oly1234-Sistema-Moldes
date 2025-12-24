@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus, MinusCircle, PlusCircle, Target, Move3d, Trash2, RefreshCcw, ImagePlus, User, SlidersHorizontal } from 'lucide-react';
+import { Camera, Search, Wand2, UploadCloud, Layers, Move, Eraser, Check, Loader2, Image as ImageIcon, Shirt, RefreshCw, X, Download, MousePointer2, ChevronRight, RotateCw, Sun, Droplets, Zap, Sliders, Sparkles, Brush, PenTool, Focus, ShieldCheck, Hand, ZoomIn, ZoomOut, RotateCcw, BrainCircuit, Maximize, Undo2, Grid, ScanLine, ArrowLeft, MoreHorizontal, CheckCircle2, Play, Plus, MinusCircle, PlusCircle, Target, Move3d, Trash2, RefreshCcw, ImagePlus, User, SlidersHorizontal, Brain } from 'lucide-react';
 import { ModuleHeader, ModuleLandingPage } from '../components/Shared';
 import { RunwayEngine, RunwayMaskSnapshot } from '../services/runwayEngine';
 
-// Componente de Card de Modelo (Simplificado do PatternVisualCard para o Runway)
+// Componente de Card de Modelo
 const RunwayModelCard: React.FC<{ match: any, onSelect: (img: string) => void }> = ({ match, onSelect }) => {
     const [imgSrc, setImgSrc] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -100,17 +100,22 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
     
     // Tools
     const [activeTool, setActiveTool] = useState<'WAND' | 'BRUSH' | 'ERASER' | 'HAND' | 'OFFSET'>('WAND');
-    const [wandTolerance, setWandTolerance] = useState(40);
-    const [brushSize, setBrushSize] = useState(30);
-    const [toolMode, setToolMode] = useState<'ADD' | 'SUB'>('ADD'); // Para varinha e brush
+    const [wandTolerance, setWandTolerance] = useState(30);
+    const [brushSize, setBrushSize] = useState(40);
+    const [toolMode, setToolMode] = useState<'ADD' | 'SUB'>('ADD'); 
+    const [smartBrush, setSmartBrush] = useState(true); // New Smart Toggle
     
-    // Pattern Transform
+    // Pattern Transform & Lighting
     const [view, setView] = useState({ x: 0, y: 0, k: 1 });
     const [patternScale, setPatternScale] = useState(0.5);
     const [patternRotation, setPatternRotation] = useState(0);
     const [patternOffset, setPatternOffset] = useState({ x: 0, y: 0 });
+    
+    // Lighting Lab
     const [edgeFeather, setEdgeFeather] = useState(1.5);
     const [shadowIntensity, setShadowIntensity] = useState(0.8);
+    const [structureIntensity, setStructureIntensity] = useState(0.5); // Highlight/Structure
+    const [brightness, setBrightness] = useState(1.0);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearching, setIsSearching] = useState(false);
@@ -120,12 +125,11 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
     const lastPointerPos = useRef<{x: number, y: number} | null>(null);
     const refFileInput = useRef<HTMLInputElement>(null);
 
-    // --- RENDERER ---
+    // --- RENDERER (Enhanced Lighting) ---
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas || !baseImgObj) return;
         
-        // 1. Setup Canvas Dimensions
         if (canvas.width !== baseImgObj.naturalWidth || canvas.height !== baseImgObj.naturalHeight) {
             canvas.width = baseImgObj.naturalWidth;
             canvas.height = baseImgObj.naturalHeight;
@@ -134,28 +138,22 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
         const w = canvas.width, h = canvas.height;
         
-        // 2. Draw Base Image
+        // 1. Base Layer
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(baseImgObj, 0, 0, w, h);
         
-        // 3. Draw Pattern if Mask exists
         if (patternImgObj && maskData) {
-            // Create a temporary canvas for the pattern
-            const tempC = document.createElement('canvas'); 
-            tempC.width = w; tempC.height = h;
+            const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h;
             const tCtx = tempC.getContext('2d')!;
             
-            // Draw Mask into Temp Canvas
+            // 2. Prepare Mask
             const maskImgData = tCtx.createImageData(w, h);
-            for(let i=0; i<maskData.length; i++) {
-                // Alpha channel = mask value
-                maskImgData.data[i*4 + 3] = maskData[i]; 
-            }
+            for(let i=0; i<maskData.length; i++) maskImgData.data[i*4 + 3] = maskData[i]; 
             tCtx.putImageData(maskImgData, 0, 0);
             
             if (edgeFeather > 0) tCtx.filter = `blur(${edgeFeather}px)`;
             
-            // Apply Pattern Composite
+            // 3. Pattern Application
             tCtx.globalCompositeOperation = 'source-in';
             tCtx.save();
             tCtx.translate(w/2 + patternOffset.x, h/2 + patternOffset.y);
@@ -165,19 +163,24 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             if (pat) { tCtx.fillStyle = pat; tCtx.fillRect(-w*8, -h*8, w*16, h*16); }
             tCtx.restore();
 
-            // Draw Pattern onto Main Canvas
-            ctx.save(); 
-            ctx.globalAlpha = 0.96; 
-            ctx.drawImage(tempC, 0, 0); 
-            ctx.restore();
+            // 4. Brightness Adjustment on Pattern
+            if (brightness !== 1.0) {
+                tCtx.filter = `brightness(${brightness})`;
+                tCtx.globalCompositeOperation = 'source-atop'; // Only affects existing pixels
+                tCtx.fillRect(0,0,w,h);
+                tCtx.filter = 'none';
+            }
+
+            // Draw Pattern
+            ctx.save(); ctx.drawImage(tempC, 0, 0); ctx.restore();
             
-            // 4. Shadow/Lighting Restoration (Multiply)
+            // 5. Advanced Lighting (Shadows & Structure)
+            // SHADOWS (Multiply)
             const shadowC = document.createElement('canvas'); shadowC.width = w; shadowC.height = h;
             const sCtx = shadowC.getContext('2d')!;
-            // Reuse mask for shadow bounds
             sCtx.putImageData(maskImgData, 0, 0); 
             sCtx.globalCompositeOperation = 'source-in';
-            sCtx.filter = `grayscale(100%) contrast(150%)`;
+            sCtx.filter = `grayscale(100%) contrast(120%)`; // Increase contrast for deeper shadows
             sCtx.drawImage(baseImgObj, 0, 0);
             
             ctx.save(); 
@@ -185,14 +188,30 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             ctx.globalAlpha = shadowIntensity; 
             ctx.drawImage(shadowC, 0, 0); 
             ctx.restore();
+
+            // STRUCTURE/HIGHLIGHTS (Soft Light / Screen) - Gives the "folds" pop
+            if (structureIntensity > 0) {
+                const structC = document.createElement('canvas'); structC.width = w; structC.height = h;
+                const stCtx = structC.getContext('2d')!;
+                stCtx.putImageData(maskImgData, 0, 0);
+                stCtx.globalCompositeOperation = 'source-in';
+                stCtx.filter = `grayscale(100%) high-pass(2px)`; // Simulated structural detail
+                stCtx.drawImage(baseImgObj, 0, 0);
+
+                ctx.save();
+                ctx.globalCompositeOperation = 'hard-light'; // Good for folds
+                ctx.globalAlpha = structureIntensity * 0.6;
+                ctx.drawImage(structC, 0, 0);
+                ctx.restore();
+            }
         }
 
-        // 5. Tool Overlays (Visual Feedback)
-        if (activeTool === 'WAND' && maskData) {
-            // Optional: Draw mask outline or highlight
+        // 6. Tool Cursor Overlay (Canvas Level)
+        if ((activeTool === 'BRUSH' || activeTool === 'ERASER') && lastPointerPos.current) {
+            // Can render cursor here if needed, but handled by pointer events usually
         }
         
-    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOffset, edgeFeather, shadowIntensity, maskData, activeTool]);
+    }, [baseImgObj, patternImgObj, patternScale, patternRotation, patternOffset, edgeFeather, shadowIntensity, structureIntensity, brightness, maskData]);
 
     useEffect(() => { if(step === 'STUDIO') requestAnimationFrame(renderCanvas); }, [renderCanvas, step, maskData]);
 
@@ -201,14 +220,10 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             const img = new Image(); img.src = referenceImage; img.crossOrigin = "anonymous";
             img.onload = () => {
                 setBaseImgObj(img);
-                setMaskData(new Uint8Array(img.naturalWidth * img.naturalHeight)); // Reset mask
+                setMaskData(new Uint8Array(img.naturalWidth * img.naturalHeight)); 
                 setUndoStack([]);
                 
-                if (canvasRef.current) {
-                    canvasRef.current.width = img.naturalWidth;
-                    canvasRef.current.height = img.naturalHeight;
-                }
-                
+                if (canvasRef.current) { canvasRef.current.width = img.naturalWidth; canvasRef.current.height = img.naturalHeight; }
                 if (containerRef.current) {
                     const rect = containerRef.current.getBoundingClientRect();
                     const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight) * 0.9;
@@ -236,23 +251,15 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         setIsSearching(true);
         setWhiteModelMatches([]);
         setVisibleCount(10);
-        
         try {
             let bodyPayload: any = { action: 'FIND_WHITE_MODELS', prompt: searchQuery };
-            
             if (imgBase64) {
                 const compressed = await compressImage(imgBase64);
                 bodyPayload.mainImageBase64 = compressed.split(',')[1];
                 bodyPayload.mainMimeType = 'image/jpeg';
             }
-
-            const res = await fetch('/api/analyze', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(bodyPayload) 
-            });
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyPayload) });
             const data = await res.json();
-            
             if (data.success && data.queries) {
                 setWhiteModelMatches(data.queries);
                 if (data.detectedStructure && !searchQuery) setSearchQuery(data.detectedStructure);
@@ -265,7 +272,6 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         const rect = containerRef.current?.getBoundingClientRect();
         if(!rect || !baseImgObj) return;
         
-        // Calculate coords relative to image
         const cx = rect.width / 2; const cy = rect.height / 2;
         const px = (e.clientX - rect.left - cx - view.x) / view.k + baseImgObj.naturalWidth / 2;
         const py = (e.clientY - rect.top - cy - view.y) / view.k + baseImgObj.naturalHeight / 2;
@@ -275,7 +281,6 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
 
         if (activeTool === 'HAND' || e.button === 1) return;
         
-        // Save history before modifying
         if (maskData) setUndoStack(prev => RunwayEngine.pushHistory(prev, maskData));
 
         const ctx = canvasRef.current!.getContext('2d')!;
@@ -291,9 +296,10 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             const mode = activeTool === 'ERASER' ? 'SUB' : toolMode;
             const newMask = RunwayEngine.paintMask(
                 maskData || new Uint8Array(baseImgObj.naturalWidth * baseImgObj.naturalHeight),
+                smartBrush ? ctx : null, // Pass context ONLY if smart brush is on
                 baseImgObj.naturalWidth, baseImgObj.naturalHeight,
                 px, py,
-                { size: brushSize, hardness: 80, opacity: 100, mode }
+                { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush }
             );
             setMaskData(newMask);
         }
@@ -323,12 +329,13 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
             setPatternOffset(p => ({ x: p.x + dx, y: p.y + dy }));
         } else if (activeTool === 'BRUSH' || activeTool === 'ERASER') {
              const mode = activeTool === 'ERASER' ? 'SUB' : toolMode;
-             // Continuous painting
+             const ctx = canvasRef.current!.getContext('2d')!;
              setMaskData(prev => RunwayEngine.paintMask(
                 prev!,
+                smartBrush ? ctx : null,
                 baseImgObj.naturalWidth, baseImgObj.naturalHeight,
                 px, py,
-                { size: brushSize, hardness: 80, opacity: 100, mode }
+                { size: brushSize, hardness: 80, opacity: 100, mode, smart: smartBrush }
             ));
         }
         
@@ -343,13 +350,22 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
         }
     };
 
+    // --- CURSOR STYLE ---
+    const getCursorStyle = () => {
+        if (activeTool === 'HAND') return 'cursor-grab active:cursor-grabbing';
+        if (activeTool === 'WAND') return 'cursor-crosshair';
+        if (activeTool === 'BRUSH' || activeTool === 'ERASER') return 'cursor-none'; // Hide default cursor for custom brush
+        if (activeTool === 'OFFSET') return 'cursor-move';
+        return 'cursor-default';
+    };
+
     return (
         <div className="flex flex-col h-full bg-[#080808] text-white overflow-hidden font-sans">
             {step === 'SEARCH_BASE' ? (
                 <div className="flex-1 bg-[#f0f2f5] overflow-y-auto text-gray-800">
                     <ModuleHeader icon={Camera} title="Provador Mágico" subtitle="Busca Global" />
                     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8 pb-24">
-                        {/* SEARCH INTERFACE (SAME AS BEFORE) */}
+                        {/* SEARCH INTERFACE */}
                         <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 flex flex-col md:flex-row gap-8">
                             <div className="flex-1 space-y-4">
                                 <h3 className="text-xl font-black uppercase tracking-wider text-gray-900">Encontre o Modelo Ideal</h3>
@@ -380,7 +396,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
 
                         {/* GRID DE RESULTADOS */}
                         {isSearching && (
-                            <div className="text-center py-12"><Loader2 size={48} className="animate-spin text-vingi-500 mx-auto mb-4"/><p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">Varrendo Fontes Globais (Vogue, Pinterest, Zara...)</p></div>
+                            <div className="text-center py-12"><Loader2 size={48} className="animate-spin text-vingi-500 mx-auto mb-4"/><p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">Simulando Marketplaces (Zara, Vogue, Street...)</p></div>
                         )}
                         {!isSearching && whiteModelMatches.length > 0 && (
                             <div className="animate-fade-in space-y-6">
@@ -411,18 +427,33 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                     </div>
                     
                     {/* CANVAS AREA */}
-                    <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden touch-none" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => isDrawingRef.current = false} onMouseLeave={() => isDrawingRef.current = false}>
+                    <div ref={containerRef} className={`flex-1 relative flex items-center justify-center overflow-hidden touch-none ${getCursorStyle()}`} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => isDrawingRef.current = false} onMouseLeave={() => isDrawingRef.current = false}>
                         {/* BACKGROUND GRID */}
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
                         <div className="relative shadow-2xl origin-center" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, width: baseImgObj?.naturalWidth, height: baseImgObj?.naturalHeight }}>
                             <canvas ref={canvasRef} className="block bg-white" />
                         </div>
+                        
+                        {/* Custom Brush Cursor */}
+                        {(activeTool === 'BRUSH' || activeTool === 'ERASER') && (
+                            <div 
+                                className="pointer-events-none fixed z-[9999] rounded-full border border-white mix-blend-difference" 
+                                style={{ 
+                                    width: brushSize * view.k, 
+                                    height: brushSize * view.k, 
+                                    left: lastPointerPos.current?.x, 
+                                    top: lastPointerPos.current?.y,
+                                    transform: 'translate(-50%, -50%)',
+                                    display: isDrawingRef.current || (lastPointerPos.current?.x) ? 'block' : 'none'
+                                }}
+                            />
+                        )}
                     </div>
 
                     {/* TOOL SETTINGS PANEL (LAYER STUDIO STYLE) */}
                     <div className="bg-[#0a0a0a] border-t border-white/10 z-[150] shadow-2xl flex flex-col shrink-0">
                         {/* Slider Controls */}
-                        <div className="h-14 px-4 flex items-center justify-between gap-4 border-b border-white/5 bg-[#080808]">
+                        <div className="h-16 px-4 flex items-center justify-between gap-4 border-b border-white/5 bg-[#080808]">
                             {activeTool === 'WAND' && (
                                 <div className="flex items-center gap-4 w-full">
                                     <div className="flex-1">
@@ -442,12 +473,23 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                                         <div className="flex justify-between items-center mb-1"><span className="text-[9px] font-bold text-gray-400 uppercase">Tamanho</span><span className="text-[9px] font-mono text-blue-400">{brushSize}px</span></div>
                                         <input type="range" min="5" max="200" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
                                     </div>
+                                    <button onClick={() => setSmartBrush(!smartBrush)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${smartBrush ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-white/5 border-transparent text-gray-500'}`}>
+                                        <Brain size={16}/> <span className="text-[9px] font-bold uppercase hidden md:inline">Smart</span>
+                                    </button>
                                 </div>
                             )}
                             {activeTool === 'OFFSET' && (
                                 <div className="flex items-center gap-4 w-full">
                                     <div className="flex-1">
-                                        <div className="flex justify-between items-center mb-1"><span className="text-[9px] font-bold text-gray-400 uppercase">Escala Estampa</span><span className="text-[9px] font-mono text-blue-400">{Math.round(patternScale*100)}%</span></div>
+                                        <div className="flex justify-between items-center mb-1"><span className="text-[9px] font-bold text-gray-400 uppercase">Sombra</span><span className="text-[9px] font-mono text-blue-400">{Math.round(shadowIntensity*100)}%</span></div>
+                                        <input type="range" min="0" max="1" step="0.1" value={shadowIntensity} onChange={(e) => setShadowIntensity(parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1"><span className="text-[9px] font-bold text-gray-400 uppercase">Estrutura</span><span className="text-[9px] font-mono text-blue-400">{Math.round(structureIntensity*100)}%</span></div>
+                                        <input type="range" min="0" max="1" step="0.1" value={structureIntensity} onChange={(e) => setStructureIntensity(parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
+                                    </div>
+                                    <div className="flex-1 hidden md:block">
+                                        <div className="flex justify-between items-center mb-1"><span className="text-[9px] font-bold text-gray-400 uppercase">Escala</span><span className="text-[9px] font-mono text-blue-400">{Math.round(patternScale*100)}%</span></div>
                                         <input type="range" min="0.1" max="2" step="0.05" value={patternScale} onChange={(e) => setPatternScale(parseFloat(e.target.value))} className="w-full h-1 bg-white/10 rounded-full appearance-none accent-blue-500 outline-none" />
                                     </div>
                                 </div>
@@ -461,7 +503,7 @@ export const VirtualRunway: React.FC<{ onNavigateToCreator: () => void }> = ({ o
                             <ToolBtn icon={Brush} label="Pincel" active={activeTool==='BRUSH'} onClick={() => setActiveTool('BRUSH')} />
                             <ToolBtn icon={Eraser} label="Apagar" active={activeTool==='ERASER'} onClick={() => setActiveTool('ERASER')} />
                             <div className="w-px h-8 bg-white/10 mx-1"></div>
-                            <ToolBtn icon={Move3d} label="Ajustar" active={activeTool==='OFFSET'} onClick={() => setActiveTool('OFFSET')} />
+                            <ToolBtn icon={SlidersHorizontal} label="Luz/Cor" active={activeTool==='OFFSET'} onClick={() => setActiveTool('OFFSET')} />
                             <ToolBtn icon={RefreshCcw} label="Estampa" onClick={() => setShowPatternModal(true)} />
                         </div>
                     </div>

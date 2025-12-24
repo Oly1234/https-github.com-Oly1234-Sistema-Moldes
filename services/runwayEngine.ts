@@ -1,9 +1,8 @@
 
 /**
- * VINGI RUNWAY ENGINE v1.0
+ * VINGI RUNWAY ENGINE v2.0
  * Motor de segmentação exclusivo para o Provador Mágico.
- * Foco: Detecção de silhuetas de vestuário e máscaras de alta precisão.
- * ISOLADO DO LAYER STUDIO PARA SEGURANÇA.
+ * Inclui: Magic Wand, Smart Brush e Histórico.
  */
 
 export interface RunwayMaskSnapshot {
@@ -17,7 +16,7 @@ export const RunwayEngine = {
     },
 
     /**
-     * Varinha Mágica (Magic Wand) - Otimizada para Tecidos Brancos
+     * Varinha Mágica Otimizada
      */
     magicWand: (
         ctx: CanvasRenderingContext2D, 
@@ -27,7 +26,6 @@ export const RunwayEngine = {
     ) => {
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
-        // Se já existe máscara, clonamos. Se não, cria nova zerada.
         const resultMask = params.existingMask ? new Uint8Array(params.existingMask) : new Uint8Array(width * height);
         const visited = new Uint8Array(width * height);
         
@@ -40,7 +38,6 @@ export const RunwayEngine = {
         const r0 = data[startPos], g0 = data[startPos+1], b0 = data[startPos+2];
         const stack: [number, number][] = [[startX, startY]];
         
-        // Ajuste de tolerância para brancos (que tem pouco contraste)
         const effectiveTolerance = params.tolerance;
 
         if (params.contiguous) {
@@ -51,10 +48,9 @@ export const RunwayEngine = {
                 visited[idx] = 1;
 
                 const pos = idx * 4;
-                // Diferença Euclidiana simples para performance
                 const diff = Math.abs(data[pos] - r0) + Math.abs(data[pos+1] - g0) + Math.abs(data[pos+2] - b0);
 
-                if (diff <= effectiveTolerance * 3) { // 3 canais (R+G+B)
+                if (diff <= effectiveTolerance * 3) {
                     resultMask[idx] = params.mode === 'ADD' ? 255 : 0;
 
                     if (cx > 0) stack.push([cx-1, cy]);
@@ -64,7 +60,6 @@ export const RunwayEngine = {
                 }
             }
         } else {
-            // Busca Global (Não contígua)
             for (let i = 0; i < width * height; i++) {
                 const pos = i * 4;
                 const diff = Math.abs(data[pos] - r0) + Math.abs(data[pos+1] - g0) + Math.abs(data[pos+2] - b0);
@@ -77,17 +72,18 @@ export const RunwayEngine = {
     },
 
     /**
-     * Pincel / Borracha (Brush/Eraser)
+     * Pincel Inteligente (Smart Brush) - Respeita bordas
      */
     paintMask: (
-        mask: Uint8Array, 
+        mask: Uint8Array,
+        ctx: CanvasRenderingContext2D | null, // Contexto para ler cores (Smart Mode)
         width: number, height: number, 
         x: number, y: number, 
-        params: { size: number, hardness: number, opacity: number, mode: 'ADD' | 'SUB' }
+        params: { size: number, hardness: number, opacity: number, mode: 'ADD' | 'SUB', smart?: boolean }
     ) => {
         const radius = params.size / 2;
         const radiusSq = radius * radius;
-        const newMask = new Uint8Array(mask); // Clona para imutabilidade
+        const newMask = new Uint8Array(mask);
         
         const centerX = Math.floor(x);
         const centerY = Math.floor(y);
@@ -97,7 +93,19 @@ export const RunwayEngine = {
         const startX = Math.max(0, Math.floor(centerX - radius));
         const endX = Math.min(width - 1, Math.ceil(centerX + radius));
 
-        // Hardness afeta o gradiente da borda
+        // Dados para Smart Mode
+        let imgData: Uint8ClampedArray | null = null;
+        let r0 = 0, g0 = 0, b0 = 0;
+        let smartTolerance = 40;
+
+        if (params.smart && ctx) {
+            // Amostra a cor central para referência
+            const p = ctx.getImageData(centerX, centerY, 1, 1).data;
+            r0 = p[0]; g0 = p[1]; b0 = p[2];
+            // Pega a área inteira para performance (ou apenas o bounding box do pincel)
+            imgData = ctx.getImageData(0, 0, width, height).data;
+        }
+
         const hardnessK = params.hardness / 100;
 
         for (let ny = startY; ny <= endY; ny++) {
@@ -108,22 +116,30 @@ export const RunwayEngine = {
 
                 if (distSq <= radiusSq) {
                     const idx = ny * width + nx;
-                    const dist = Math.sqrt(distSq);
                     
-                    // Cálculo de suavidade (feathering)
+                    // Cálculo Smart (Proteção de Borda)
+                    let affinity = 1;
+                    if (params.smart && imgData) {
+                        const pos = idx * 4;
+                        const diff = Math.abs(imgData[pos] - r0) + Math.abs(imgData[pos+1] - g0) + Math.abs(imgData[pos+2] - b0);
+                        // Se a diferença for muito grande, reduz drasticamente a afinidade
+                        if (diff > smartTolerance * 3) affinity = 0;
+                        else if (diff > smartTolerance) affinity = 1 - ((diff - smartTolerance) / (smartTolerance * 2));
+                    }
+
+                    if (affinity <= 0.1) continue;
+
+                    const dist = Math.sqrt(distSq);
                     const innerRadius = radius * hardnessK;
                     let force = dist > innerRadius 
                         ? 1 - (dist - innerRadius) / (radius - innerRadius) 
                         : 1;
                     
-                    // Aplica opacidade (se necessário) - Aqui assumimos binário ou 255 para máscara forte
-                    const value = force * 255; 
+                    const value = force * 255 * affinity; 
 
                     if (params.mode === 'ADD') {
-                        // Max garante que não diminuímos a opacidade se já estiver pintado
                         newMask[idx] = Math.max(newMask[idx], value); 
                     } else {
-                        // Borracha
                         newMask[idx] = Math.min(newMask[idx], 255 - value);
                     }
                 }

@@ -61,51 +61,54 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
     }
     
-    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (GLOBAL DIVERSITY ENGINE v2)
+    // NOVO MOTOR DE BUSCA DE MODELOS BRANCOS (MARKETPLACE SIMULATION v3)
     if (action === 'FIND_WHITE_MODELS') {
         let searchTerm = prompt;
         
-        // 1. Se tiver imagem, analisa o DNA primeiro para saber O QUE buscar
+        // 1. Se tiver imagem, analisa o DNA primeiro
         if (mainImageBase64) {
             const visualData = await analyzeVisualDNA(apiKey, mainImageBase64, mainMimeType || 'image/jpeg', cleanJson, 'GARMENT');
-            // Ex: "Vestido Longo Chemise"
             searchTerm = visualData.visualDescription || prompt || "Vestido Feminino"; 
         }
 
-        // Variadores de CONTEXTO (Onde a foto foi tirada)
-        const contexts = [
-            "studio white background", "street style paris", "runway fashion week", "beach sunlight", 
-            "urban concrete wall", "luxury hotel interior", "minimalist loft", "garden outdoor",
-            "red carpet event", "casual coffee shop", "backstage fashion", "editorial magazine shoot"
+        // 2. Estratégia de "Marcas Virtuais" e Contextos (Copiando lógica do Scanner)
+        // Isso força o buscador a tratar cada query como uma entidade diferente.
+        const marketSources = [
+            { name: "Zara Style", query: "Zara white dress lookbook" },
+            { name: "H&M Studio", query: "H&M white clothing studio" },
+            { name: "Vogue Editorial", query: "Vogue fashion photography white dress" },
+            { name: "Street Style", query: "Paris fashion week street style white" },
+            { name: "Revolve", query: "Revolve clothing white dress model" },
+            { name: "Net-a-Porter", query: "luxury fashion e-commerce white dress" },
+            { name: "Mango", query: "Mango fashion campaign white" },
+            { name: "Farm Rio Vibe", query: "Farm Rio white dress mockup" },
+            { name: "Minimalist", query: "COS stores minimalist white fashion" },
+            { name: "Boho Chic", query: "Free People white dress boho" },
+            { name: "Bridal Modern", query: "Modern bridal white dress simple" },
+            { name: "Runway", query: "Runway fashion show white collection" },
+            { name: "Photoshoot", query: "Professional model photoshoot white background" },
+            { name: "Urban", query: "Urban fashion white outfit concrete" },
+            { name: "Beach", query: "Beachwear white dress sunset" },
+            { name: "Linen", query: "Linen white clothing texture" },
+            { name: "Silk", query: "Silk white dress luxury" },
+            { name: "Cotton", query: "Cotton white dress casual" },
+            { name: "Pinterest", query: "Pinterest aesthetic white outfit" },
+            { name: "Instagram", query: "Instagram fashion influencer white" }
         ];
 
-        // Variadores de FONTE/ESTILO (Marcas, Revistas e Estilos) - Força diversidade de "mão" fotográfica
-        const sources = [
-            "Vogue editorial", "Zara catalog", "Revolve clothing", "Net-a-Porter style", 
-            "Pinterest aesthetic", "Instagram influencer", "H&M studio", "Shein lookbook", 
-            "Mango fashion", "ASOS design", "Elle magazine", "Harper's Bazaar",
-            "Reformation style", "Farm Rio vibe", "Massimo Dutti", "Anthropologie",
-            "Shutterstock photo", "Getty Images editorial", "Unsplash portrait", "Pexels fashion"
-        ];
+        const poses = ["standing", "sitting", "walking", "back view", "detail shot", "full body"];
 
-        // Variadores de DETALHE VISUAL (Para evitar a mesma pose)
-        const details = [
-            "full body shot", "close up detail", "walking motion", "sitting pose", 
-            "back view", "side profile", "laughing candid", "serious model pose",
-            "holding bag", "sunglasses", "architectural lighting", "shadow play"
-        ];
-
-        // 2. Gerador de Links Otimizado
-        const createModelLink = (sourceLabel, type, urlBase, visualQuery, index) => {
+        const createModelLink = (sourceObj, pose, index) => {
+            const finalQuery = `${sourceObj.query} ${pose} ${searchTerm}`;
             return {
-                source: sourceLabel,
+                source: `${sourceObj.name} • ${pose}`, // Nome Visual
                 patternName: `Base: ${searchTerm}`, 
                 similarityScore: 90,
-                type,
+                type: "GLOBAL",
                 linkType: 'SEARCH_QUERY',
-                url: `${urlBase}${encodeURIComponent(visualQuery)}`,
-                // O termo de backup é o que realmente busca a imagem no Bing Proxy
-                backupSearchTerm: visualQuery + " high resolution -drawing -sketch",
+                url: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(finalQuery)}`,
+                // O termo de backup é o segredo: ele varia drasticamente para cada card
+                backupSearchTerm: `${finalQuery} high resolution photo -drawing`,
                 imageUrl: null
             };
         };
@@ -113,29 +116,12 @@ export default async function handler(req, res) {
         const queries = [];
         let globalIndex = 0;
 
-        // ESTRATÉGIA DE PERMUTAÇÃO ALEATÓRIA
-        // Gera 50+ combinações únicas
-        while (queries.length < 55) {
-            // Seleciona aleatoriamente um de cada categoria
-            const ctx = contexts[globalIndex % contexts.length];
-            const src = sources[globalIndex % sources.length];
-            const dtl = details[globalIndex % details.length];
+        // Gera 60 resultados únicos combinando Fontes x Poses
+        while (queries.length < 60) {
+            const source = marketSources[globalIndex % marketSources.length];
+            const pose = poses[Math.floor(globalIndex / marketSources.length) % poses.length] || "model";
             
-            // Constrói uma query visual rica
-            // Ex: "White Dress Vogue editorial studio white background full body shot"
-            const uniqueQuery = `white ${searchTerm} ${src} ${ctx} ${dtl}`;
-            
-            // Define o rótulo da fonte (ex: "Vogue / Studio")
-            const sourceLabel = `${src.split(' ')[0]} • ${ctx.split(' ')[0]}`;
-            
-            queries.push(createModelLink(
-                sourceLabel,
-                "GLOBAL",
-                "https://www.google.com/search?tbm=isch&q=",
-                uniqueQuery,
-                globalIndex
-            ));
-            
+            queries.push(createModelLink(source, pose, globalIndex));
             globalIndex++;
         }
 
