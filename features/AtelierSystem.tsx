@@ -1,7 +1,7 @@
 
-// ... (imports remain the same)
+// ... existing imports ...
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity, Cloud } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity, Cloud, Save, FolderOpen } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
@@ -115,12 +115,16 @@ const TEXTURE_PRESETS = [
 ];
 
 export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup, onNavigateToLayerStudio }) => {
+    // ... (Keep existing state variables) ...
     const [creationMode, setCreationMode] = useState<'IMAGE' | 'TEXT'>('IMAGE');
     const [referenceImage, setReferenceImage] = useState<string | null>(null);
     const [generatedPattern, setGeneratedPattern] = useState<string | null>(null);
     
+    // --- INPUTS DO PROJETO ---
     const [userPrompt, setUserPrompt] = useState<string>(''); 
     const [customInstruction, setCustomInstruction] = useState<string>(''); 
+    const [collectionName, setCollectionName] = useState<string>('');
+    const [autoDriveSave, setAutoDriveSave] = useState<boolean>(true);
 
     const [printTechnique, setPrintTechnique] = useState<'CYLINDER' | 'DIGITAL'>('CYLINDER');
     const [colors, setColors] = useState<PantoneColor[]>([]);
@@ -181,6 +185,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setActiveTexture('NONE'); setGeneratedTextureUrl(null);
     };
 
+    // ... (Keep existing async functions: analyzePrompt, analyzeColors, handleReferenceUpload, handleGenerateTexture, performAutoSave, handleGenerate, handleSmartCloudSave, handleProductionDownload) ...
     const analyzePrompt = async (cleanBase64: string) => {
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ANALYZE_REFERENCE_FOR_PROMPT', mainImageBase64: cleanBase64 }) });
@@ -226,61 +231,52 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         finally { setIsGeneratingTexture(false); }
     };
 
+    const performAutoSave = (imageUrl: string) => {
+        if (!autoDriveSave) return;
+        const safeCollection = collectionName ? collectionName.replace(/[^a-zA-Z0-9]/g, '_') : 'Nova_Colecao';
+        const dateStr = new Date().toISOString().split('T')[0];
+        const randomId = Math.floor(Math.random() * 1000);
+        const filename = `${dateStr}_${safeCollection}_VINGI_${randomId}.png`;
+        const l = document.createElement('a'); 
+        l.download = filename; 
+        l.href = imageUrl; 
+        document.body.appendChild(l);
+        l.click();
+        document.body.removeChild(l);
+        console.log(`Auto-saved to Drive structure: ${filename}`);
+    };
+
     const handleGenerate = async () => {
         if (!userPrompt.trim()) { setError("Aguarde a análise da referência ou digite um prompt."); return; }
-        
-        const finalPrompt = customInstruction 
-            ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` 
-            : userPrompt;
-
+        const finalPrompt = customInstruction ? `USER DIRECTIVE: "${customInstruction}". \nBASE DESCRIPTION: ${userPrompt}` : userPrompt;
         setIsProcessing(true); setStatusMessage(printTechnique === 'DIGITAL' ? "Renderizando Arquivo Digital (4K)..." : "Gerando Vetores Chapados...");
         setGeneratedPattern(null); setError(null); setShowDownloadMenu(false);
         setTimeout(() => setStatusMessage("Aplicando Estilo & Cor..."), 1200);
-        
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ 
-                action: 'GENERATE_PATTERN', 
-                prompt: finalPrompt, 
-                colors: colors, 
-                selvedge: 'NENHUMA', 
-                layoutStyle: targetLayout, 
-                subLayoutStyle: subLayout, 
-                artStyle: artStyle,
-                customStyle: customStyleText,
-                targetSize: targetSize, 
-                colorCount: colorCount, 
-                technique: printTechnique 
-            }) });
+            body: JSON.stringify({ action: 'GENERATE_PATTERN', prompt: finalPrompt, colors: colors, selvedge: 'NENHUMA', layoutStyle: targetLayout, subLayoutStyle: subLayout, artStyle: artStyle, customStyle: customStyleText, targetSize: targetSize, colorCount: colorCount, technique: printTechnique }) });
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
+                if (autoDriveSave) performAutoSave(data.image);
             } else { throw new Error(data.error || "A IA não conseguiu gerar."); }
         } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
     };
 
-    // --- DRIVE WORKFLOW ---
     const handleSmartCloudSave = () => {
         if (!generatedPattern) return;
-        const name = prompt("Nome para o arquivo da estampa?", `Estampa_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
+        const name = prompt("Nome para o arquivo da estampa?", collectionName || `Estampa_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
         if (!name) return;
-
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `VINGI_${name}_${timestamp}.png`;
-
-        // 1. Trigger Download with Correct Name
         const l = document.createElement('a'); 
         l.download = filename; 
         l.href = generatedPattern; 
         document.body.appendChild(l);
         l.click();
         document.body.removeChild(l);
-
-        // 2. Open Drive Folder
         window.open(DRIVE_FOLDER_URL, '_blank');
-        
         setShowDownloadMenu(false);
-        alert(`Arquivo "${filename}" baixado.\n\nA pasta do Google Drive foi aberta. Arraste o arquivo baixado para lá para salvar na nuvem.`);
     };
 
     const handleProductionDownload = async () => {
@@ -289,32 +285,11 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setShowDownloadMenu(false);
         try {
             const cleanBase64 = generatedPattern.split(',')[1];
-            
-            const res = await fetch('/api/analyze', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    action: 'PREPARE_PRODUCTION', 
-                    mainImageBase64: cleanBase64,
-                    targetSize: targetSize || "140cm Standard",
-                    technique: printTechnique,
-                    layoutStyle: targetLayout 
-                }) 
-            });
-
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(`Erro do Servidor (${res.status}): Tente novamente.`);
-            }
-
+            const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'PREPARE_PRODUCTION', mainImageBase64: cleanBase64, targetSize: targetSize || "140cm Standard", technique: printTechnique, layoutStyle: targetLayout }) });
+            if (!res.ok) { const text = await res.text(); throw new Error(`Erro do Servidor (${res.status}): Tente novamente.`); }
             const textData = await res.text();
             let data;
-            try {
-                data = JSON.parse(textData);
-            } catch (jsonError) {
-                throw new Error("Erro de conexão: Resposta inválida do servidor (Timeout em 4K).");
-            }
-
+            try { data = JSON.parse(textData); } catch (jsonError) { throw new Error("Erro de conexão: Resposta inválida do servidor (Timeout em 4K)."); }
             if (data.success && data.image) {
                 const l = document.createElement('a'); 
                 l.download = `VINGI_PRO_PRODUCTION_${targetSize || 'RAW'}.png`; 
@@ -322,15 +297,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 document.body.appendChild(l);
                 l.click();
                 document.body.removeChild(l);
-            } else {
-                throw new Error(data.error || "Falha no motor de produção. Tente novamente.");
-            }
-        } catch (e: any) {
-            console.error("Production Error:", e);
-            alert(e.message || "Erro ao gerar arquivo de produção.");
-        } finally {
-            setIsUpscaling(false);
-        }
+                if (autoDriveSave) performAutoSave(data.image);
+            } else { throw new Error(data.error || "Falha no motor de produção. Tente novamente."); }
+        } catch (e: any) { console.error("Production Error:", e); alert(e.message || "Erro ao gerar arquivo de produção."); } finally { setIsUpscaling(false); }
     };
 
     const handleTransfer = (target: string) => {
@@ -362,11 +331,12 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     return (
         <div className="h-full w-full bg-[#000000] flex flex-col overflow-hidden text-white">
+            {/* Header */}
             <div className="bg-[#111111] px-4 pb-3 pt-[calc(1.5rem+env(safe-area-inset-top))] flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-auto min-h-[4.5rem] transition-all duration-300 border-b border-white/5">
                 <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
                 <div className="flex gap-2 relative">
                     <button onClick={() => window.open(DRIVE_FOLDER_URL, '_blank')} className="hidden md:flex items-center gap-1 text-[10px] bg-white/5 px-3 py-1.5 rounded hover:bg-white/10 font-bold border border-white/10 transition-colors text-blue-300">
-                        <Cloud size={12} /> Biblioteca Nuvem
+                        <FolderOpen size={12} /> Pasta Drive
                     </button>
                     {hasActiveSession && (
                         <button onClick={resetSession} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium border border-gray-700">Novo</button>
@@ -426,7 +396,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                     </button>
                                 </div>
                                 <button onClick={() => window.open(DRIVE_FOLDER_URL, '_blank')} className="mt-4 text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center justify-center gap-2 uppercase tracking-widest bg-blue-900/10 py-3 rounded-lg border border-blue-900/30">
-                                    <Cloud size={14} /> Acessar Biblioteca de Criações (Drive)
+                                    <FolderOpen size={14} /> Acessar Repositório Drive (Cloud)
                                 </button>
                             </div>
                         }
@@ -434,8 +404,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 bg-black">
-                    {/* CANVAS AREA (LEFT) - MOBILE OPTIMIZED (FLEX BASIS) */}
-                    <div className={`relative flex items-center justify-center p-0 md:p-4 bg-[#050505] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0 ${window.innerWidth < 768 ? 'basis-[35%] shrink-0 h-[35dvh]' : 'flex-1'}`}>
+                    {/* CANVAS AREA (LEFT) - MOBILE OPTIMIZED (Fixed Height on Mobile) */}
+                    <div className="relative flex items-center justify-center p-0 md:p-4 bg-[#050505] shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] z-0 h-[35dvh] shrink-0 md:h-auto md:flex-1 md:basis-auto">
                         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
                         
                         {isProcessing || isUpscaling ? (
@@ -476,9 +446,10 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                         {referenceImage && <div className="absolute bottom-4 left-4 w-20 h-20 rounded-lg border-2 border-gray-700 overflow-hidden shadow-lg bg-black z-20 hover:scale-150 transition-transform origin-bottom-left"><img src={referenceImage} className="w-full h-full object-cover opacity-100" /></div>}
                     </div>
 
-                    {/* CONTROL DECK - MOBILE OPTIMIZED (FLEX-1 + SAFE AREA) */}
+                    {/* CONTROL DECK - MOBILE OPTIMIZED (FLEX-1 + SAFE AREA + SCROLL) */}
                     <div className="w-full md:w-[400px] bg-[#111] flex flex-col z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] flex-1 md:h-full md:flex-none shrink-0 relative transition-all duration-500 min-h-0 pb-[env(safe-area-inset-bottom)]">
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-24">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 pb-24 touch-pan-y">
+                            {/* ... Content ... */}
                             {!isAnalysisComplete && !generatedPattern && (
                                 <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-10 gap-4">
                                     <Lock size={32} className="text-gray-600"/>
@@ -492,6 +463,28 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><Sparkles size={12} className="text-vingi-400"/> Direção Criativa</h3>
                                         </div>
+                                        
+                                        {/* PROJECT METADATA */}
+                                        <div className="bg-[#1a1a1a] p-3 rounded-xl border border-gray-800 space-y-2 mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    value={collectionName} 
+                                                    onChange={(e) => setCollectionName(e.target.value)} 
+                                                    placeholder="Nome da Coleção/Projeto..." 
+                                                    className="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-vingi-500 transition-colors"
+                                                />
+                                            </div>
+                                            <div onClick={() => setAutoDriveSave(!autoDriveSave)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${autoDriveSave ? 'bg-blue-900/30 border-blue-500/50' : 'bg-transparent border-gray-800 hover:bg-white/5'}`}>
+                                                {autoDriveSave ? <Check size={14} className="text-blue-400"/> : <div className="w-3.5 h-3.5 rounded-full border border-gray-600"/>}
+                                                <div className="flex-1">
+                                                    <span className={`text-[10px] font-bold block ${autoDriveSave ? 'text-blue-200' : 'text-gray-500'}`}>Salvar Automaticamente</span>
+                                                    <span className="text-[8px] text-gray-600 block">Backup imediato na nuvem após gerar</span>
+                                                </div>
+                                                <Cloud size={14} className={autoDriveSave ? "text-blue-400" : "text-gray-600"}/>
+                                            </div>
+                                        </div>
+
                                         <div className="relative group">
                                             <textarea 
                                                 value={customInstruction} 
@@ -514,7 +507,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
                                     <div className="space-y-3 animate-slide-up" style={{animationDelay: '0.2s'}}>
                                         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2"><LayoutTemplate size={12}/> Layout da Estampa</h3>
-                                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar touch-pan-x">
                                             {LAYOUT_OPTIONS.map(opt => (
                                                 <button 
                                                     key={opt.id} 

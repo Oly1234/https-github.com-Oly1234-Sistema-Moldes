@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Layers, Trash2, Eye, EyeOff, Hand, Wand2, Brush, 
@@ -10,6 +11,7 @@ import {
 import { ModuleLandingPage } from './Shared';
 import { LayerEnginePro, MaskSnapshot } from '../services/layerEnginePro';
 
+// ... (Keep existing interfaces and compressForAI function) ...
 interface StudioLayer {
     id: string;
     type: 'BACKGROUND' | 'ELEMENT';
@@ -51,7 +53,7 @@ const compressForAI = (img: HTMLImageElement, maxSize = 1024): Promise<string> =
 };
 
 export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMockup?: () => void }> = ({ onNavigateBack, onNavigateToMockup }) => {
-    // --- STATE CORE ---
+    // ... (Keep all state and refs exactly as they are) ...
     const [originalImg, setOriginalImg] = useState<HTMLImageElement | null>(null);
     const [originalData, setOriginalData] = useState<Uint8ClampedArray | null>(null);
     const [layers, setLayers] = useState<StudioLayer[]>([]);
@@ -110,6 +112,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         return () => observer.disconnect();
     }, [fitImageToContainer, originalImg]);
 
+    // ... (Keep initStudio, getPreciseCoords, pushUndoState, handleUndo, handleSemanticIdentification, confirmExtraction, reorderLayer, toggleVisibility, triggerTransfer) ...
     const initStudio = (src: string) => {
         setIsProcessing(true);
         const img = new Image();
@@ -258,8 +261,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         if (targetModule === 'MOCKUP' && onNavigateToMockup) onNavigateToMockup();
     };
 
-    // --- TOUCH & POINTER EVENTS (Robust Mobile Handling) ---
-
+    // ... (Keep handleTouchStart, handleTouchMove, handleTouchEnd, executeToolAction, handlePointerDown, handlePointerMove, handlePointerUp, handleWheel) ...
     const handleTouchStart = (e: React.TouchEvent) => {
         if (e.touches.length === 2) {
             isZooming.current = true;
@@ -413,7 +415,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
         setView(v => ({ x: v.x - dx, y: v.y - dy, k: newK }));
     };
 
-    // --- EFFECTS ---
+    // ... (Keep effects: overlayRef, cursorRef) ...
     useEffect(() => {
         if (!overlayRef.current || !originalImg) return;
         const ctx = overlayRef.current.getContext('2d')!;
@@ -467,6 +469,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
     return (
         <div className="flex flex-col h-full bg-[#050505] text-white overflow-hidden relative font-sans touch-none select-none">
+            {/* ... Header and Empty State ... */}
             <div className="h-14 bg-black border-b border-white/5 px-4 flex items-center justify-between z-[100] shrink-0">
                 <div className="flex items-center gap-3">
                     <button onClick={() => onNavigateBack?.()} className="p-2 -ml-2 text-gray-400 hover:text-white"><ArrowLeft size={20}/></button>
@@ -517,7 +520,8 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 
                     {isMobile ? (
                         <div className="bg-[#0a0a0a] border-t border-white/10 z-[150] shadow-2xl safe-area-bottom flex flex-col shrink-0">
-                            <div className="h-20 px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black">
+                            {/* Layer List Horizontal Scroll - Added touch-pan-x */}
+                            <div className="h-20 px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar border-b border-white/5 bg-black touch-pan-x">
                                 <button onClick={() => document.getElementById('l-up')?.click()} className="min-w-[48px] h-[48px] rounded-xl bg-white/5 border border-dashed border-white/20 flex flex-col items-center justify-center text-gray-500 shrink-0"><Plus size={18}/><span className="text-[7px] mt-1 uppercase font-bold">Novo</span></button>
                                 {[...layers].reverse().map(l => (
                                     <div key={l.id} onClick={() => setSelectedLayerIds([l.id])} onContextMenu={(e) => { e.preventDefault(); setMobileMenuLayerId(l.id); }} className={`min-w-[48px] h-[48px] rounded-xl border-2 transition-all relative bg-black shrink-0 flex flex-col items-center ${selectedLayerIds.includes(l.id) ? 'border-blue-500 scale-105 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-60'}`}>
@@ -550,13 +554,14 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                                     <div className="w-full text-center"><span className="text-[10px] font-black uppercase tracking-widest text-blue-400 animate-pulse">Laço Inteligente: Envolva a área</span></div>
                                 )}
                             </div>
-                            <div className="h-20 flex items-center justify-around px-2 bg-black">
+                            {/* Toolbar - Added overflow-x-auto, touch-pan-x and justified properly */}
+                            <div className="h-20 flex items-center justify-between px-4 overflow-x-auto no-scrollbar bg-black pb-[env(safe-area-inset-bottom)] gap-2 touch-pan-x">
                                 <ToolBtn icon={Hand} label="Pan" active={tool==='HAND'} onClick={() => setTool('HAND')} />
                                 <ToolBtn icon={Wand2} label="Mira" active={tool==='WAND'} onClick={() => setTool('WAND')} />
                                 <ToolBtn icon={Brush} label="Pincel" active={tool==='BRUSH'} onClick={() => setTool('BRUSH')} />
                                 <ToolBtn icon={Eraser} label="Apagar" active={tool==='ERASER'} onClick={() => setTool('ERASER')} />
                                 <ToolBtn icon={Layers} label="Laço" active={tool==='LASSO'} onClick={() => setTool('LASSO')} />
-                                <div className="w-px h-8 bg-white/10 mx-1"></div>
+                                <div className="w-px h-8 bg-white/10 mx-1 shrink-0"></div>
                                 <div className="flex bg-white/5 rounded-xl p-0.5 border border-white/10 shrink-0">
                                     <button onClick={() => setToolMode('ADD')} className={`p-2.5 rounded-lg transition-all ${toolMode==='ADD' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-600'}`}><Plus size={16}/></button>
                                     <button onClick={() => setToolMode('SUB')} className={`p-2.5 rounded-lg transition-all ${toolMode==='SUB' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-600'}`}><Minus size={16}/></button>
@@ -564,6 +569,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
                             </div>
                         </div>
                     ) : (
+                        // ... (Keep desktop layout) ...
                         <>
                             <div className="absolute top-0 left-0 bottom-0 w-16 bg-black border-r border-white/5 flex flex-col items-center py-6 gap-5 z-50 shadow-2xl">
                                 <ToolBtn icon={Hand} label="Pan" active={tool==='HAND'} onClick={() => setTool('HAND')} />
@@ -638,7 +644,7 @@ export const LayerStudio: React.FC<{ onNavigateBack?: () => void, onNavigateToMo
 };
 
 const ToolBtn = ({ icon: Icon, label, active, onClick }: any) => (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center w-10 h-10 md:w-16 md:h-14 rounded-xl transition-all ${active ? 'text-blue-500' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center w-10 h-10 md:w-16 md:h-14 rounded-xl transition-all ${active ? 'text-blue-500' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'} shrink-0`}>
         <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
         {label && <span className="text-[9px] font-bold uppercase tracking-tight mt-1">{label}</span>}
     </button>
