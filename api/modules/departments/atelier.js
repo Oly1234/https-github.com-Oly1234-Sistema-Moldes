@@ -5,27 +5,25 @@ import { GoogleGenAI } from "@google/genai";
 
 // Análise Visual para extrair Prompt da Imagem com foco em Estúdio de Moda Profissional
 export const refineDesignPrompt = async (apiKey, imageBase64) => {
-    // FIX: Usa a apiKey passada pelo argumento para evitar erro de credenciais (Google Default Credentials)
     if (!apiKey) throw new Error("API Key required for Atelier Analysis.");
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
     const SYSTEM_PROMPT = `
-    ACT AS: Senior Textile Art Director & Fashion Forensic Specialist.
+    ACT AS: Senior Art Director for Textile Design.
     
-    TASK: Analyze this image and write a detailed TEXT TO IMAGE PROMPT to recreate a similar textile design.
+    TASK: Analyze this image and write a vivid, descriptive TEXT-TO-IMAGE PROMPT to recreate this exact textile design style and content.
     
-    CRITICAL INSTRUCTIONS:
-    1. IGNORE MODELS/PEOPLE: If there is a person, ignore them. Focus ONLY on the fabric print/pattern.
-    2. DECONSTRUCT THE STYLE: Identify the specific artistic technique (e.g., "Vintage Botanical Illustration", "Watercolor", "Vector Pop Art", "Toile de Jouy").
-    3. MOTIF HIERARCHY: Describe the primary elements (e.g., "Large Hibiscus flowers"), secondary elements (e.g., "Palm leaves"), and background (e.g., "Solid Navy Blue").
-    4. VIBE: Capture the mood (e.g., "Tropical Resort", "Dark Academia", "Cottagecore").
-    
-    OUTPUT: A single, dense, high-quality English prompt starting with "A seamless textile pattern design...". Include specific color names and artistic directives.
+    INSTRUCTIONS:
+    1. IGNORE the garment shape or model. Focus 100% on the PRINT/PATTERN.
+    2. Describe the ARTISTIC STYLE (e.g., "Vintage Botanical Illustration", "Abstract Expressionist Brushstrokes", "Geometric Bauhaus").
+    3. Describe the MOTIFS (e.g., "Large sprawling hibiscus flowers", "Tiny geometric polka dots", "Baroque swirls").
+    4. Describe the COLORS and MOOD (e.g., "Vibrant tropical summer palette", "Muted earth tones, melancholic").
+    5. OUTPUT FORMAT: A single paragraph, highly descriptive, ready for an AI image generator. Start with "A seamless textile pattern...".
     `;
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash', // Vision model fast
+            model: 'gemini-2.5-flash', 
             contents: {
                 parts: [
                     { text: SYSTEM_PROMPT },
@@ -35,11 +33,11 @@ export const refineDesignPrompt = async (apiKey, imageBase64) => {
         });
 
         const text = response.text;
-        return text ? text.trim() : "Seamless high-end fashion textile pattern, botanical luxury style.";
+        return text ? text.trim() : "A seamless high-fashion textile pattern with intricate details.";
 
     } catch (e) {
         console.error("Atelier Analysis Error:", e);
-        return "Professional technical print design faithful to reference.";
+        return "Professional textile pattern design.";
     }
 };
 

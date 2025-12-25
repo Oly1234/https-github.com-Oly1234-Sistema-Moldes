@@ -1,148 +1,114 @@
 
 // api/modules/generator.js
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
-// BRAIN UPDATE: Enhanced Textile Studio Logic v2.0 (Restored & Polished)
+// BRAIN UPDATE: Enhanced Textile Studio Logic v2.1 (Creative & Robust)
 import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
-    // FIX CRÍTICO: Injeção explícita da chave para evitar erro de "Default Credentials"
-    if (!apiKey) throw new Error("API Key is missing in Generator Module.");
+    
+    // SAFETY CHECK: Ensure API Key is present and valid string
+    if (!apiKey || typeof apiKey !== 'string') {
+        console.error("Generator: Missing API Key");
+        throw new Error("Chave de API inválida ou ausente no Gerador.");
+    }
+
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
-    // 1. CEREBRO CROMÁTICO (The Colorist Brain)
-    // Se houver cores definidas, forçamos a IA a usá-las.
-    let colorContext = "";
+    // 1. CEREBRO CROMÁTICO (Harmonia & Paleta)
+    let colorInstruction = "";
     if (colors && colors.length > 0) {
-        const colorList = colors.map(c => `${c.name} (${c.hex})`).join(', ');
-        colorContext = `
-        STRICT COLOR PALETTE DIRECTIVE:
-        You represent a Dyeing House. You must stick to this exact palette as closely as possible: [${colorList}].
-        - Use these colors for the main motifs and background.
-        - Create harmony and contrast using ONLY these tones if possible.
+        const colorList = colors.map(c => c.name + (c.hex ? ` (${c.hex})` : '')).join(', ');
+        colorInstruction = `
+        COLOR PALETTE (STRICT):
+        Use mainly these colors: ${colorList}.
+        Create a sophisticated harmony. Ensure high contrast and vibrant output if the palette allows.
         `;
     } else {
-        colorContext = "COLOR DIRECTIVE: Create a harmonious, trending fashion palette (WGSN 2025 style). High sophistication.";
+        colorInstruction = "COLOR DIRECTIVE: Use a trending, high-end fashion color palette (WGSN 2025). Vibrant and harmonious.";
     }
 
-    // 2. CEREBRO TÉCNICO (The Engineer Brain)
-    let TECHNIQUE_PROMPT = "";
-    let NEGATIVE_PROMPT = "";
-
-    if (technique === 'DIGITAL') {
-        // --- MODO DIGITAL (Estilo Farm / Liberty / Digital Art) ---
-        TECHNIQUE_PROMPT = `
-        MODE: HIGH-END DIGITAL TEXTILE PRINT.
-        
-        VISUAL QUALITY:
-        - Texture: Rich, organic, photorealistic fabric simulation (Silk/Viscose/Linen).
-        - Detail: Extremely high definition (4K style). Visible brush strokes if painting style.
-        - Depth: Use layered transparencies, watercolor bleeding, and subtle drop shadows.
-        - Finish: "Imperfect" organic look preferred over cold computer vectors.
-        `;
-        
-        NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT: low resolution, jpeg artifacts, blurry, distorted, plastic look, 3d render style, neon glow, amateur digital art, watermark, text, signature, bad composition, cut off objects, ugly.
-        `;
-    } else {
-        // --- MODO CILINDRO (Rotativa / Vetor Chapado) ---
-        TECHNIQUE_PROMPT = `
-        MODE: ROTARY SCREEN PRINTING (Technical Vector / Cylinder).
-        
-        VISUAL QUALITY:
-        - Style: FLAT VECTOR ART / POSTER STYLE. Solid colors only. 
-        - Separation: Distinct color blocks ready for screen separation. No gradients. No blur.
-        - Lines: Clean, sharp edges. Perfect for Cylinder engraving.
-        - Complexity: Create a design feasible for ${colorCount > 0 ? colorCount : '8-12'} screens/colors.
-        `;
-
-        NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT: gradients, shadows, 3d, photorealism, blur, noise, texture overlay, watercolor bleeding, complex shading, photograph, realistic photo.
-        `;
-    }
-
-    // 3. ESTILO ARTÍSTICO (The Art Director Brain)
-    let artStyleInstruction = "";
+    // 2. TÉCNICA E ESTILO (O "Vibe" da Estampa)
+    let visualStyle = "";
     
-    if (artStyle === 'CUSTOM' && customStyle) {
-        artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Interpret with professional designer precision.`;
+    if (technique === 'DIGITAL') {
+        visualStyle = `
+        TECHNIQUE: HIGH-END DIGITAL PRINT (4K).
+        - Texture: Photorealistic fabric effect (Silk, Linen, or Viscose grain).
+        - Detail: Intricate, painterly details. Watercolor bleeds, brush strokes, and soft gradients are welcome.
+        - Finish: Look like a luxury scarf or premium dress fabric.
+        `;
     } else {
-        switch (artStyle) {
-            case 'WATERCOLOR': 
-                artStyleInstruction = "ART STYLE: Botanical Watercolor. Wet-on-wet technique, pigment pooling, translucent petals, organic edges. Hand-painted atelier look."; break;
-            case 'GIZ': 
-                artStyleInstruction = "ART STYLE: Pastel Chalk / Crayon. Dry texture, rough grain, soft blended edges, sketching feel."; break;
-            case 'ACRILICA': 
-                artStyleInstruction = "ART STYLE: Heavy Body Acrylic / Gouache. Visible brush strokes, impasto texture, vibrant opaque colors, painterly freedom."; break;
-            case 'VETOR': 
-                artStyleInstruction = "ART STYLE: Modern Vector Flat. Minimalist, geometric simplification, bauhaus influence, clean lines, solid fills."; break;
-            case 'BORDADO':
-                artStyleInstruction = "ART STYLE: Embroidery Simulation. Stitch texture, thread volume, satin stitch direction, raised effect."; break;
-            case 'LINHA':
-                artStyleInstruction = "ART STYLE: Fine Line Art / Toile de Jouy. Monochromatic or duotone, engraving style, detailed hatching, ink pen."; break;
-            case 'ORNAMENTAL':
-                artStyleInstruction = "ART STYLE: Baroque / Paisley / Ornamental. Complex symmetrical details, filigree, luxury scarf style, golden elements."; break;
-            default: 
-                artStyleInstruction = "ART STYLE: High-end commercial fashion print. Balanced, sellable, sophisticated."; break;
-        }
+        // CILINDRO / VETOR
+        visualStyle = `
+        TECHNIQUE: ROTARY SCREEN PRINT (Vetor/Flat).
+        - Style: Clean, flat vector art. Pop Art or Poster style.
+        - Colors: Solid blocks of color. No blurs, no gradients, no shading.
+        - Definition: Sharp edges defined for screen separation.
+        `;
     }
 
-    // 4. ESTRUTURA DE LAYOUT (The Composer Brain)
-    let layoutInstruction = "LAYOUT: SEAMLESS REPEAT PATTERN (All-over). Ensure edges match perfectly for continuous printing.";
+    // 3. ESTRUTURA (Layout)
+    let layoutInstruction = "LAYOUT: SEAMLESS REPEAT PATTERN (All-over). The design must tile perfectly.";
     
     if (layoutStyle === 'LENCO') {
-        const subParams = subLayoutStyle ? `Sub-style: ${subLayoutStyle}.` : "";
-        layoutInstruction = `LAYOUT: SILK SCARF (Carré) COMPOSITION.
-        - Structure: Engineered placement print within a square.
-        - Borders: Distinct decorative frame/border (Baroque or Geometric).
-        - Center: Centralized medallion or focal artwork.
-        - Symmetry: Rotational or Mirror symmetry (Hermès Style).
-        ${subParams}`;
+        layoutInstruction = `
+        LAYOUT: ENGINEERED SILK SCARF (Carré).
+        - Composition: Symmetrical or Centralized.
+        - Borders: Distinct decorative borders framing the design.
+        - Center: Focal medallion or main artwork.
+        - Format: Square composition.
+        `;
     } else if (layoutStyle === 'BARRADO') {
-        layoutInstruction = `LAYOUT: BORDER PRINT (Barrado).
-        - Structure: Heaviest, most complex elements at the BOTTOM edge.
-        - Transition: Fading or scattering upwards into negative space/background color.
-        - Horizontal: Seamless repeat horizontally (along the width).`;
-    } else if (layoutStyle === 'PAREO') {
-        layoutInstruction = `LAYOUT: PAREO / BEACH PANEL.
-        - Structure: Large scale rectangular composition (Portrait).
-        - Style: Tropical/Resort wear placement print. Big bold elements.`;
+        layoutInstruction = `
+        LAYOUT: BORDER PRINT (Barrado).
+        - Composition: Heavy detail at the BOTTOM, fading/scattering upwards into negative space.
+        - Orientation: Horizontal flow.
+        `;
     } else if (layoutStyle === 'LOCALIZADA') {
-        layoutInstruction = `LAYOUT: PLACEMENT PRINT (T-Shirt/Chest).
-        - Structure: Centralized isolated artwork on solid background.
-        - Usage: Chest print or back print. Not a repeating pattern.`;
+        layoutInstruction = `
+        LAYOUT: PLACEMENT PRINT (Localizada).
+        - Composition: Centralized artwork for T-shirt chest or Dress center.
+        - Background: Solid or subtle, emphasizing the central motif.
+        `;
     }
 
-    // PROMPT FINAL OTIMIZADO
+    // 4. DIREÇÃO DE ARTE (Refinamento)
+    let artisticDir = "";
+    switch (artStyle) {
+        case 'WATERCOLOR': artisticDir = "Style: Hand-painted Watercolor. Soft edges, translucent washes, wet-on-wet look."; break;
+        case 'VETOR': artisticDir = "Style: Minimalist Vector. Bold shapes, clean lines, Bauhaus influence."; break;
+        case 'BORDADO': artisticDir = "Style: Realistic Embroidery. Visible thread texture, satin stitch direction."; break;
+        case 'TROPICAL': artisticDir = "Style: Brazilian Tropicalism. Farm Rio style. Lush leaves, vibrant fruits, exotic birds."; break;
+        case 'CUSTOM': artisticDir = `Style: ${customStyle || "Creative High Fashion"}.`; break;
+        default: artisticDir = "Style: Sophisticated Fashion Print. Balanced and commercial."; break;
+    }
+
+    // PROMPT FINAL "MIDJOURNEY STYLE"
     const FULL_PROMPT = `
-    ROLE: You are the Head Textile Designer of a luxury fashion house (e.g., Gucci, Farm Rio, Zimmerman).
-    TASK: Create a production-ready textile design based on the following DNA.
+    Design a textile pattern. ${prompt}
     
-    INPUT DNA / THEME: "${prompt}"
+    ${layoutInstruction}
+    ${visualStyle}
+    ${artisticDir}
+    ${colorInstruction}
     
-    TECHNICAL DIRECTIVES:
-    1. ${layoutInstruction}
-    2. ${TECHNIQUE_PROMPT}
-    3. ${artStyleInstruction}
-    4. ${colorContext}
-    
-    QUALITY CONTROL:
-    - Eliminate hallucinations (extra limbs, weird text).
-    - Ensure colors are distinct.
-    - Make it look like a finished fabric swatch.
-    
-    ${NEGATIVE_PROMPT}
+    CRITICAL QUALITY GUIDELINES:
+    - Masterpiece quality, highly detailed, sharp focus.
+    - Professional textile design standard.
+    - No text, no watermarks, no distorted objects.
     `;
 
     // Define Aspect Ratio based on Layout
-    // gemini-2.5-flash-image supports: "1:1", "3:4", "4:3", "9:16", "16:9"
+    // Default is 1:1. 
+    // Options: "1:1", "3:4", "4:3", "9:16", "16:9"
     let aspectRatio = "1:1";
-    if (layoutStyle === 'PAREO') aspectRatio = "9:16"; // Vertical Canga
-    if (layoutStyle === 'BARRADO') aspectRatio = "16:9"; // Horizontal Border
-    if (layoutStyle === 'LOCALIZADA') aspectRatio = "3:4"; // Portrait T-shirt
+    if (layoutStyle === 'PAREO') aspectRatio = "9:16"; 
+    if (layoutStyle === 'BARRADO') aspectRatio = "16:9"; 
+    if (layoutStyle === 'LOCALIZADA') aspectRatio = "3:4";
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-2.5-flash-image', // Modelo Rápido e Eficiente para Estampas
             contents: { parts: [{ text: FULL_PROMPT }] },
             config: {
                 imageConfig: { aspectRatio: aspectRatio }
@@ -159,12 +125,17 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
             }
         }
         
-        if (!imageUrl) throw new Error("A IA falhou na renderização têxtil. Tente simplificar o prompt.");
+        if (!imageUrl) throw new Error("A IA gerou uma resposta, mas sem imagem válida.");
         
         return imageUrl;
+
     } catch (e) { 
-        console.error("Generator Error:", e);
-        throw e; 
+        console.error("Generator API Error:", e);
+        // Better error message for the UI
+        if (e.message.includes("default credentials")) {
+            throw new Error("Erro de Configuração de API (Credenciais). Contate o suporte.");
+        }
+        throw new Error(`Falha na Geração: ${e.message}`);
     }
 };
 
@@ -172,25 +143,12 @@ export const generateTextureLayer = async (apiKey, textureType, prompt) => {
     if (!apiKey) return null;
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
-    const TEXTURE_PROMPT = `
-    Generate a SEAMLESS TEXTURE MASK: ${textureType} (${prompt}). 
-    Style: Grayscale heightmap / bump map.
-    Lighting: Flat, even lighting. 
-    Detail: High fidelity fabric grain.
-    No colors, only grey tones for overlay blending.
-    `;
-    
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: TEXTURE_PROMPT }] }
+            contents: { parts: [{ text: `Texture: ${textureType}, ${prompt}. Grayscale heightmap style. Seamless.` }] }
         });
-        let imageUrl = null;
-        if (response.candidates?.[0]?.content?.parts) {
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData) { imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`; break; }
-            }
-        }
-        return imageUrl;
+        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        return part ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : null;
     } catch (e) { return null; }
 };
