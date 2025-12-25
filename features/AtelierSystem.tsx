@@ -231,29 +231,50 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         finally { setIsGeneratingTexture(false); }
     };
 
-    const performAutoSave = (imageUrl: string) => {
+    // --- REFACTORED AUTO SAVE (SERVER-SIDE) ---
+    const performAutoSave = async (imageUrl: string) => {
         if (!autoDriveSave) return;
         
-        setStatusMessage("Sincronizando com Google Drive...");
+        setStatusMessage("Enviando para Nuvem (Server)...");
         
         const safeCollection = collectionName ? collectionName.replace(/[^a-zA-Z0-9]/g, '_') : 'Nova_Colecao';
         const dateStr = new Date().toISOString().split('T')[0];
         const randomId = Math.floor(Math.random() * 1000);
         const filename = `${dateStr}_${safeCollection}_VINGI_${randomId}.png`;
 
-        // Simula upload com delay para feedback visual
-        setTimeout(() => {
+        try {
+            // Tenta upload via backend (Server-to-Server Drive API)
+            const response = await fetch('/api/drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: imageUrl, filename: filename })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                console.log("Arquivo salvo na nuvem com sucesso:", data.fileId);
+                setStatusMessage("Salvo no Drive!");
+            } else {
+                // FALLBACK: Se o backend falhar (ex: sem credenciais), faz download local
+                console.warn("Backend Drive falhou, iniciando download local:", data.error);
+                throw new Error("Fallback local");
+            }
+        } catch (e) {
+            // Fallback silencioso para download local
+            setStatusMessage("Baixando Localmente...");
             const l = document.createElement('a'); 
             l.download = filename; 
             l.href = imageUrl; 
             document.body.appendChild(l);
             l.click();
             document.body.removeChild(l);
-            
-            console.log(`Auto-saved to Drive structure: ${filename}`);
-            setIsProcessing(false);
-            setStatusMessage("");
-        }, 2000);
+        } finally {
+            setTimeout(() => {
+                setIsProcessing(false);
+                setStatusMessage("");
+            }, 1000);
+        }
     };
 
     const handleGenerate = async () => {
@@ -269,7 +290,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
                 if (autoDriveSave) {
-                    performAutoSave(data.image);
+                    performAutoSave(data.image); // Agora chama a versão async
                 } else {
                     setIsProcessing(false);
                 }
@@ -283,14 +304,14 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         if (!name) return;
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `VINGI_${name}_${timestamp}.png`;
-        const l = document.createElement('a'); 
-        l.download = filename; 
-        l.href = generatedPattern; 
-        document.body.appendChild(l);
-        l.click();
-        document.body.removeChild(l);
-        window.open(DRIVE_FOLDER_URL, '_blank');
-        setShowDownloadMenu(false);
+        
+        // Manual save also tries backend first
+        setIsProcessing(true);
+        performAutoSave(generatedPattern).then(() => {
+             // Optional: Open Drive folder if successful?
+             // window.open(DRIVE_FOLDER_URL, '_blank');
+             setShowDownloadMenu(false);
+        });
     };
 
     const handleProductionDownload = async () => {
