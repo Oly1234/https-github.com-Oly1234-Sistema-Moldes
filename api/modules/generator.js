@@ -1,95 +1,127 @@
 
 // api/modules/generator.js
 // MOTOR DE GERAÇÃO: VINGI DIRECT (SDK Implementation)
+// BRAIN UPDATE: Enhanced Textile Studio Logic v2.0
 import { GoogleGenAI } from "@google/genai";
 
 export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, technique = 'CYLINDER', colorCount = 0, layoutStyle = 'ORIGINAL', subLayoutStyle = '', artStyle = 'ORIGINAL', targetSize = 'PADRAO', customStyle = '') => {
     // FIX: Usa a apiKey passada pelo argumento para evitar erro de credenciais
-    // Isso garante que o servidor use a chave validada em analyze.js
     const ai = new GoogleGenAI({ apiKey: apiKey });
 
-    // 1. Fidelidade Cromática de Estúdio
+    // 1. ANÁLISE CROMÁTICA & FIDELIDADE (The Colorist Brain)
     const colorContext = (colors && colors.length > 0) 
-        ? `STRICT COLOR FIDELITY: Use the EXACT colors from reference: [${colors.map(c => c.name).join(', ')}]. 
-           The BACKGROUND tone must match the reference analysis perfectly. 
-           Ensure micro-variations and tone-on-tone nuances used by professional textile designers.` 
-        : "COLOR MASTER DIRECTIVE: Create a sophisticated authorial palette for high-end fashion.";
+        ? `STRICT PALETTE ENFORCEMENT: You must use ONLY these specific colors: [${colors.map(c => c.name + ' (' + c.hex + ')').join(', ')}]. 
+           - Background Color: Determine the best background from the palette to make the motif pop.
+           - Color Harmony: Maintain professional textile contrast. 
+           - If technique is CYLINDER, use solid blocks of these exact colors.
+           - If technique is DIGITAL, you may use gradients of these colors.` 
+        : "COLOR MASTER DIRECTIVE: Create a sophisticated, trending high-fashion palette (WGSN Style).";
 
-    // 2. Inteligência Têxtil (Mentalidade de Estúdio Digital vs Cilindro)
+    // 2. TÉCNICA DE ESTAMPARIA (The Engineer Brain)
     let TECHNIQUE_PROMPT = "";
     let NEGATIVE_PROMPT = "";
 
     if (technique === 'DIGITAL') {
-        // --- MODO DIGITAL (Estúdio de Moda Profissional / Estilo Farm Rio) ---
+        // --- MODO DIGITAL (Estilo Farm / Liberty / Digital Art) ---
         TECHNIQUE_PROMPT = `
-        MODE: SUPREME DIGITAL TEXTILE MASTERPIECE.
-        ACT AS: Professional Textile Designer in a High-End Fashion Studio.
+        MODE: HIGH-END DIGITAL TEXTILE PRINT.
         
-        VISUAL RULES:
-        - STYLE: This MUST look like a technical print file created in Photoshop or an Atelier. No generic AI art.
-        - FINISH: Use rich chromatic depth, organic gradients, tone-on-tone variations, and layered transparency.
-        - BACKGROUND: Treat background as an active textile surface with subtle manual texture and breathability.
-        - TECHNIQUE: Visible manual brush strokes, hand-painted gouache effects, and professional stippling.
-        - COMPOSITION: Elements must have volume, material depth, and clear hierarchy.
-        - CONTRAST: Balanced textile contrast for high-quality digital printing on silk/viscose.
+        VISUAL QUALITY:
+        - Texture: Rich, organic, photorealistic fabric simulation (Silk/Viscose).
+        - Detail: Extremely high definition (4K style). Visible brush strokes if painting style.
+        - Depth: Use layered transparencies, multiply effects, and subtle drop shadows common in Photoshop textile design.
+        - Finish: "Imperfect" organic look preferred over cold computer vectors.
         `;
         
         NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT: generic AI look, 3D render, cinematic lighting, neon glow, photorealistic humans, skin, blurry backgrounds, stock photo style, amateur illustration, plastic texture, flat dead colors, glowing edges.
+        NEGATIVE PROMPT: low resolution, jpeg artifacts, blurry, distorted, plastic look, 3d render style, neon glow, amateur digital art, watermark, text, signature, bad composition, cut off objects.
         `;
     } else {
-        // --- MODO CILINDRO (Engenharia de Gravação) ---
+        // --- MODO CILINDRO (Rotativa / Vetor Chapado) ---
         TECHNIQUE_PROMPT = `
-        MODE: ROTARY SCREEN PRINTING (Cylinder Engineering).
-        STYLE: Solid Flat Shapes, Sharp Technical Edges, Hard Color Blocking.
-        RULES: No gradients, no transparency, no shadows. Ready for screen separation.
-        LIMIT: Optimized for ${colorCount > 0 ? colorCount : '8'} screens.
+        MODE: ROTARY SCREEN PRINTING (Technical Vector).
+        
+        VISUAL QUALITY:
+        - Style: FLAT VECTOR ART. Solid colors only. No gradients. No transparency.
+        - Separation: Distinct color blocks ready for screen separation.
+        - Lines: Clean, sharp edges. Perfect for Cylinder engraving.
+        - Limit: Visual look of ${colorCount > 0 ? colorCount : '8-10'} distinct screens.
         `;
 
         NEGATIVE_PROMPT = `
-        NEGATIVE PROMPT: Gradients, Shadows, 3D volume, textures, blur, transparency, realistic photo.
+        NEGATIVE PROMPT: gradients, shadows, 3d, photorealism, blur, noise, texture overlay, watercolor bleeding, complex shading, photograph.
         `;
     }
 
-    // 3. Estilo e Linguagem de Moda
-    let artStyleInstruction = "ART STYLE: Technical fashion print.";
+    // 3. ESTILO ARTÍSTICO (The Art Director Brain)
+    let artStyleInstruction = "";
+    
     if (artStyle === 'CUSTOM' && customStyle) {
         artStyleInstruction = `ART STYLE: ${customStyle.toUpperCase()}. Interpret with manual designer precision.`;
     } else {
         switch (artStyle) {
             case 'WATERCOLOR': 
-                artStyleInstruction = "ART STYLE: Manual Atelier Watercolor. Realistic wet-on-wet edges and pigment rings."; break;
+                artStyleInstruction = "ART STYLE: Botanical Watercolor. Wet-on-wet technique, pigment pooling, translucent petals, organic edges. Hand-painted atelier look."; break;
+            case 'GIZ': 
+                artStyleInstruction = "ART STYLE: Pastel Chalk / Crayon. Dry texture, rough grain, soft blended edges, sketching feel."; break;
             case 'ACRILICA': 
-                artStyleInstruction = "ART STYLE: Hand-painted Acrylic. Visible heavy brush textures and manual layering."; break;
+                artStyleInstruction = "ART STYLE: Heavy Body Acrylic. Visible brush strokes, impasto texture, vibrant opaque colors, painterly freedom."; break;
             case 'VETOR': 
-                artStyleInstruction = "ART STYLE: Clean professional vector illustration for textile design."; break;
-            default: artStyleInstruction = "ART STYLE: High-end textile print studio finish."; break;
+                artStyleInstruction = "ART STYLE: Modern Vector Flat. Minimalist, geometric simplification, bauhaus influence, clean lines."; break;
+            case 'BORDADO':
+                artStyleInstruction = "ART STYLE: Embroidery Simulation. Stitch texture, thread volume, satin stitch direction."; break;
+            case 'LINHA':
+                artStyleInstruction = "ART STYLE: Fine Line Art / Toile de Jouy. Monochromatic or duotone, engraving style, detailed hatching."; break;
+            case 'ORNAMENTAL':
+                artStyleInstruction = "ART STYLE: Baroque / Paisley / Ornamental. Complex symmetrical details, filigree, luxury scarf style."; break;
+            default: 
+                artStyleInstruction = "ART STYLE: High-end commercial fashion print (Zara/Farm aesthetic). Balanced and sellable."; break;
         }
     }
 
-    // 4. Layout Intelligence
-    let layoutInstruction = "LAYOUT: Seamless Repeat Pattern (High continuity).";
+    // 4. ESTRUTURA DE LAYOUT (The Composer Brain)
+    let layoutInstruction = "LAYOUT: SEAMLESS REPEAT PATTERN (Standard Rapport). Ensure invisible tiling.";
+    
     if (layoutStyle === 'LENCO') {
-        layoutInstruction = `LAYOUT: SILK SCARF COMPOSITION (Square). 
-        - Structure: Engineered placement print with a distinct BORDER/FRAME and a CENTRAL MEDALLION or localized motif.
-        - Symmetry: Rotational or Reflectional symmetry typical of Hermès/Versace scarves.`;
+        const subParams = subLayoutStyle ? `Sub-style: ${subLayoutStyle}.` : "";
+        layoutInstruction = `LAYOUT: SILK SCARF (Carré) COMPOSITION.
+        - Structure: Engineered placement print.
+        - Borders: Distinct decorative frame/border.
+        - Center: Centralized medallion or focal artwork.
+        - Symmetry: Rotational symmetry (Hermès Style).
+        ${subParams}`;
     } else if (layoutStyle === 'BARRADO') {
-        layoutInstruction = `LAYOUT: BORDER PRINT (Barrado). 
-        - Structure: Elements concentrated at the BOTTOM edge, fading up into negative space. 
-        - Horizontal Repeat: Seamless horizontally, but localized vertically.`;
+        layoutInstruction = `LAYOUT: BORDER PRINT (Barrado).
+        - Structure: Heaviest elements at the BOTTOM edge, fading or scattering upwards into negative space/background.
+        - Horizontal: Seamless repeat horizontally.
+        - Vertical: Non-repeating (Placement).`;
     } else if (layoutStyle === 'PAREO') {
-        layoutInstruction = `LAYOUT: PAREO / BEACH SARONG (Rectangular Panel).
-        - Structure: Large scale placement print. Frame style or Centralized Art.`;
+        layoutInstruction = `LAYOUT: PAREO / BEACH PANEL.
+        - Structure: Large scale rectangular composition.
+        - Style: Tropical/Resort wear placement print.`;
+    } else if (layoutStyle === 'LOCALIZADA') {
+        layoutInstruction = `LAYOUT: PLACEMENT PRINT (T-Shirt/Chest).
+        - Structure: Centralized isolated artwork on solid background.
+        - Usage: Chest print or back print. Not a pattern.`;
     }
 
+    // PROMPT FINAL OTIMIZADO
     const FULL_PROMPT = `
-    MASTER PRODUCTION DIRECTIVE: REPRODUCE THIS PRINT AS A TECHNICAL FASHION MASTERPIECE.
-    REFERENCE DNA: ${prompt}.
+    ROLE: You are the Head Textile Designer of a luxury fashion house.
+    TASK: Create a production-ready textile design based on the following DNA.
     
-    ${TECHNIQUE_PROMPT}
-    ${artStyleInstruction}
-    ${colorContext}
-    ${layoutInstruction}
+    INPUT DNA: "${prompt}"
+    
+    TECHNICAL DIRECTIVES:
+    1. ${layoutInstruction}
+    2. ${TECHNIQUE_PROMPT}
+    3. ${artStyleInstruction}
+    4. ${colorContext}
+    
+    QUALITY CONTROL:
+    - Eliminate hallucinations (extra limbs, weird text).
+    - Ensure colors are distinct and muddy tones are removed.
+    - If "Seamless", edges must match perfectly.
     
     ${NEGATIVE_PROMPT}
     `;
@@ -98,6 +130,7 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
     let aspectRatio = "1:1";
     if (layoutStyle === 'PAREO') aspectRatio = "9:16";
     if (layoutStyle === 'BARRADO') aspectRatio = "16:9";
+    if (layoutStyle === 'LOCALIZADA') aspectRatio = "3:4";
 
     try {
         const response = await ai.models.generateContent({
@@ -117,15 +150,19 @@ export const generatePattern = async (apiKey, prompt, colors, selvedgeInfo, tech
                 }
             }
         }
+        
         if (!imageUrl) throw new Error("A IA falhou na renderização têxtil.");
+        
         return imageUrl;
-    } catch (e) { throw e; }
+    } catch (e) { 
+        console.error("Generator Error:", e);
+        throw e; 
+    }
 };
 
 export const generateTextureLayer = async (apiKey, textureType, prompt) => {
-    // FIX: Usa a apiKey passada pelo argumento
     const ai = new GoogleGenAI({ apiKey: apiKey });
-    const TEXTURE_PROMPT = `GENERATE A SEAMLESS TEXTURE MASK: ${textureType} (${prompt}). Grayscale heightmap, high fidelity.`;
+    const TEXTURE_PROMPT = `GENERATE A SEAMLESS TEXTURE MASK: ${textureType} (${prompt}). Grayscale heightmap, high fidelity, flat lighting.`;
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',

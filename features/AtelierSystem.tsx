@@ -1,7 +1,7 @@
 
 // ... (imports remain the same)
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity } from 'lucide-react';
+import { UploadCloud, Wand2, Download, Palette, Loader2, Grid3X3, Settings2, Image as ImageIcon, Type, Sparkles, FileWarning, RefreshCw, Sun, Moon, Contrast, Droplets, ArrowDownToLine, Move, ZoomIn, Minimize2, Check, Cylinder, Printer, Eye, Zap, Layers, Cpu, LayoutTemplate, PaintBucket, Ruler, Box, Target, BoxSelect, Maximize, Copy, FileText, PlusCircle, Pipette, Brush, PenTool, Scissors, Edit3, Feather, Frame, Send, ChevronRight, X, SlidersHorizontal, FileCheck, HardDrive, Play, Info, Lock, Grid, Activity, Cloud } from 'lucide-react';
 import { PantoneColor } from '../types';
 import { ModuleHeader, FloatingReference, ModuleLandingPage, SmartImageViewer } from '../components/Shared';
 
@@ -49,6 +49,8 @@ const compressImage = (base64Str: string | null, maxWidth = 1024): Promise<strin
         img.onerror = () => reject(new Error("Load error"));
     });
 };
+
+const DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/19UC2beAjjSn2s4ROtj6gp6VtKSpdoApR?usp=sharing";
 
 interface AtelierSystemProps {
     onNavigateToMockup?: () => void;
@@ -257,6 +259,30 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
     };
 
+    // --- DRIVE WORKFLOW ---
+    const handleSmartCloudSave = () => {
+        if (!generatedPattern) return;
+        const name = prompt("Nome para o arquivo da estampa?", `Estampa_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
+        if (!name) return;
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `VINGI_${name}_${timestamp}.png`;
+
+        // 1. Trigger Download with Correct Name
+        const l = document.createElement('a'); 
+        l.download = filename; 
+        l.href = generatedPattern; 
+        document.body.appendChild(l);
+        l.click();
+        document.body.removeChild(l);
+
+        // 2. Open Drive Folder
+        window.open(DRIVE_FOLDER_URL, '_blank');
+        
+        setShowDownloadMenu(false);
+        alert(`Arquivo "${filename}" baixado.\n\nA pasta do Google Drive foi aberta. Arraste o arquivo baixado para lá para salvar na nuvem.`);
+    };
+
     const handleProductionDownload = async () => {
         if (!generatedPattern) return;
         setIsUpscaling(true);
@@ -276,7 +302,6 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                 }) 
             });
 
-            // Tratamento Robustecido para Mobile/Timeouts
             if (!res.ok) {
                 const text = await res.text();
                 throw new Error(`Erro do Servidor (${res.status}): Tente novamente.`);
@@ -340,6 +365,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             <div className="bg-[#111111] px-4 pb-3 pt-[calc(1.5rem+env(safe-area-inset-top))] flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.5)] shrink-0 z-50 h-auto min-h-[4.5rem] transition-all duration-300 border-b border-white/5">
                 <div className="flex items-center gap-2"><Palette size={18} className="text-vingi-400"/><span className="font-bold text-sm">Atelier AI</span></div>
                 <div className="flex gap-2 relative">
+                    <button onClick={() => window.open(DRIVE_FOLDER_URL, '_blank')} className="hidden md:flex items-center gap-1 text-[10px] bg-white/5 px-3 py-1.5 rounded hover:bg-white/10 font-bold border border-white/10 transition-colors text-blue-300">
+                        <Cloud size={12} /> Biblioteca Nuvem
+                    </button>
                     {hasActiveSession && (
                         <button onClick={resetSession} className="text-[10px] bg-gray-800 px-3 py-1.5 rounded hover:bg-gray-700 font-medium border border-gray-700">Novo</button>
                     )}
@@ -356,9 +384,15 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                             <div><span className="block text-xs font-bold text-white">Rascunho (Rápido)</span><span className="block text-[9px] text-gray-500">Preview JPG</span></div>
                                         </button>
                                         <div className="h-px bg-gray-800 my-1"></div>
+                                        {/* NEW: CLOUD SAVE OPTION */}
+                                        <button onClick={handleSmartCloudSave} className="w-full text-left px-3 py-2 hover:bg-blue-900/30 rounded-lg flex items-center gap-3 group">
+                                            <div className="p-1.5 bg-blue-600 rounded-md group-hover:bg-blue-500"><Cloud size={14} className="text-white"/></div>
+                                            <div><span className="block text-xs font-bold text-white">Salvar na Nuvem</span><span className="block text-[9px] text-blue-300">Google Drive Org.</span></div>
+                                        </button>
+                                        <div className="h-px bg-gray-800 my-1"></div>
                                         <button onClick={handleProductionDownload} className="w-full text-left px-3 py-2 hover:bg-vingi-900/50 rounded-lg flex items-center gap-3 group">
-                                            <div className="p-1.5 bg-blue-900/50 rounded-md group-hover:bg-blue-800"><HardDrive size={14} className="text-blue-400"/></div>
-                                            <div><span className="block text-xs font-bold text-white">Produção (Final)</span><span className="block text-[9px] text-blue-300">Upscaling 4K & Restauro</span></div>
+                                            <div className="p-1.5 bg-purple-900/50 rounded-md group-hover:bg-purple-800"><HardDrive size={14} className="text-purple-400"/></div>
+                                            <div><span className="block text-xs font-bold text-white">Produção (Final)</span><span className="block text-[9px] text-purple-300">Upscaling 4K & Restauro</span></div>
                                         </button>
                                     </div>
                                 </div>
@@ -374,7 +408,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                     <ModuleLandingPage 
                         icon={Palette} 
                         title="Atelier Generativo" 
-                        description="Crie estampas exclusivas a partir de referências visuais. Combine estilos artísticos, layouts de lenço e paletas Pantone." 
+                        description="Crie estampas exclusivas com inteligência artificial avançada. Controle total de técnica, estilo e layout." 
                         primaryActionLabel="Criar Estampa" 
                         onPrimaryAction={() => fileInputRef.current?.click()} 
                         features={["Vetorial & Digital", "Variação de Estilo", "Layouts de Lenço", "Pantone TCX"]}
@@ -391,6 +425,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                         <div><h3 className="text-lg font-bold text-white">Digital (4K)</h3><p className="text-xs text-gray-500 mt-1">Textura fotográfica, degradês complexos.</p></div>
                                     </button>
                                 </div>
+                                <button onClick={() => window.open(DRIVE_FOLDER_URL, '_blank')} className="mt-4 text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center justify-center gap-2 uppercase tracking-widest bg-blue-900/10 py-3 rounded-lg border border-blue-900/30">
+                                    <Cloud size={14} /> Acessar Biblioteca de Criações (Drive)
+                                </button>
                             </div>
                         }
                     />

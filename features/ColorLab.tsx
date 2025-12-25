@@ -1,4 +1,5 @@
 
+// ... existing imports
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
     Layers, UploadCloud, Droplets, Cylinder, Download, RefreshCw, 
@@ -255,7 +256,7 @@ export const ColorLab: React.FC = () => {
             }
         };
         requestAnimationFrame(() => renderComposite());
-    }, [colors, masks, rawMasks, layerVisibility, viewMode, activeChannel, halftoneMode, originalDims]);
+    }, [colors, masks, rawMasks, layerVisibility, viewMode, activeChannel, halftoneMode, originalDims, showOriginal]);
 
     // --- ACTIONS ---
     const startSeparation = async (imgBase64: string) => {
