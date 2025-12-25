@@ -5,7 +5,7 @@ import {
     Check, Activity, Eye, EyeOff, Printer, Palette, Share2, Grid3X3,
     ArrowRight, Loader2, Maximize, AlertCircle, GripVertical, CheckCircle2,
     ZoomIn, ZoomOut, Move, RotateCcw, Wand2, Eraser, ScanLine, FileDown,
-    LayoutGrid, ChevronUp, ChevronDown
+    LayoutGrid, ChevronUp, ChevronDown, Image as ImageIcon, SplitSquareHorizontal
 } from 'lucide-react';
 import { ModuleLandingPage } from '../components/Shared';
 import { PantoneColor } from '../types';
@@ -176,6 +176,7 @@ export const ColorLab: React.FC = () => {
     const [isRevised, setIsRevised] = useState(false);
     const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 });
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [showOriginal, setShowOriginal] = useState(false);
     
     const isDragging = useRef(false);
     const lastPos = useRef({ x: 0, y: 0 });
@@ -448,8 +449,12 @@ export const ColorLab: React.FC = () => {
                                         height: originalDims?.h 
                                     }}
                                 >
-                                    <canvas ref={compositeCanvasRef} className="w-full h-full block" />
-                                    {viewMode === 'SINGLE' && activeChannel !== null && <div className="absolute inset-0 border-4 border-blue-500/50 mix-blend-screen pointer-events-none"></div>}
+                                    {showOriginal ? (
+                                        <img src={originalImage} className="w-full h-full object-contain pointer-events-none select-none" draggable={false} />
+                                    ) : (
+                                        <canvas ref={compositeCanvasRef} className="w-full h-full block" />
+                                    )}
+                                    {!showOriginal && viewMode === 'SINGLE' && activeChannel !== null && <div className="absolute inset-0 border-4 border-blue-500/50 mix-blend-screen pointer-events-none"></div>}
                                 </div>
                             )}
                             <div className="absolute bottom-6 left-6 flex gap-2 z-30">
@@ -468,7 +473,7 @@ export const ColorLab: React.FC = () => {
                                 {colors.map((color, idx) => (
                                     <div 
                                         key={idx} 
-                                        onClick={() => { setActiveChannel(idx); setViewMode('SINGLE'); }}
+                                        onClick={() => { setActiveChannel(idx); setViewMode('SINGLE'); setShowOriginal(false); }}
                                         className={`min-w-[64px] h-[72px] rounded-xl border-2 transition-all relative bg-[#111] shrink-0 flex flex-col items-center justify-center gap-1 ${activeChannel === idx && viewMode === 'SINGLE' ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]' : 'border-white/10 opacity-80'}`}
                                     >
                                         <div className="w-8 h-8 rounded-full shadow-inner border border-white/10" style={{ backgroundColor: color.hex }}></div>
@@ -485,7 +490,12 @@ export const ColorLab: React.FC = () => {
 
                             {/* TOOLS ROW */}
                             <div className="h-16 px-4 flex items-center justify-between gap-2 bg-[#0a0a0a]">
-                                <button onClick={() => { setViewMode('COMPOSITE'); setActiveChannel(null); }} className={`flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${viewMode === 'COMPOSITE' ? 'bg-blue-600 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10'}`}>Composto</button>
+                                <button onClick={() => setShowOriginal(!showOriginal)} className={`flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${showOriginal ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-500 border-white/10'}`}>
+                                    {showOriginal ? 'Original' : 'Separação'}
+                                </button>
+                                <button onClick={() => { setViewMode('COMPOSITE'); setActiveChannel(null); setShowOriginal(false); }} className={`w-12 flex flex-col items-center justify-center rounded-lg border transition-all ${viewMode === 'COMPOSITE' && !showOriginal ? 'bg-blue-600 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10'}`}>
+                                    <Grid3X3 size={16} />
+                                </button>
                                 <button onClick={() => setHalftoneMode(!halftoneMode)} className={`flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase border transition-all ${halftoneMode ? 'bg-white text-black border-white' : 'bg-white/5 text-gray-500 border-white/10'}`}>Retícula</button>
                                 <button onClick={runRevisor} disabled={isRevised} className={`flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase border transition-all flex items-center justify-center gap-1 ${isRevised ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-purple-600 text-white border-purple-500'}`}>
                                     {isRevised ? <CheckCircle2 size={12}/> : <ScanLine size={12}/>} {isRevised ? 'Ok' : 'Revisar'}
@@ -513,7 +523,7 @@ export const ColorLab: React.FC = () => {
                                         {(groupItems as { color: PantoneColor, index: number }[]).map(({ color, index }) => (
                                             <div key={index} className={`group relative p-2 rounded-xl border transition-all flex items-center gap-3 ${activeChannel === index && viewMode === 'SINGLE' ? 'bg-white/10 border-blue-500/50' : 'bg-black border-white/5 hover:bg-white/5'}`}>
                                                 <button onClick={(e) => { e.stopPropagation(); toggleLayer(index); }} className={`p-1.5 rounded-lg transition-colors ${layerVisibility[index] ? 'text-blue-400 bg-blue-900/20' : 'text-gray-600 bg-white/5'}`}>{layerVisibility[index] ? <Eye size={14}/> : <EyeOff size={14}/>}</button>
-                                                <div className="flex-1 flex items-center gap-3 cursor-pointer" onClick={() => { setActiveChannel(index); setViewMode('SINGLE'); }}>
+                                                <div className="flex-1 flex items-center gap-3 cursor-pointer" onClick={() => { setActiveChannel(index); setViewMode('SINGLE'); setShowOriginal(false); }}>
                                                     <div className="w-8 h-8 rounded-lg shrink-0 shadow-inner border border-white/10 relative overflow-hidden" style={{ backgroundColor: color.hex }}></div>
                                                     <div className="min-w-0"><div className="flex items-center gap-2"><span className="text-[10px] font-bold text-gray-300 truncate">{color.name}</span></div><p className="text-[9px] text-gray-500 font-mono">{color.code}</p></div>
                                                 </div>
@@ -526,8 +536,14 @@ export const ColorLab: React.FC = () => {
                             <div className="p-4 border-t border-white/5 bg-[#050505]">
                                 <div className="flex items-center justify-between mb-3">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Modo Visualização</span>
-                                    <div className="flex bg-white/5 rounded-lg p-0.5"><button onClick={() => { setViewMode('COMPOSITE'); setActiveChannel(null); }} className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase ${viewMode==='COMPOSITE'?'bg-blue-600 text-white':'text-gray-500'}`}>Full</button><button onClick={() => setHalftoneMode(!halftoneMode)} className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase ${halftoneMode?'bg-white text-black':'text-gray-500'}`}>Retícula</button></div>
+                                    <div className="flex bg-white/5 rounded-lg p-0.5">
+                                        <button onClick={() => { setViewMode('COMPOSITE'); setActiveChannel(null); setShowOriginal(false); }} className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase ${viewMode==='COMPOSITE' && !showOriginal ?'bg-blue-600 text-white':'text-gray-500'}`}>Full</button>
+                                        <button onClick={() => setHalftoneMode(!halftoneMode)} className={`px-3 py-1 rounded-md text-[9px] font-bold uppercase ${halftoneMode?'bg-white text-black':'text-gray-500'}`}>Retícula</button>
+                                    </div>
                                 </div>
+                                <button onClick={() => setShowOriginal(!showOriginal)} className={`w-full py-2 rounded-lg text-[9px] font-black uppercase border transition-all flex items-center justify-center gap-2 ${showOriginal ? 'bg-white text-black' : 'bg-white/5 text-gray-500 border-white/10'}`}>
+                                    <SplitSquareHorizontal size={14}/> {showOriginal ? 'Vendo Original' : 'Comparar Original'}
+                                </button>
                             </div>
                         </div>
                     )}
