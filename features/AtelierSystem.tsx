@@ -185,7 +185,7 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
         setActiveTexture('NONE'); setGeneratedTextureUrl(null);
     };
 
-    // ... (Keep existing async functions: analyzePrompt, analyzeColors, handleReferenceUpload, handleGenerateTexture) ...
+    // ... (Keep existing async functions: analyzePrompt, analyzeColors, handleReferenceUpload, handleGenerateTexture, performAutoSave, handleGenerate, handleSmartCloudSave, handleProductionDownload) ...
     const analyzePrompt = async (cleanBase64: string) => {
         try {
             const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ANALYZE_REFERENCE_FOR_PROMPT', mainImageBase64: cleanBase64 }) });
@@ -233,27 +233,17 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
 
     const performAutoSave = (imageUrl: string) => {
         if (!autoDriveSave) return;
-        
-        setStatusMessage("Sincronizando com Google Drive...");
-        
         const safeCollection = collectionName ? collectionName.replace(/[^a-zA-Z0-9]/g, '_') : 'Nova_Colecao';
         const dateStr = new Date().toISOString().split('T')[0];
         const randomId = Math.floor(Math.random() * 1000);
         const filename = `${dateStr}_${safeCollection}_VINGI_${randomId}.png`;
-
-        // Simula upload com delay para feedback visual
-        setTimeout(() => {
-            const l = document.createElement('a'); 
-            l.download = filename; 
-            l.href = imageUrl; 
-            document.body.appendChild(l);
-            l.click();
-            document.body.removeChild(l);
-            
-            console.log(`Auto-saved to Drive structure: ${filename}`);
-            setIsProcessing(false);
-            setStatusMessage("");
-        }, 2000);
+        const l = document.createElement('a'); 
+        l.download = filename; 
+        l.href = imageUrl; 
+        document.body.appendChild(l);
+        l.click();
+        document.body.removeChild(l);
+        console.log(`Auto-saved to Drive structure: ${filename}`);
     };
 
     const handleGenerate = async () => {
@@ -268,13 +258,9 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
             const data = await res.json();
             if (data.success && data.image) {
                 setGeneratedPattern(data.image);
-                if (autoDriveSave) {
-                    performAutoSave(data.image);
-                } else {
-                    setIsProcessing(false);
-                }
-            } else { throw new Error(data.error || "A IA não conseguiu gerar."); setIsProcessing(false); }
-        } catch (err: any) { setError(err.message); setIsProcessing(false); }
+                if (autoDriveSave) performAutoSave(data.image);
+            } else { throw new Error(data.error || "A IA não conseguiu gerar."); }
+        } catch (err: any) { setError(err.message); } finally { setIsProcessing(false); }
     };
 
     const handleSmartCloudSave = () => {
@@ -492,8 +478,8 @@ export const AtelierSystem: React.FC<AtelierSystemProps> = ({ onNavigateToMockup
                                             <div onClick={() => setAutoDriveSave(!autoDriveSave)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${autoDriveSave ? 'bg-blue-900/30 border-blue-500/50' : 'bg-transparent border-gray-800 hover:bg-white/5'}`}>
                                                 {autoDriveSave ? <Check size={14} className="text-blue-400"/> : <div className="w-3.5 h-3.5 rounded-full border border-gray-600"/>}
                                                 <div className="flex-1">
-                                                    <span className={`text-[10px] font-bold block ${autoDriveSave ? 'text-blue-200' : 'text-gray-500'}`}>Backup Automático (Local/Drive)</span>
-                                                    <span className="text-[8px] text-gray-600 block">Download imediato para sync na nuvem</span>
+                                                    <span className={`text-[10px] font-bold block ${autoDriveSave ? 'text-blue-200' : 'text-gray-500'}`}>Salvar Automaticamente</span>
+                                                    <span className="text-[8px] text-gray-600 block">Backup imediato na nuvem após gerar</span>
                                                 </div>
                                                 <Cloud size={14} className={autoDriveSave ? "text-blue-400" : "text-gray-600"}/>
                                             </div>
